@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/">
+        <file>resource/image/voltage.png</file>
+        <file>resource/image/clock.png</file>
+        <file>resource/image/shotNum.png</file>
+        <file>resource/image/stop.png</file>
+        <file>resource/image/tip.png</file>
+        <file>resource/image/pictogram.png</file>
+    </qresource>
+</RCC>
