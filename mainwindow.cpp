@@ -656,37 +656,43 @@ void MainWindow::initUi()
             mIsEmergencyStop = true;
         }
     });
-    connect(mCommHelper, &CommHelper::reportTemperature, this, [=](quint8 row,quint8 column,float v){
-        ui->tableWidget_status->item(row, column)->setText(QString::number(v));
+    connect(mCommHelper, &CommHelper::reportTemperature, this, [=](quint8 moduleNo, QVector<float>& pairs){
+        quint32 row = moduleNo + 1;
+        for (int column=0; column<pairs.size(); ++column){
+            ui->tableWidget_status->item(row, column)->setText(QString::number(pairs[column], 2, 'f'));
 
-        //温度设成10~50℃
-        if (v > 50){
-            ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
-        }
-        else{
-            ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            //温度设成10~50℃
+            if (pairs[column] > 50 || pairs[column] < 10){
+                ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+
+                qCritical().noquote() << "模组#" << moduleNo << "温度异常，温度值：" << QString::number(pairs[column], 2, 'f');
+            }
+            else{
+                ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            }
         }
     });
-    connect(mCommHelper, &CommHelper::reportVoltage, this, [=](quint8 row,quint8 column,float v){
-        ui->tableWidget_status->item(row, column)->setText(QString::number(v));
+    connect(mCommHelper, &CommHelper::reportVoltageCurrent, this, [=](quint8 moduleNo, QVector<QPair<float,float>>& pairs){
+        quint32 row = moduleNo + 1;
+        for (int column=0; column<pairs.size(); ++column){
+            ui->tableWidget_status->item(row, 4+column)->setText(QString::number(pairs[column].first, 2, 'f'));
 
-        //电压设成25~50V
-        if (v > 50){
-            ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
-        }
-        else{
-            ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
-        }
-    });
-    connect(mCommHelper, &CommHelper::reportCurrent, this, [=](quint8 row,quint8 column,float v){
-        ui->tableWidget_status->item(row, column)->setText(QString::number(v));
+            //电压设成25~50V
+            if (pairs[column].first > 50 || pairs[column].first < 25){
+                ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+            }
+            else{
+                ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            }
 
-        //电流设置成0~20mA
-        if (v > 20){
-            ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
-        }
-        else{
-            ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            //电流设置成0~20mA
+            ui->tableWidget_status->item(row, 8+column)->setText(QString::number(pairs[column].second, 2, 'f'));
+            if (pairs[column].second > 20){
+                ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+            }
+            else{
+                ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            }
         }
     });
 }

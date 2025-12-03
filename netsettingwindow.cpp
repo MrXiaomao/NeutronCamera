@@ -1,7 +1,6 @@
 #include "netsettingwindow.h"
 #include "ui_netsettingwindow.h"
 #include "globalsettings.h"
-#include <QSerialPortInfo>
 
 NetSettingWindow::NetSettingWindow(QWidget *parent)
     : QWidget(parent)
@@ -13,12 +12,6 @@ NetSettingWindow::NetSettingWindow(QWidget *parent)
     ui->lineEdit_ip->setText(settings.value("Net/ip", "192.168.1.100").toString());
     ui->spinBox_port->setValue(settings.value("Net/port", 6000).toUInt());
     ui->spinBox_broadcastPort->setValue(settings.value("Net/broadcastPort", 12100).toUInt());
-
-    QStringList m_serialPortName;
-    foreach(const QSerialPortInfo &info,QSerialPortInfo::availablePorts())
-    {
-        ui->comboBox_serialPortName->addItem(info.portName());
-    }
 }
 
 NetSettingWindow::~NetSettingWindow()

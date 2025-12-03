@@ -20,31 +20,6 @@ CommHelper::~CommHelper()
 
 void CommHelper::initSocket()
 {
-    // 初始化串口
-
-    this->mSerialPort = new QSerialPort();
-    //数据到达
-    connect(mSerialPort, SIGNAL(readyRead()), this, SLOT(serialPortReadyRead()));
-
-    GlobalSettings settings(CONFIG_FILENAME);
-    QString portName = settings.value("SerialPort/name", "COM1").toString();
-    quint32 baudRate = settings.value("SerialPort/baudRate", 115200).toUInt();
-    quint32 dataBits = settings.value("SerialPort/dataBits", 8).toUInt();
-    quint32 parity = settings.value("SerialPort/parity", 0).toUInt();
-    quint32 stopBits = settings.value("SerialPort/stopBits", 1).toUInt();
-    mSerialPort->setPortName(portName);
-    if(mSerialPort->open(QIODevice::ReadWrite))
-    {
-        mSerialPort->setBaudRate(QSerialPort::Baud115200,QSerialPort::AllDirections);//设置波特率和读写方向
-        mSerialPort->setDataBits(QSerialPort::DataBits(dataBits));
-        mSerialPort->setFlowControl(QSerialPort::NoFlowControl);//无流控制
-        mSerialPort->setParity(QSerialPort::Parity(parity));	//无校验位
-        mSerialPort->setStopBits(QSerialPort::StopBits(stopBits)); //一位停止位
-    }
-    else{
-        qInfo().noquote() << "串口打开失败！！！";
-    }
-
     // 初始化TCP
     this->mTcpClient = new QTcpSocket();
     //数据到达
@@ -120,6 +95,7 @@ void CommHelper::readyRead()
     //读取新的数据
     QByteArray rawData = mTcpClient->readAll();
     if (rawData.startsWith('@') && rawData.endsWith('#')){
+        quint8 moduleNo = rawData.mid(1, 2).toInt();
         /*
             @01*999*GETR*01*
             -----Voltage &Current Data-----
@@ -151,16 +127,17 @@ void CommHelper::readyRead()
         */
 
         QList<QByteArray> lines = rawData.split('\n');
-        float temperature = 0.0;
-        float voltage = 0.0;
-        float current = 0.0;
+        QVector<float> temperature;
+        QVector<QPair<float,float>> voltage_current;
         //IHA238_01 = 0.00V, 0.00mA
         for (int i=0; i<lines.size(); ++i){
             QString input = lines.at(i);
             if (input.contains("IHA238")){
-                QRegularExpression regex(R"(=\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*[a-zA-Z]*)");
+                QRegularExpression regex("(\\d+\\.\\d+)(V|mA)");
                 QRegularExpressionMatchIterator iterator = regex.globalMatch(input);
 
+                float voltage = 0.0;
+                float current = 0.0;
                 int j = 0;
                 while (iterator.hasNext()) {
                     QRegularExpressionMatch match = iterator.next();
@@ -174,112 +151,30 @@ void CommHelper::readyRead()
                             current = value;
                     }
                 }
+
+                voltage_current.push_back(qMakePair(voltage, current));
             }
             else if (input.contains("DS18B20")){
                 QRegularExpression regex(R"(=\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*[a-zA-Z]*)");
                 QRegularExpressionMatchIterator iterator = regex.globalMatch(input);
 
-                int j = 0;
                 while (iterator.hasNext()) {
                     QRegularExpressionMatch match = iterator.next();
                     QString valueStr = match.captured(1);
                     bool ok;
                     double value = valueStr.toFloat(&ok);
                     if (ok) {
-                        temperature = value;
+                        temperature.push_back(value);
                     }
                 }
             }
         }
 
-        emit reportTemperature(1, 1, temperature);
-        emit reportVoltage(1, 1, voltage);
-        emit reportCurrent(1, 1, current);
+        emit reportTemperature(moduleNo, temperature);
+        emit reportVoltageCurrent(moduleNo, voltage_current);
     }
 }
 
-void CommHelper::serialPortReadyRead()
-{
-    //读取新的数据
-    QByteArray rawData = mSerialPort->readAll();
-    if (rawData.startsWith('@') && rawData.endsWith('#')){
-        /*
-            @01*999*GETR*01*
-            -----Voltage &Current Data-----
-            IHA238_01 = 0.00V, 0.00mA
-            IHA238_02 = 0.00V, 0.00mA
-            IHA238_03 = 0.00V, 0.00mA
-            IHA238_04 = 0.00V, 0.00mA
-            IHA238_05 = 0.00V. 0.00mA
-            IHA238_06 = 0.00V, 0.00mA
-            IHA238_07 = 0.00V, 0.00mA
-            IHA238_08 = 0.00V, 0.00mA
-            THA238_09 = 0.00V, 0.00mA
-            THA238_10 = 0.00V, 0.00mA
-            IHA238_11 = 0.00V, 0.00mA
-            IHA238_12 = 0.00V, 0.00mA
-
-            -----Temperature ata-----
-            DS18B20_01 = 0.00°C
-            DS18B20_02 = 0.00°C
-            DS18B20_03 = 0.00°C
-            DS18B20_04 = 0.00°C
-
-            -----Device Info-----
-            UTD = 0x3938353834315100002F0017
-            FeSoftV=Unknown
-            FeHardy=Unknown
-            FeAddr = 01
-            #
-        */
-
-        QList<QByteArray> lines = rawData.split('\n');
-        float temperature = 0.0;
-        float voltage = 0.0;
-        float current = 0.0;
-        //IHA238_01 = 0.00V, 0.00mA
-        for (int i=0; i<lines.size(); ++i){
-            QString input = lines.at(i);
-            if (input.contains("IHA238")){
-                QRegularExpression regex(R"(=\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*[a-zA-Z]*)");
-                QRegularExpressionMatchIterator iterator = regex.globalMatch(input);
-
-                int j = 0;
-                while (iterator.hasNext()) {
-                    QRegularExpressionMatch match = iterator.next();
-                    QString valueStr = match.captured(1);
-                    bool ok;
-                    double value = valueStr.toFloat(&ok);
-                    if (ok) {
-                        if (j++ == 0)
-                            voltage = value;
-                        else
-                            current = value;
-                    }
-                }
-            }
-            else if (input.contains("DS18B20")){
-                QRegularExpression regex(R"(=\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*[a-zA-Z]*)");
-                QRegularExpressionMatchIterator iterator = regex.globalMatch(input);
-
-                int j = 0;
-                while (iterator.hasNext()) {
-                    QRegularExpressionMatch match = iterator.next();
-                    QString valueStr = match.captured(1);
-                    bool ok;
-                    double value = valueStr.toFloat(&ok);
-                    if (ok) {
-                        temperature = value;
-                    }
-                }
-            }
-        }
-
-        emit reportTemperature(1, 1, temperature);
-        emit reportVoltage(1, 1, voltage);
-        emit reportCurrent(1, 1, current);
-    }
-}
 
 void CommHelper::connected()
 {
