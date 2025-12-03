@@ -618,16 +618,29 @@
                <set>QAbstractItemView::NoEditTriggers</set>
               </property>
               <property name="rowCount">
-               <number>20</number>
-              </property>
-              <property name="columnCount">
                <number>28</number>
               </property>
+              <property name="columnCount">
+               <number>20</number>
+              </property>
               <attribute name="horizontalHeaderVisible">
+               <bool>true</bool>
+              </attribute>
+              <attribute name="verticalHeaderVisible">
                <bool>false</bool>
               </attribute>
               <row>
                <property name="text">
+                <string>温度(℃)</string>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string/>
+               </property>
+              </row>
+              <row>
+               <property name="text">
                 <string/>
                </property>
               </row>
@@ -638,87 +651,57 @@
               </row>
               <row>
                <property name="text">
-                <string>模组#1</string>
+                <string>29V电压值(V)</string>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#2</string>
+                <string/>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#3</string>
+                <string/>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#4</string>
+                <string/>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#5</string>
+                <string>29V电流值(mA)</string>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#6</string>
+                <string/>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#7</string>
+                <string/>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#8</string>
+                <string/>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#9</string>
+                <string>48V电压值(V)</string>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#10</string>
+                <string/>
                </property>
               </row>
               <row>
                <property name="text">
-                <string>模组#11</string>
-               </property>
-              </row>
-              <row>
-               <property name="text">
-                <string>模组#12</string>
-               </property>
-              </row>
-              <row>
-               <property name="text">
-                <string>模组#13</string>
-               </property>
-              </row>
-              <row>
-               <property name="text">
-                <string>模组#14</string>
-               </property>
-              </row>
-              <row>
-               <property name="text">
-                <string>模组#15</string>
-               </property>
-              </row>
-              <row>
-               <property name="text">
-                <string>模组#16</string>
-               </property>
-              </row>
-              <row>
-               <property name="text">
-                <string>模组#17</string>
+                <string/>
                </property>
               </row>
               <row>
@@ -726,138 +709,171 @@
                 <string>模组#18</string>
                </property>
               </row>
+              <row>
+               <property name="text">
+                <string>48V电流值(mA)</string>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string>新建行</string>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string/>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string/>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string>运放板电压值(V)</string>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string>新建行</string>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string/>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string/>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string>运放板电流值(mA)</string>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string/>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string/>
+               </property>
+              </row>
+              <row>
+               <property name="text">
+                <string/>
+               </property>
+              </row>
               <column>
                <property name="text">
-                <string>温度</string>
+                <string/>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string/>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#1</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#2</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>29V电压电流</string>
+                <string>模组#3</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#4</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#5</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#6</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#7</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#8</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#9</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#10</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#11</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>48V电压电流</string>
+                <string>模组#12</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#13</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#14</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#15</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#16</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#17</string>
                </property>
               </column>
               <column>
                <property name="text">
-                <string>新建列</string>
+                <string>模组#18</string>
                </property>
               </column>
-              <column>
+              <item row="0" column="0">
                <property name="text">
-                <string>新建列</string>
+                <string/>
                </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>新建列</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>温度</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>新建列</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>新建列</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>新建列</string>
-               </property>
-              </column>
-              <column/>
-              <column/>
+              </item>
              </widget>
             </item>
            </layout>

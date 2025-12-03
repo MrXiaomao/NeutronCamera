@@ -130,7 +130,6 @@ private:
     bool mEnableAutoUpdateShotnum = false;//是否启用自动更新炮号
     bool mEnableClockSynchronization = false;//是否启用时钟同步
     bool mEnableEmergencyStop = false;//是否启用紧急停机
-    bool mIsEmergencyStop = false;//紧急停机状态
 
     bool mIsDarkTheme = true;
     bool mThemeColorEnable = true;

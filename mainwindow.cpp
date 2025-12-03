@@ -115,71 +115,73 @@ void MainWindow::initUi()
 
     {
         ui->tableWidget_status->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        ui->tableWidget_status->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+        ui->tableWidget_status->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
 
-        ui->tableWidget_status->setSpan(0, 0, 1, 4);
-        ui->tableWidget_status->setItem(0, 0, new QTableWidgetItem("温度℃"));
+        ui->tableWidget_status->setSpan(0, 0, 4, 1);
+        ui->tableWidget_status->setItem(0, 0, new QTableWidgetItem("温度\n℃"));
         ui->tableWidget_status->item(0, 0)->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget_status->item(0, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
         for (int i=0; i<=3; ++i){
-            ui->tableWidget_status->setItem(1, i, new QTableWidgetItem(QString("#%1").arg(i+1)));
-            ui->tableWidget_status->item(1, i)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget_status->setItem(i, 1, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(i, 1)->setTextAlignment(Qt::AlignCenter);
         }
 
-        ui->tableWidget_status->setSpan(0, 4, 1, 4);
-        ui->tableWidget_status->setItem(0, 4, new QTableWidgetItem("29V电压V"));
-        ui->tableWidget_status->item(0, 4)->setTextAlignment(Qt::AlignCenter);
-        ui->tableWidget_status->item(0, 4)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        ui->tableWidget_status->setSpan(4, 0, 4, 1);
+        ui->tableWidget_status->setItem(4, 0, new QTableWidgetItem("29V\n电压\n(V)"));
+        ui->tableWidget_status->item(4, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(4, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
         for (int i=0; i<=3; ++i){
-            ui->tableWidget_status->setItem(1, 4+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
-            ui->tableWidget_status->item(1, 4+i)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget_status->setItem(4+i, 1, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(4+i, 1)->setTextAlignment(Qt::AlignCenter);
         }
-        ui->tableWidget_status->setSpan(0, 8, 1, 4);
-        ui->tableWidget_status->setItem(0, 8, new QTableWidgetItem("29V电流mA"));
-        ui->tableWidget_status->item(0, 8)->setTextAlignment(Qt::AlignCenter);
-        ui->tableWidget_status->item(0, 8)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        ui->tableWidget_status->setSpan(8, 0, 4, 1);
+        ui->tableWidget_status->setItem(8, 0, new QTableWidgetItem("29V\n电流\n(mA)"));
+        ui->tableWidget_status->item(8, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(8, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
         for (int i=0; i<=3; ++i){
-            ui->tableWidget_status->setItem(1, 8+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
-            ui->tableWidget_status->item(1, 8+i)->setTextAlignment(Qt::AlignCenter);
-        }
-
-        ui->tableWidget_status->setSpan(0, 12, 1, 4);
-        ui->tableWidget_status->setItem(0, 12, new QTableWidgetItem("48V电压V"));
-        ui->tableWidget_status->item(0, 12)->setTextAlignment(Qt::AlignCenter);
-        ui->tableWidget_status->item(0, 12)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
-        for (int i=0; i<=3; ++i){
-            ui->tableWidget_status->setItem(1, 12+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
-            ui->tableWidget_status->item(1, 12+i)->setTextAlignment(Qt::AlignCenter);
-        }
-        ui->tableWidget_status->setSpan(0, 16, 1, 4);
-        ui->tableWidget_status->setItem(0, 16, new QTableWidgetItem("48V电流mA"));
-        ui->tableWidget_status->item(0, 16)->setTextAlignment(Qt::AlignCenter);
-        ui->tableWidget_status->item(0, 16)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
-        for (int i=0; i<=3; ++i){
-            ui->tableWidget_status->setItem(1, 16+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
-            ui->tableWidget_status->item(1, 16+i)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget_status->setItem(8+i, 1, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(8+i, 1)->setTextAlignment(Qt::AlignCenter);
         }
 
-        ui->tableWidget_status->setSpan(0, 20, 1, 4);
-        ui->tableWidget_status->setItem(0, 20, new QTableWidgetItem("运放板电压"));
-        ui->tableWidget_status->item(0, 20)->setTextAlignment(Qt::AlignCenter);
-        ui->tableWidget_status->item(0, 20)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        ui->tableWidget_status->setSpan(12, 0, 4, 1);
+        ui->tableWidget_status->setItem(12, 0, new QTableWidgetItem("48V\n电压(V)"));
+        ui->tableWidget_status->item(12, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(12, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
         for (int i=0; i<=3; ++i){
-            ui->tableWidget_status->setItem(1, 20+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
-            ui->tableWidget_status->item(1, 20+i)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget_status->setItem(12+i, 1, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(12+i, 1)->setTextAlignment(Qt::AlignCenter);
         }
-        ui->tableWidget_status->setSpan(0, 24, 1, 4);
-        ui->tableWidget_status->setItem(0, 24, new QTableWidgetItem("运放板电流"));
-        ui->tableWidget_status->item(0, 24)->setTextAlignment(Qt::AlignCenter);
-        ui->tableWidget_status->item(0, 24)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        ui->tableWidget_status->setSpan(16, 0, 4, 1);
+        ui->tableWidget_status->setItem(16, 0, new QTableWidgetItem("48V\n电流\n(mA)"));
+        ui->tableWidget_status->item(16, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(16, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
         for (int i=0; i<=3; ++i){
-            ui->tableWidget_status->setItem(1, 24+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
-            ui->tableWidget_status->item(1, 24+i)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget_status->setItem(16+i, 1, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(16+i, 1)->setTextAlignment(Qt::AlignCenter);
+        }
+
+        ui->tableWidget_status->setSpan(20, 0, 4, 1);
+        ui->tableWidget_status->setItem(20, 0, new QTableWidgetItem("运放板\n电压\n(V)"));
+        ui->tableWidget_status->item(20, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(20, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(20+i, 1, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(20+i, 1)->setTextAlignment(Qt::AlignCenter);
+        }
+        ui->tableWidget_status->setSpan(24, 0, 4, 1);
+        ui->tableWidget_status->setItem(24, 0, new QTableWidgetItem("运放板\n电流\n(mA)"));
+        ui->tableWidget_status->item(24, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(24, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(24+i, 1, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(24+i, 1)->setTextAlignment(Qt::AlignCenter);
         }
 
         for (int i=2; i<20; ++i){
             for (int j=0; j<28; ++j){
-                ui->tableWidget_status->setItem(i, j, new QTableWidgetItem("0.0"));
-                ui->tableWidget_status->item(i, j)->setTextAlignment(Qt::AlignCenter);
+                ui->tableWidget_status->setItem(j, i, new QTableWidgetItem("0.0"));
+                ui->tableWidget_status->item(j, i)->setTextAlignment(Qt::AlignCenter);
             }
         }
     }
@@ -217,14 +219,17 @@ void MainWindow::initUi()
             for (int column=2; column<=4; ++column){
                 SwitchButton* cell = new SwitchButton(this);
                 if (column == 2){
+                    cell->setObjectName(QString("Power#%1").arg(row+1));
                     cell->setProperty("isPower", true);
                     cell->setProperty("index", row + 1);
                 }
                 else if (column == 3){
+                    cell->setObjectName(QString("Voltage#%1").arg(row+1));
                     cell->setProperty("isVoltage", true);
                     cell->setProperty("index", row + 1);
                 }
                 else {
+                    cell->setObjectName(QString("BackupChannel#%1").arg(row+1));
                     cell->setText("#2", "#1");
                     cell->setProperty("isSelChannel", true);
                     cell->setProperty("index", row + 1);
@@ -239,20 +244,37 @@ void MainWindow::initUi()
 
                 connect(cell, &SwitchButton::toggled, this, [=](bool checked){
                     SwitchButton* button = qobject_cast<SwitchButton*>(sender());
-                    if (checked){
-                        if (column == 2){
-                            mPCIeCommSdk.switchPower(row + 1, checked);
-                        }
-                        else if (column == 3) {
-                            mPCIeCommSdk.switchVoltage(row + 1, checked);
-                        }
-                        else if (column == 4) {
-                            mPCIeCommSdk.switchChannel(row + 1, checked);
-                        }
+                    if (column == 2){
+                        mPCIeCommSdk.switchPower(row + 1, checked);
+                    }
+                    else if (column == 3) {
+                        mPCIeCommSdk.switchVoltage(row + 1, checked);
+                    }
+                    else if (column == 4) {
+                        mPCIeCommSdk.switchBackupChannel(row + 1, checked);
                     }
                 });
             }
         }
+
+        connect(&mPCIeCommSdk, &PCIeCommSdk::reportPowerStatus, this, [=](quint32 moduleNo, bool on){
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("Power#%1").arg(moduleNo));
+            if (button){
+                button->setChecked(on);
+            }
+        });
+        connect(&mPCIeCommSdk, &PCIeCommSdk::reportVoltageStatus, this, [=](quint32 moduleNo, bool on){
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("Voltage#%1").arg(moduleNo));
+            if (button){
+                button->setChecked(on);
+            }
+        });
+        connect(&mPCIeCommSdk, &PCIeCommSdk::reportBackupChannelStatus, this, [=](quint32 moduleNo, bool on){
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("BackupChannel#%1").arg(moduleNo));
+            if (button){
+                button->setChecked(!on);
+            }
+        });
     }
 
     QActionGroup *actionType = new QActionGroup(this);
@@ -373,38 +395,6 @@ void MainWindow::initUi()
                 this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
             }
         }
-        //判断磁盘空间
-        // {
-        //     qint8 channelCount = 3;
-        //     qint32 timeBase = 50;//打包时长基数
-        //     qint64 onePacketSize = 268435456;//打包大小基数
-        //     QString cacheDir = ui->lineEdit_savePath->text();
-        //     QDir dir(cacheDir);
-        //     qint64 diskFreeSpace = getDiskFreeSpace(dir.absoluteFilePath(cacheDir));
-        //     qint32 canRecordSeconds = diskFreeSpace / (onePacketSize*1000*channelCount/timeBase);
-        //     this->findChild<QLabel*>("label_alarm")->setToolTip(QString("可录时长：%1秒").arg(canRecordSeconds));
-        //     // 这里只分3个阶段吧（30秒 5分钟 60分钟）
-        //     if (diskFreeSpace <= (qint64(onePacketSize*30000*channelCount) / timeBase)){
-        //         //不足30秒 红色
-        //         QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), Qt::red);
-        //         this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
-        //     }
-        //     else if (diskFreeSpace <= (qint64(onePacketSize*5*60000*channelCount) / timeBase)){
-        //         //不足5分钟 橙色
-        //         QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0xff,0xa5,0x00,0xff));
-        //         this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
-        //     }
-        //     else if (diskFreeSpace <= (qint64(onePacketSize*60*60000*channelCount) / timeBase)){
-        //         //不足1小时 绿色
-        //         QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0x00,0xff,0x00,0xff));
-        //         this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
-        //     }
-        //     else{
-        //         //草绿色
-        //         QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0x7c,0xfc,0x00,0xff));
-        //         this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
-        //     }
-        // }
     });
     systemClockTimer->start(900);
 
@@ -641,31 +631,42 @@ void MainWindow::initUi()
     initCustomPlot(ui->spectroMeter_time3, tr(""), tr("时刻3 Energy Counts"));
 
     connect(mCommHelper, &CommHelper::reportShotnum, this, [=](QString shotnum){
-        qInfo().noquote() << "更新炮号：" << shotnum;
-        if (mEnableAutoUpdateShotnum)
+        qInfo().noquote() << "接收指令，更新炮号：" << shotnum;
+        if (mEnableAutoUpdateShotnum){
             ui->lineEdit_shotNum->setText(shotnum);
+        }
     });
     connect(mCommHelper, &CommHelper::reportSystemtime, this, [=](QDateTime tm){
-        qInfo().noquote() << "同步时钟：" << tm.toString("yyyy-MM-dd hh:mm:ss.zzz");
+        qInfo().noquote() << "接收指令，同步时钟：" << tm.toString("yyyy-MM-dd hh:mm:ss.zzz");
         if (mEnableClockSynchronization){
         }
     });
     connect(mCommHelper, &CommHelper::reportEnergenceStop, this, [=](){
-        qInfo().noquote() << "紧急停机！！！";
-        if (mEnableEmergencyStop){
-            mIsEmergencyStop = true;
+        qInfo().noquote() << "接收指令，紧急停机！";
+        ui->action_stop->setChecked(true);
+        mEnableEmergencyStop = true;
+
+        //软件立马控制软件停止测量，并将已测的数据继续保存，在界面打印“紧急停机”日志。然后发送电源断开指令、偏压关闭指令到设备来控制测量系统进行断电。
+        qInfo().noquote() << "自动停止测量、切断电压和关闭偏压";
+
+        for (int row = 0; row < 18; ++row){
+            mPCIeCommSdk.switchPower(row + 1, false);
+            mPCIeCommSdk.switchVoltage(row + 1, false);
         }
     });
     connect(mCommHelper, &CommHelper::reportTemperature, this, [=](quint8 moduleNo, QVector<float>& pairs){
-        quint32 row = moduleNo + 1;
-        for (int column=0; column<pairs.size(); ++column){
-            ui->tableWidget_status->item(row, column)->setText(QString::number(pairs[column], 2, 'f'));
+        quint32 column = moduleNo + 1;
+        for (int row=0; row<pairs.size(); ++row){
+            ui->tableWidget_status->item(row, column)->setText(QString::number(pairs[row], 'f', 2));
 
             //温度设成10~50℃
-            if (pairs[column] > 50 || pairs[column] < 10){
+            if (pairs[row] > 50 || pairs[row] < 10){
                 ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
 
-                qCritical().noquote() << "模组#" << moduleNo << "温度异常，温度值：" << QString::number(pairs[column], 2, 'f');
+                qCritical().noquote() << "模组#" << moduleNo << "温度异常，温度值：" << QString::number(pairs[row], 'f', 2);
+
+                mPCIeCommSdk.switchPower(moduleNo, false);
+                mPCIeCommSdk.switchVoltage(moduleNo, false);
             }
             else{
                 ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
@@ -673,25 +674,106 @@ void MainWindow::initUi()
         }
     });
     connect(mCommHelper, &CommHelper::reportVoltageCurrent, this, [=](quint8 moduleNo, QVector<QPair<float,float>>& pairs){
-        quint32 row = moduleNo + 1;
-        for (int column=0; column<pairs.size(); ++column){
-            ui->tableWidget_status->item(row, 4+column)->setText(QString::number(pairs[column].first, 2, 'f'));
+        quint32 column = moduleNo + 1;
 
-            //电压设成25~50V
-            if (pairs[column].first > 50 || pairs[column].first < 25){
-                ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+        //29V电压
+        quint8 rowOffset = 4;
+        for (int row=0; row<3; ++row){
+            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(pairs[row].first, 'f', 2));
+
+            //电压设成28~30V
+            if (pairs[row].first > 30 || pairs[row].first < 28){
+                ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(Qt::red);
+
+                qCritical().noquote() << "模组#" << moduleNo << " 29V电压异常，电压值：" << QString::number(pairs[row].first, 'f', 2) << "V";
+
+                mPCIeCommSdk.switchPower(moduleNo, false);
+                mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupChannel(moduleNo, true);
             }
             else{
-                ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+                ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
             }
 
             //电流设置成0~20mA
-            ui->tableWidget_status->item(row, 8+column)->setText(QString::number(pairs[column].second, 2, 'f'));
-            if (pairs[column].second > 20){
-                ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(pairs[row].second, 'f', 2));
+            if (pairs[row].second > 20 || pairs[row].second == 0){
+                ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(Qt::red);
+
+                qCritical().noquote() << "模组#" << moduleNo << " 29V电流异常，电流值：" << QString::number(pairs[row].first, 'f', 2) << "mA";
+
+                mPCIeCommSdk.switchPower(moduleNo, false);
+                mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupChannel(moduleNo, true);
             }
             else{
-                ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+                ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            }
+        }
+
+        //48V电压
+        rowOffset += 4;
+        for (int row=4; row<8; ++row){
+            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(pairs[row].first, 'f', 2));
+
+            //电压设成45~50V
+            if (pairs[row].first > 50 || pairs[row].first < 45){
+                ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(Qt::red);
+
+                qCritical().noquote() << "模组#" << moduleNo << " 48V电压异常，电压值：" << QString::number(pairs[row].first, 'f', 2) << "V";
+
+                mPCIeCommSdk.switchPower(moduleNo, false);
+                mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupChannel(moduleNo, true);
+            }
+            else{
+                ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            }
+
+            //电流设置成0~20mA
+            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(pairs[row].second, 'f', 2));
+            if (pairs[row].second > 20 || pairs[row].second == 0){
+                ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(Qt::red);
+
+                qCritical().noquote() << "模组#" << moduleNo << " 48V电流异常，电流值：" << QString::number(pairs[row].first, 'f', 2) << "mA";
+
+                mPCIeCommSdk.switchPower(moduleNo, false);
+                mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupChannel(moduleNo, true);
+            }
+            else{
+                ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            }
+        }
+
+        //运放板电压
+        rowOffset += 4;
+        for (int row=8; row<12; ++row){
+            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(pairs[row].first, 'f', 2));
+
+            //电压设成45~50V
+            if (pairs[row].first > 50 || pairs[row].first < 45){
+                ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(Qt::red);
+
+                qCritical().noquote() << "模组#" << moduleNo << " 运放板电压异常，电压值：" << QString::number(pairs[row].first, 2, 'f') << "V";
+
+                mPCIeCommSdk.switchPower(moduleNo, false);
+                mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupChannel(moduleNo, true);
+            }
+            else{
+                ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+            }
+
+            //电流设置成0~20mA
+            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(pairs[row].second, 'f', 2));
+            if (pairs[row].second > 20 || pairs[row].second == 0){
+                ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(Qt::red);
+
+                qCritical().noquote() << "模组#" << moduleNo << " 运放板电流异常，电流值：" << QString::number(pairs[row].first, 2, 'f') << "mA";
+            }
+            else{
+                ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
             }
         }
     });
@@ -1061,6 +1143,11 @@ void MainWindow::on_action_open_triggered()
 
 void MainWindow::on_action_startMeasure_triggered()
 {
+    if (mEnableEmergencyStop){
+        QMessageBox::critical(this, tr("紧急停机"), tr("禁止在紧急停机状态下实验！"));
+        return;
+    }
+
     //根据实验时长判断磁盘空间是否足够
     {
         qint32 timeBase = 50;//打包时长基数
@@ -1577,7 +1664,8 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
         ui->pushButton_selChannel1->hide();
         ui->pushButton_selChannel2->hide();
 
-        ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);//spectroMeterPageInfoWidget_LSD
+        if (!ui->action_status->isChecked())
+            ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);//spectroMeterPageInfoWidget_LSD
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1594,7 +1682,8 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
         ui->pushButton_selChannel1->show();
         ui->pushButton_selChannel2->show();
 
-        ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
+        if (!ui->action_status->isChecked())
+            ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
         this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1611,7 +1700,8 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
         ui->pushButton_selChannel1->hide();
         ui->pushButton_selChannel2->hide();
 
-        ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
+        if (!ui->action_status->isChecked())
+            ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
         this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1993,20 +2083,16 @@ void MainWindow::on_action_stop_triggered(bool checked)
         qInfo().noquote() << tr("禁用紧急停机");
 
     mEnableEmergencyStop = checked;
-    if (!checked)
-        mIsEmergencyStop = false;
 }
 
 
 void MainWindow::on_action_status_triggered(bool checked)
 {
-    static QWidget* savedWidget = nullptr;
-    if (checked){
-        savedWidget = ui->stackedWidget->currentWidget();
+    if (checked){      
         ui->stackedWidget->setCurrentWidget(ui->statusMonitorPageInfoWidget);
     }
     else{
-        ui->stackedWidget->setCurrentWidget(savedWidget);
+        ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
     }
 }
 

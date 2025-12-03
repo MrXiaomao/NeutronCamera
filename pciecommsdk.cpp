@@ -356,18 +356,24 @@ bool PCIeCommSdk::openHistoryData(QString filename)
 bool PCIeCommSdk::switchPower(quint32 channel, bool on)
 {
     mMapPower[channel] = on;
+
+    emit reportPowerStatus(channel, on);
     return true;
 }
 
 bool PCIeCommSdk::switchVoltage(quint32 channel, bool on)
 {
     mMapVoltage[channel] = on;
+
+    emit reportVoltageStatus(channel, on);
     return true;
 }
 
-bool PCIeCommSdk::switchChannel(quint32 channel, bool on)
+bool PCIeCommSdk::switchBackupChannel(quint32 channel, bool on)
 {
     mMapChannel[channel] = on;
+
+    emit reportBackupChannelStatus(channel, on);
     return true;
 }
 

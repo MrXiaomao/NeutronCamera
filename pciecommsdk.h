@@ -389,6 +389,10 @@ public:
     Q_SIGNAL void reportNeutronSpectrum(quint8, quint8, QVector<quint16>&);
     Q_SIGNAL void reportGammaSpectrum(quint8, quint8, QVector<quint16>&);
 
+    Q_SIGNAL void reportPowerStatus(quint32, bool);
+    Q_SIGNAL void reportVoltageStatus(quint32, bool);
+    Q_SIGNAL void reportBackupChannelStatus(quint32, bool);
+
     Q_SLOT void replyCaptureData(quint8, quint32, QByteArray&);
     Q_SLOT void replySettingFinished();
 
@@ -413,7 +417,7 @@ public:
 
     bool switchPower(quint32, bool);
     bool switchVoltage(quint32, bool);
-    bool switchChannel(quint32, bool);
+    bool switchBackupChannel(quint32, bool);
 
     /*指令集*/
     //死时间
