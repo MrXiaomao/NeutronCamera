@@ -19,20 +19,38 @@ public:
     explicit OfflineWindow(bool isDarkTheme = true, QWidget *parent = nullptr);
     ~OfflineWindow();
 
-    void initCustomPlot(int index, QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel, int graphCount = 1);
+    void initUi();
+    void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
 
     bool loadOfflineFilename(const QString&);
-    void startAnalyze();
     void loadRelatedFiles(const QString& src);
+    void startAnalyze();
 
-    Q_SIGNAL void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    Q_SLOT void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    Q_SLOT void replyWaveform(quint8, quint8, QVector<quint16>&);
-    Q_SLOT void replyNeutronSpectrum(quint8, QVector<quint16>&);
-    Q_SLOT void replyGammaSpectrum(quint8, QVector<quint16>&);
+    QPixmap maskPixmap(QPixmap, QSize sz, QColor clrMask);
+    QPixmap roundPixmap(QSize sz, QColor clrOut = Qt::gray);//单圆
+    QPixmap dblroundPixmap(QSize sz, QColor clrIn, QColor clrOut = Qt::gray);//双圆
+
+    // Q_SIGNAL void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    // Q_SLOT void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
+    // Q_SLOT void replyWaveform(quint8, quint8, QVector<quint16>&);
+    // Q_SLOT void replyNeutronSpectrum(quint8, QVector<quint16>&);
+    // Q_SLOT void replyGammaSpectrum(quint8, QVector<quint16>&);
 
     virtual void closeEvent(QCloseEvent *event) override;
     virtual bool eventFilter(QObject *watched, QEvent *event) override;
+
+public slots:
+    void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
+    void replyWaveform(quint8, quint8, QVector<quint16>&);
+    void replySpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
+    void replyKernelDensitySpectrumPSD(quint8, QVector<QPair<double ,double>>&);// 核密度图谱
+    void replyKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合
+
+signals:
+    void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    void reportSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
+    void reportKernelDensitySpectrumPSD(quint8, QVector<QPair<double ,double>>&);// 核密度图谱
+    void reportKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合
 
 private slots:
     void on_pushButton_test_clicked();
@@ -56,6 +74,17 @@ private slots:
     void on_action_darkTheme_triggered();
 
     void on_action_colorTheme_triggered();
+
+    void on_action_typeLSD_triggered(bool checked);
+
+    void on_action_typePSD_triggered(bool checked);
+
+    void on_action_typeLBD_triggered(bool checked);
+
+
+    void on_action_waveform_triggered(bool checked);
+
+    void on_action_ngamma_triggered(bool checked);
 
 private:
     Ui::OfflineWindow *ui;

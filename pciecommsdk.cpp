@@ -77,7 +77,7 @@ quint32 PCIeCommSdk::numberOfDevices()
 }
 
 #include <processtopologyapi.h> //SetThreadGroupAffinity
-void PCIeCommSdk::startCapture(quint32 cardIndex, QString fileSavePath, quint32 captureTimeSeconds, quint32 shotNum/*炮号*/)
+void PCIeCommSdk::startCapture(quint32 cardIndex, QString fileSavePath, quint32 captureTimeSeconds, QString shotNum/*炮号*/)
 {
     if (cardIndex > (quint32)mDevices.count()) {
         return ;
@@ -135,7 +135,7 @@ void PCIeCommSdk::stopCapture(quint32 cardIndex)
     }
 }
 
-void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeSeconds,  quint32 shotNum/*炮号*/)
+void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeSeconds,  QString shotNum/*炮号*/)
 {
     for (int cardIndex=1; cardIndex<=mDevices.count(); ++cardIndex){
         startCapture(cardIndex, fileSavePath, captureTimeSeconds, shotNum);
@@ -157,23 +157,23 @@ bool inTimestampRange(quint64 timestamp, quint64 timestamp_start, quint64 timest
 }
 
 #include <QtEndian>
-void PCIeCommSdk::replyCaptureData(quint32 cardIndex/*相机序号*/, quint32 captureRef/*包序号*/, QByteArray& data)
+void PCIeCommSdk::replyCaptureData(quint8 cardIndex/*PCIe卡序号*/, quint32 captureRef/*包序号*/, QByteArray& data)
 {
     // 根据相机序号，计算起始相机通道号
     quint8 cameraFrom = (cardIndex-1) * CAMNUMBER_DDR_PER + 1;
     quint8 cameraTo = cardIndex * CAMNUMBER_DDR_PER;
     quint8 cameraOrientation = 0;
     quint8 currentNo = 0;//当前通道序号(0开始)
-    if (mHorCameraIndex >= cameraFrom && mHorCameraIndex <= cameraTo){
-        currentNo = mHorCameraIndex - (cardIndex-1)*4;
-        cameraOrientation = CameraOrientation::Horizontal;
-    }
-    else if (mVerCameraIndex >= cameraFrom && mVerCameraIndex <= cameraTo){
-        currentNo = mVerCameraIndex - (cardIndex-1)*4;
-        cameraOrientation = CameraOrientation::Vertical;
-    }
-    else
-        return;
+    // if (mHorCameraIndex >= cameraFrom && mHorCameraIndex <= cameraTo){
+    //     currentNo = mHorCameraIndex - (cardIndex-1)*4;
+    //     cameraOrientation = CameraOrientation::Horizontal;
+    // }
+    // else if (mVerCameraIndex >= cameraFrom && mVerCameraIndex <= cameraTo){
+    //     currentNo = mVerCameraIndex - (cardIndex-1)*4;
+    //     cameraOrientation = CameraOrientation::Vertical;
+    // }
+    // else
+    //     return;
 
     //根据通道号计算对应采集卡的第几通道
     {
@@ -237,8 +237,8 @@ void PCIeCommSdk::replyCaptureData(quint32 cardIndex/*相机序号*/, quint32 ca
                 if (serialNumberRef == 1){// 只显示第1个能谱数据
                     quint64 timestamp_start = (serialNumber - 1) * 50;
                     quint64 timestamp_stop = captureRef * 50;
-                    quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
-                    for (int i=0; i<3; ++i){
+                    quint64 mTimestampMs[] = {mTimestampMs1};
+                    for (int i=0; i<1; ++i){
                         if (inTimestampRange(mTimestampMs[i], timestamp_start, timestamp_stop)){
                             QByteArray gamma = chunk.mid(currentNo*124, 124);  //62*4*2
                             QByteArray neutron = chunk.mid(currentNo*124, 124);
@@ -278,13 +278,15 @@ void PCIeCommSdk::replyCaptureData(quint32 cardIndex/*相机序号*/, quint32 ca
         quint32 capture_timelength = 1024 * 1024 * 32 * 2;
 
         //数据包的其实时间戳/ns
+        captureRef = (mTimestampMs1 + 49) / 50;
         quint64 timestamp_start = (captureRef - 1) * capture_timelength;
         quint64 timestamp_stop = captureRef * capture_timelength;
 
         //判断时间戳范围
-        quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
-        for (int i=0; i<3; ++i){
-            if (inTimestampRange(mTimestampMs[i], timestamp_start, timestamp_stop)){
+        quint64 mTimestampMs[] = {mTimestampMs1};
+        for (int i=0; i<1; ++i){
+            //if (inTimestampRange(mTimestampMs[i], timestamp_start, timestamp_stop))
+            {
                 //将时间戳ms换算成ns
                 quint64 cut_timestamp_start = mTimestampMs[i] * 1000 * 1000 - timestamp_start;
 
@@ -330,13 +332,10 @@ void PCIeCommSdk::replySettingFinished()
 }
 
 /*设置采集参数*/
-void PCIeCommSdk::setCaptureParamter(quint32 horCameraIndex, quint32 verCameraIndex, quint32 time1, quint32 time2, quint32 time3)
+void PCIeCommSdk::setCaptureParamter(quint8 cameraIndex, quint32 time1)
 {
-    mHorCameraIndex = horCameraIndex;
-    mVerCameraIndex = verCameraIndex;
+    mCameraIndex = cameraIndex;
     mTimestampMs1 = time1;
-    mTimestampMs2 = time2;
-    mTimestampMs3 = time3;
 }
 
 #include <QRegularExpression>
@@ -344,21 +343,8 @@ bool PCIeCommSdk::openHistoryData(QString filename)
 {
     QFile file(filename);
     if (file.open(QIODevice::ReadWrite)){
-        quint32 index =1;
-        quint32 packref = 1;
-        QRegularExpression re("\\d+"); // \d+ 匹配一个或多个数字
-        auto matches = re.globalMatch(QFileInfo(filename).baseName());
-        QStringList numbers;
-
-        while (matches.hasNext()) {
-            QRegularExpressionMatch match = matches.next();
-            numbers.append(match.captured(0));
-        }
-        index = numbers.at(0).toUInt();
-        packref = numbers.at(1).toUInt();
-
         QByteArray data = file.readAll();            
-        replyCaptureData(index, packref, data);
+        replyCaptureData(mCameraIndex, mTimestampMs1, data);
         file.close();
         return true;
     }

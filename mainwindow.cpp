@@ -68,7 +68,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
     });
-    //connect(&mPCIeCommSdk, &PCIeCommSdk::reportWaveform, this, &MainWindow::replyWaveform);
+    connect(&mPCIeCommSdk, &PCIeCommSdk::reportWaveform, this, &MainWindow::replyWaveform);
 
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
@@ -104,22 +104,6 @@ MainWindow::~MainWindow()
 
 void MainWindow::initUi()
 {
-    ui->widgetTemperature->setUnit("℃");
-    ui->widgetTemperature->setText(tr("温度(℃)"));
-    ui->widgetTemperature->setPrecision(2);
-    ui->widgetTemperature->setRange(0, 10);
-    // ui->widgetTemperature->setWarnThold(80);
-    // ui->widgetTemperature->setAlarmThold(120);
-    ui->widgetTemperature->setValue(0);
-
-    ui->widgetVoltage->setUnit("V");
-    ui->widgetVoltage->setText(tr("电压(V)"));
-    ui->widgetVoltage->setPrecision(2);
-    ui->widgetVoltage->setRange(0, 10);
-    // ui->widgetVoltage->setWarnThold(120);
-    // ui->widgetVoltage->setAlarmThold(180);
-    ui->widgetVoltage->setValue(0);
-
     mDetSettingWindow = new DetSettingWindow();
     mDetSettingWindow->setWindowFlags(Qt::Widget | Qt::WindowStaysOnTopHint);
     mDetSettingWindow->hide();
@@ -128,6 +112,77 @@ void MainWindow::initUi()
     mNetSettingWindow = new NetSettingWindow();
     mNetSettingWindow->setWindowFlags(Qt::Widget | Qt::WindowStaysOnTopHint);
     mNetSettingWindow->hide();
+
+    {
+        ui->tableWidget_status->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+
+        ui->tableWidget_status->setSpan(0, 0, 1, 4);
+        ui->tableWidget_status->setItem(0, 0, new QTableWidgetItem("温度℃"));
+        ui->tableWidget_status->item(0, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(0, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(1, i, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(1, i)->setTextAlignment(Qt::AlignCenter);
+        }
+
+        ui->tableWidget_status->setSpan(0, 4, 1, 4);
+        ui->tableWidget_status->setItem(0, 4, new QTableWidgetItem("29V电压V"));
+        ui->tableWidget_status->item(0, 4)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(0, 4)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(1, 4+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(1, 4+i)->setTextAlignment(Qt::AlignCenter);
+        }
+        ui->tableWidget_status->setSpan(0, 8, 1, 4);
+        ui->tableWidget_status->setItem(0, 8, new QTableWidgetItem("29V电流mA"));
+        ui->tableWidget_status->item(0, 8)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(0, 8)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(1, 8+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(1, 8+i)->setTextAlignment(Qt::AlignCenter);
+        }
+
+        ui->tableWidget_status->setSpan(0, 12, 1, 4);
+        ui->tableWidget_status->setItem(0, 12, new QTableWidgetItem("48V电压V"));
+        ui->tableWidget_status->item(0, 12)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(0, 12)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(1, 12+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(1, 12+i)->setTextAlignment(Qt::AlignCenter);
+        }
+        ui->tableWidget_status->setSpan(0, 16, 1, 4);
+        ui->tableWidget_status->setItem(0, 16, new QTableWidgetItem("48V电流mA"));
+        ui->tableWidget_status->item(0, 16)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(0, 16)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(1, 16+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(1, 16+i)->setTextAlignment(Qt::AlignCenter);
+        }
+
+        ui->tableWidget_status->setSpan(0, 20, 1, 4);
+        ui->tableWidget_status->setItem(0, 20, new QTableWidgetItem("运放板电压"));
+        ui->tableWidget_status->item(0, 20)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(0, 20)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(1, 20+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(1, 20+i)->setTextAlignment(Qt::AlignCenter);
+        }
+        ui->tableWidget_status->setSpan(0, 24, 1, 4);
+        ui->tableWidget_status->setItem(0, 24, new QTableWidgetItem("运放板电流"));
+        ui->tableWidget_status->item(0, 24)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_status->item(0, 24)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
+        for (int i=0; i<=3; ++i){
+            ui->tableWidget_status->setItem(1, 24+i, new QTableWidgetItem(QString("#%1").arg(i+1)));
+            ui->tableWidget_status->item(1, 24+i)->setTextAlignment(Qt::AlignCenter);
+        }
+
+        for (int i=2; i<20; ++i){
+            for (int j=0; j<28; ++j){
+                ui->tableWidget_status->setItem(i, j, new QTableWidgetItem("0.0"));
+                ui->tableWidget_status->item(i, j)->setTextAlignment(Qt::AlignCenter);
+            }
+        }
+    }
 
     {
         ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Fixed);
@@ -299,38 +354,57 @@ void MainWindow::initUi()
         QString dayOfWeekString = dayNames.at(dayOfWeekNumber);
         this->findChild<QLabel*>("label_systemtime")->setText(QString(QObject::tr("系统时间：")) + currentDateTime.toString("yyyy/MM/dd hh:mm:ss ") + dayOfWeekString);
 
-        //判断磁盘空间
         {
-            qint8 channelCount = 3;
-            qint32 timeBase = 50;//打包时长基数
-            qint64 onePacketSize = 268435456;//打包大小基数
-            QString cacheDir = ui->lineEdit_savePath->text();
-            QDir dir(cacheDir);
-            qint64 diskFreeSpace = getDiskFreeSpace(dir.absoluteFilePath(cacheDir));
-            qint32 canRecordSeconds = diskFreeSpace / (onePacketSize*1000*channelCount/timeBase);
-            this->findChild<QLabel*>("label_alarm")->setToolTip(QString("可录时长：%1秒").arg(canRecordSeconds));
-            // 这里只分3个阶段吧（30秒 5分钟 60分钟）
-            if (diskFreeSpace <= (qint64(onePacketSize*30000*channelCount) / timeBase)){
-                //不足30秒 红色
-                QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), Qt::red);
-                this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
-            }
-            else if (diskFreeSpace <= (qint64(onePacketSize*5*60000*channelCount) / timeBase)){
-                //不足5分钟 橙色
-                QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0xff,0xa5,0x00,0xff));
-                this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
-            }
-            else if (diskFreeSpace <= (qint64(onePacketSize*60*60000*channelCount) / timeBase)){
-                //不足1小时 绿色
-                QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0x00,0xff,0x00,0xff));
-                this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
+            //监测温度和电压报警状态
+            static quint32 ref = 0;
+            ref = (ref==0) ? 1 : 0;
+            if (mIsAlarm[0] || mIsAlarm[1]){
+                if (ref == 0){
+                    QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0xff,0x00,0x00,0xff));
+                    this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
+                }
+                else {
+                    QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0xff,0x00,0x00,0x00));
+                    this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
+                }
             }
             else{
-                //草绿色
                 QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0x7c,0xfc,0x00,0xff));
                 this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
             }
         }
+        //判断磁盘空间
+        // {
+        //     qint8 channelCount = 3;
+        //     qint32 timeBase = 50;//打包时长基数
+        //     qint64 onePacketSize = 268435456;//打包大小基数
+        //     QString cacheDir = ui->lineEdit_savePath->text();
+        //     QDir dir(cacheDir);
+        //     qint64 diskFreeSpace = getDiskFreeSpace(dir.absoluteFilePath(cacheDir));
+        //     qint32 canRecordSeconds = diskFreeSpace / (onePacketSize*1000*channelCount/timeBase);
+        //     this->findChild<QLabel*>("label_alarm")->setToolTip(QString("可录时长：%1秒").arg(canRecordSeconds));
+        //     // 这里只分3个阶段吧（30秒 5分钟 60分钟）
+        //     if (diskFreeSpace <= (qint64(onePacketSize*30000*channelCount) / timeBase)){
+        //         //不足30秒 红色
+        //         QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), Qt::red);
+        //         this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
+        //     }
+        //     else if (diskFreeSpace <= (qint64(onePacketSize*5*60000*channelCount) / timeBase)){
+        //         //不足5分钟 橙色
+        //         QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0xff,0xa5,0x00,0xff));
+        //         this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
+        //     }
+        //     else if (diskFreeSpace <= (qint64(onePacketSize*60*60000*channelCount) / timeBase)){
+        //         //不足1小时 绿色
+        //         QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0x00,0xff,0x00,0xff));
+        //         this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
+        //     }
+        //     else{
+        //         //草绿色
+        //         QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0x7c,0xfc,0x00,0xff));
+        //         this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
+        //     }
+        // }
     });
     systemClockTimer->start(900);
 
@@ -396,15 +470,9 @@ void MainWindow::initUi()
     }
 
     // 左侧栏
-    QPushButton* statusButton = nullptr;
     QPushButton* controlButton = nullptr;
     {        
         {
-            statusButton = new QPushButton();
-            statusButton->setText(tr("状态监测"));
-            statusButton->setFixedSize(250,29);
-            statusButton->setCheckable(true);
-
             controlButton = new QPushButton();
             controlButton->setText(tr("设备控制"));
             controlButton->setFixedSize(250,29);
@@ -419,7 +487,6 @@ void MainWindow::initUi()
         QWidget* sideProxyWidget = new QWidget();
         sideProxyWidget->setObjectName("sideProxyWidget");
         sideProxyWidget->setLayout(sideHboxLayout);
-        sideHboxLayout->addWidget(statusButton);
         sideHboxLayout->addWidget(controlButton);
 
         QGraphicsScene *scene = new QGraphicsScene(this);
@@ -430,37 +497,10 @@ void MainWindow::initUi()
         ui->graphicsView_2->setFrameStyle(0);
         ui->graphicsView_2->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         ui->graphicsView_2->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        ui->graphicsView_2->setFixedSize(30, 500);
+        ui->graphicsView_2->setFixedSize(30, 250);
         ui->leftSidewidget->setFixedWidth(30);
 
-        connect(statusButton,&QPushButton::clicked,this,[=](/*bool checked*/){
-            controlButton->setChecked(false);
-
-            if(ui->leftStackedWidget->isHidden()) {
-                ui->leftStackedWidget->setCurrentWidget(ui->detectorStatusWidget);
-                ui->leftStackedWidget->show();            
-
-                GlobalSettings settings;
-                settings.setValue("Global/DefaultPage", "detectorStatus");
-            } else {
-                if(ui->leftStackedWidget->currentWidget() == ui->detectorStatusWidget) {
-                    ui->leftStackedWidget->hide();
-
-                    statusButton->setChecked(false);
-                    GlobalSettings settings;
-                    settings.setValue("Global/DefaultPage", "");
-                } else {
-                    ui->leftStackedWidget->setCurrentWidget(ui->detectorStatusWidget);
-
-                    GlobalSettings settings;
-                    settings.setValue("Global/DefaultPage", "detectorStatus");
-                }
-            }
-        });
-
         connect(controlButton,&QPushButton::clicked,this,[=](/*bool checked*/){
-            statusButton->setChecked(false);
-
             if(ui->leftStackedWidget->isHidden()) {
                 ui->leftStackedWidget->setCurrentWidget(ui->detectorControlWidget);
                 ui->leftStackedWidget->show();
@@ -483,14 +523,6 @@ void MainWindow::initUi()
             }
         });
 
-        connect(ui->toolButton_closeDetectorStatusWidget,&QPushButton::clicked,this,[=](){
-            ui->leftStackedWidget->hide();
-            statusButton->setChecked(false);
-
-            GlobalSettings settings;
-            settings.setValue("Global/DefaultPage", "");
-        });
-
         connect(ui->toolButton_closeDetectorControlWidget,&QPushButton::clicked,this,[=](){
             ui->leftStackedWidget->hide();
             controlButton->setChecked(false);
@@ -504,14 +536,9 @@ void MainWindow::initUi()
             ui->leftStackedWidget->setCurrentWidget(ui->detectorControlWidget);
             controlButton->setChecked(true);
         }
-        else if (settings.value("Global/DefaultPage").toString() == "detectorStatus"){
-            ui->leftStackedWidget->setCurrentWidget(ui->detectorStatusWidget);
-            statusButton->setChecked(true);
-        }
         else{
             ui->leftStackedWidget->hide();
             controlButton->setChecked(false);
-            statusButton->setChecked(false);
         }
     }
 
@@ -570,7 +597,7 @@ void MainWindow::initUi()
         ui->lineEdit_savePath->setText(cacheDir);
 
         // 发次
-        ui->spinBox_shotNum->setValue(settings.value("Global/ShotNum", 100).toUInt());
+        ui->lineEdit_shotNum->setText(settings.value("Global/ShotNum", "00001").toString());
         ui->checkBox_autoIncrease->setChecked(settings.value("Global/ShotNumIsAutoIncrease", false).toBool());
     }
 
@@ -609,15 +636,58 @@ void MainWindow::initUi()
     initCustomPlot(ui->spectroMeter_verCamera_PSD, tr("垂直 n:γ Energy(keVee) PSD图"), tr(""));
     initCustomPlot(ui->spectroMeter_verCamera_FOM, tr("垂直 FOM图"), tr(""));
 
-    initCustomPlot(ui->spectroMeter_time1, tr("时刻1 Energy"), tr("Counts"));
-    initCustomPlot(ui->spectroMeter_time2, tr("时刻2 Energy"), tr("Counts"));
-    initCustomPlot(ui->spectroMeter_time3, tr("时刻3 Energy"), tr("Counts"));
+    initCustomPlot(ui->spectroMeter_time1, tr(""), tr("时刻1 Energy Counts"));
+    initCustomPlot(ui->spectroMeter_time2, tr(""), tr("时刻2 Energy Counts"));
+    initCustomPlot(ui->spectroMeter_time3, tr(""), tr("时刻3 Energy Counts"));
 
-    connect(mCommHelper, &CommHelper::reportTemperature, this, [=](float v){
-        ui->widgetTemperature->setValue(v);
+    connect(mCommHelper, &CommHelper::reportShotnum, this, [=](QString shotnum){
+        qInfo().noquote() << "更新炮号：" << shotnum;
+        if (mEnableAutoUpdateShotnum)
+            ui->lineEdit_shotNum->setText(shotnum);
     });
-    connect(mCommHelper, &CommHelper::reportVoltage, this, [=](float v){
-        ui->widgetVoltage->setValue(v);
+    connect(mCommHelper, &CommHelper::reportSystemtime, this, [=](QDateTime tm){
+        qInfo().noquote() << "同步时钟：" << tm.toString("yyyy-MM-dd hh:mm:ss.zzz");
+        if (mEnableClockSynchronization){
+        }
+    });
+    connect(mCommHelper, &CommHelper::reportEnergenceStop, this, [=](){
+        qInfo().noquote() << "紧急停机！！！";
+        if (mEnableEmergencyStop){
+            mIsEmergencyStop = true;
+        }
+    });
+    connect(mCommHelper, &CommHelper::reportTemperature, this, [=](quint8 row,quint8 column,float v){
+        ui->tableWidget_status->item(row, column)->setText(QString::number(v));
+
+        //温度设成10~50℃
+        if (v > 50){
+            ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+        }
+        else{
+            ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+        }
+    });
+    connect(mCommHelper, &CommHelper::reportVoltage, this, [=](quint8 row,quint8 column,float v){
+        ui->tableWidget_status->item(row, column)->setText(QString::number(v));
+
+        //电压设成25~50V
+        if (v > 50){
+            ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+        }
+        else{
+            ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+        }
+    });
+    connect(mCommHelper, &CommHelper::reportCurrent, this, [=](quint8 row,quint8 column,float v){
+        ui->tableWidget_status->item(row, column)->setText(QString::number(v));
+
+        //电流设置成0~20mA
+        if (v > 20){
+            ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+        }
+        else{
+            ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+        }
     });
 }
 
@@ -1016,7 +1086,7 @@ void MainWindow::on_action_startMeasure_triggered()
     spectroMeter_verCamera->replot();
 
     QDateTime now = QDateTime::currentDateTime();
-    QString fileSaveDir = QString("%1/%2/%3").arg(ui->spinBox_timeLength->value()).arg(ui->spinBox_shotNum->value()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
+    QString fileSaveDir = QString("%1/%2/%3").arg(ui->spinBox_timeLength->value()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
     QDir dir(fileSaveDir);
     if (!dir.exists()) {
         if (!dir.mkpath(".")){
@@ -1029,7 +1099,7 @@ void MainWindow::on_action_startMeasure_triggered()
 
     // 保存本地测量参数信息
     GlobalSettings settings(CONFIG_FILENAME);
-    settings.setValue("Global/ShotNum", ui->spinBox_shotNum->value());
+    settings.setValue("Global/ShotNum", ui->lineEdit_shotNum->text());
     settings.setValue("Global/ShotNumIsAutoIncrease", ui->checkBox_autoIncrease->isChecked());
     settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
     settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
@@ -1041,7 +1111,7 @@ void MainWindow::on_action_startMeasure_triggered()
 
     mPCIeCommSdk.startAllCapture(fileSaveDir,
                              ui->spinBox_timeLength->value(),
-                             ui->spinBox_shotNum->value());
+                             ui->lineEdit_shotNum->text());
 
 }
 
@@ -1337,24 +1407,6 @@ QPixmap MainWindow::dblroundPixmap(QSize sz, QColor clrIn, QColor clrOut)
 }
 
 
-void MainWindow::on_action_clock_triggered()
-{
-    qInfo().noquote() << tr("发送时钟同步信息");
-}
-
-
-void MainWindow::on_action_shotNum_triggered()
-{
-    qInfo().noquote() << tr("更新炮号：") << ui->spinBox_shotNum->value();
-}
-
-
-void MainWindow::on_action_stop_triggered()
-{
-    qInfo().noquote() << tr("紧急停机！！！");
-}
-
-
 void MainWindow::on_action_linear_triggered(bool checked)
 {
     QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
@@ -1519,7 +1571,7 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
         ui->pushButton_selChannel1->hide();
         ui->pushButton_selChannel2->hide();
 
-        ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LSD);
+        ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);//spectroMeterPageInfoWidget_LSD
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1744,7 +1796,17 @@ void MainWindow::replyKernelDensitySpectrumFoM(quint8 cameraOrientation, QVector
 void MainWindow::replySpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<quint16,quint16>>& pairs)
 {
     //实测曲线
-    QCustomPlot* customPlot = ui->spectroMeter_top;
+    QCustomPlot* customPlot = nullptr;
+    if (timestampIndex == 1){
+        customPlot = ui->spectroMeter_time1;
+    }
+    else if (timestampIndex == 2){
+        customPlot = ui->spectroMeter_time2;
+    }
+    else if (timestampIndex == 3){
+        customPlot = ui->spectroMeter_time3;
+    }
+
     QVector<double> keys, values;
     quint16 yMin = 1e10;
     quint16 yMax = 0;
@@ -1760,24 +1822,10 @@ void MainWindow::replySpectrum(quint8 timestampIndex, quint8 cameraOrientation, 
         spaceDisc = (yMax - yMin) * 0.15;
     }
 
-    if (timestampIndex == 1){
-        if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
-            customPlot->graph(0)->setData(keys, values);
-        else
-            customPlot->graph(1)->setData(keys, values);
-    }
-    else if (timestampIndex == 2){
-        if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
-            customPlot->graph(2)->setData(keys, values);
-        else
-            customPlot->graph(3)->setData(keys, values);
-    }
-    else if (timestampIndex == 3){
-        if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
-            customPlot->graph(4)->setData(keys, values);
-        else
-            customPlot->graph(5)->setData(keys, values);
-    }
+    if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
+        customPlot->graph(0)->setData(keys, values);
+    else
+        customPlot->graph(1)->setData(keys, values);
 
     customPlot->xAxis->rescale(true);
     customPlot->yAxis->rescale(false);
@@ -1881,7 +1929,7 @@ void MainWindow::on_pushButton_preview_clicked()
             emit reportSpectrum(2, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
             emit reportSpectrum(2, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
             emit reportSpectrum(3, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[1]);
-            emit reportSpectrum(4, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
+            emit reportSpectrum(3, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
         }
     }
 }
@@ -1908,3 +1956,51 @@ void MainWindow::on_action_init_triggered()
 
     emit mPCIeCommSdk.replySettingFinished();
 }
+
+void MainWindow::on_action_clock_triggered(bool checked)
+{
+    if (checked)
+        qInfo().noquote() << tr("启用时钟同步");
+    else
+        qInfo().noquote() << tr("禁用时钟同步");
+
+    mEnableAutoUpdateShotnum = checked;
+}
+
+
+void MainWindow::on_action_shotNum_triggered(bool checked)
+{
+    if (checked)
+        qInfo().noquote() << tr("启用自动更新炮号");
+    else
+        qInfo().noquote() << tr("禁用自动更新炮号");
+
+    mEnableClockSynchronization = checked;
+}
+
+
+void MainWindow::on_action_stop_triggered(bool checked)
+{
+    if (checked)
+        qInfo().noquote() << tr("启用紧急停机");
+    else
+        qInfo().noquote() << tr("禁用紧急停机");
+
+    mEnableEmergencyStop = checked;
+    if (!checked)
+        mIsEmergencyStop = false;
+}
+
+
+void MainWindow::on_action_status_triggered(bool checked)
+{
+    static QWidget* savedWidget = nullptr;
+    if (checked){
+        savedWidget = ui->stackedWidget->currentWidget();
+        ui->stackedWidget->setCurrentWidget(ui->statusMonitorPageInfoWidget);
+    }
+    else{
+        ui->stackedWidget->setCurrentWidget(savedWidget);
+    }
+}
+

@@ -389,11 +389,11 @@ public:
     Q_SIGNAL void reportNeutronSpectrum(quint8, quint8, QVector<quint16>&);
     Q_SIGNAL void reportGammaSpectrum(quint8, quint8, QVector<quint16>&);
 
-    Q_SLOT void replyCaptureData(quint32, quint32, QByteArray&);
+    Q_SLOT void replyCaptureData(quint8, quint32, QByteArray&);
     Q_SLOT void replySettingFinished();
 
-    Q_SLOT void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, quint32 shotNum/*炮号*/);
-    Q_SLOT void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, quint32 shotNum/*炮号*/);
+    Q_SLOT void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
+    Q_SLOT void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
     Q_SLOT void stopCapture(quint32 index);
     Q_SLOT void stopAllCapture();
 
@@ -407,7 +407,7 @@ public:
     void initialize();
 
     /*设置采集参数*/
-    void setCaptureParamter(quint32, quint32, quint32, quint32, quint32);
+    void setCaptureParamter(quint8, quint32);
 
     bool openHistoryData(QString filename);
 
@@ -474,9 +474,8 @@ private:
 
     QStringList mDevices;
     QMap<quint32, bool> mThreadRunning;
-    quint32 mHorCameraIndex = 1;
-    quint32 mVerCameraIndex = 12;
-    quint64 mTimestampMs1 = 1000, mTimestampMs2 = 2000, mTimestampMs3 = 3000;
+    quint8 mCameraIndex = 1;/*相机序号*/
+    quint32 mTimestampMs1 = 1000;/*分析时刻*/
 };
 
 #endif // PCIECOMMSDK_H

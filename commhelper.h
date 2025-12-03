@@ -2,12 +2,15 @@
 #define COMMHELPER_H
 
 #include <QObject>
+#include <QSerialPort>
 #include <QTcpSocket>
+#include <QUdpSocket>
 #include <QMutex>
 #include <QFile>
 #include <QElapsedTimer>
 #include <QWaitCondition>
 #include <QTimer>
+#include <QDateTime>
 #include <QEventLoop>
 
 class CommHelper : public QObject
@@ -31,15 +34,22 @@ public:
     */
     void disconnectServer();
 
-    Q_SIGNAL void reportTemperature(float);
-    Q_SIGNAL void reportVoltage(float);
+    Q_SIGNAL void reportTemperature(quint8,quint8,float);
+    Q_SIGNAL void reportVoltage(quint8,quint8,float);
+    Q_SIGNAL void reportCurrent(quint8,quint8,float);
+    Q_SIGNAL void reportShotnum(QString);
+    Q_SIGNAL void reportSystemtime(QDateTime);
+    Q_SIGNAL void reportEnergenceStop();
 
     Q_SLOT void error(QAbstractSocket::SocketError);
     Q_SLOT void readyRead();
+    Q_SLOT void serialPortReadyRead();
     Q_SLOT void connected();
 
 private:
+    QSerialPort* mSerialPort = nullptr;
     QTcpSocket *mTcpClient = nullptr;
+    QUdpSocket *mUdpServer = nullptr;
 
     /*
      初始化网络

@@ -297,33 +297,83 @@
      </widget>
     </item>
     <item>
-     <widget class="QWidget" name="centralVboxTabWidget" native="true">
-      <layout class="QVBoxLayout" name="verticalLayout_7">
-       <property name="spacing">
-        <number>2</number>
-       </property>
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QCustomPlot" name="spectroMeter_top" native="true"/>
-       </item>
-       <item>
-        <widget class="QCustomPlot" name="spectroMeter_central" native="true"/>
-       </item>
-       <item>
-        <widget class="QCustomPlot" name="spectroMeter_bottom" native="true"/>
-       </item>
-      </layout>
+     <widget class="QStackedWidget" name="centralVboxStackedWidget">
+      <property name="currentIndex">
+       <number>1</number>
+      </property>
+      <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QCustomPlot" name="spectroMeter_LSD_waveform" native="true"/>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_3">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QCustomPlot" name="spectroMeter_horCamera_PSD" native="true"/>
+          </item>
+          <item>
+           <widget class="QCustomPlot" name="spectroMeter_horCamera_FOM" native="true"/>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QCustomPlot" name="spectroMeter_verCamera_PSD" native="true"/>
+          </item>
+          <item>
+           <widget class="QCustomPlot" name="spectroMeter_verCamera_FOM" native="true"/>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="spectroMeterPageInfoWidget_PSD_LBD">
+       <layout class="QVBoxLayout" name="verticalLayout_7">
+        <property name="spacing">
+         <number>2</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QCustomPlot" name="spectroMeter_waveform" native="true"/>
+        </item>
+        <item>
+         <widget class="QCustomPlot" name="spectroMeter_spectrum" native="true"/>
+        </item>
+       </layout>
+      </widget>
      </widget>
     </item>
     <item>
@@ -406,45 +456,13 @@
           </sizepolicy>
          </property>
          <property name="title">
-          <string>预览脉冲幅度谱</string>
+          <string>选择相机/时刻</string>
          </property>
          <property name="alignment">
           <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
          </property>
          <layout class="QGridLayout" name="gridLayout_6">
-          <item row="0" column="2">
-           <widget class="QLabel" name="label_18">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>时刻3/ms：</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QLabel" name="label_12">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>时刻2/ms：</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="0">
+          <item row="1" column="0">
            <widget class="QLabel" name="label_11">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -460,8 +478,31 @@
             </property>
            </widget>
           </item>
+          <item row="3" column="2">
+           <widget class="QRadioButton" name="radioButton_2">
+            <property name="text">
+             <string>10ms</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="label_12">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>时长/ms：</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+          </item>
           <item row="1" column="1">
-           <widget class="QSpinBox" name="spinBox_timeNode2">
+           <widget class="QSpinBox" name="spinBox_time1">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
               <horstretch>0</horstretch>
@@ -478,11 +519,11 @@
              <number>10</number>
             </property>
             <property name="value">
-             <number>20</number>
+             <number>10</number>
             </property>
            </widget>
           </item>
-          <item row="2" column="0">
+          <item row="5" column="0">
            <widget class="QWidget" name="widget_4" native="true">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -509,51 +550,17 @@
             </layout>
            </widget>
           </item>
-          <item row="1" column="2">
-           <widget class="QSpinBox" name="spinBox_timeNode3">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
+          <item row="3" column="1">
+           <widget class="QRadioButton" name="radioButton">
+            <property name="text">
+             <string>1ms</string>
             </property>
-            <property name="minimum">
-             <number>0</number>
-            </property>
-            <property name="maximum">
-             <number>10000</number>
-            </property>
-            <property name="singleStep">
-             <number>10</number>
-            </property>
-            <property name="value">
-             <number>30</number>
+            <property name="checked">
+             <bool>true</bool>
             </property>
            </widget>
           </item>
-          <item row="1" column="0">
-           <widget class="QSpinBox" name="spinBox_timeNode1">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimum">
-             <number>0</number>
-            </property>
-            <property name="maximum">
-             <number>10000</number>
-            </property>
-            <property name="singleStep">
-             <number>10</number>
-            </property>
-            <property name="value">
-             <number>10</number>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="0" colspan="3">
+          <item row="0" column="0" colspan="3">
            <widget class="QWidget" name="widget_2" native="true">
             <layout class="QGridLayout" name="gridLayout_3">
              <item row="0" column="0">
@@ -683,6 +690,19 @@
             </layout>
            </widget>
           </item>
+          <item row="1" column="2">
+           <spacer name="horizontalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
          </layout>
         </widget>
        </item>
@@ -740,6 +760,9 @@
             </property>
             <property name="checkable">
              <bool>false</bool>
+            </property>
+            <property name="toolButtonStyle">
+             <enum>Qt::ToolButtonTextBesideIcon</enum>
             </property>
            </widget>
           </item>
@@ -942,6 +965,65 @@
       </layout>
      </widget>
     </item>
+    <item>
+     <widget class="QWidget" name="rightSidewidget" native="true">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>30</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QGraphicsView" name="rightGraphicsView">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -950,7 +1032,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -977,7 +1059,16 @@
     <addaction name="separator"/>
     <addaction name="action_colorTheme"/>
    </widget>
+   <widget class="QMenu" name="menu_detType">
+    <property name="title">
+     <string>探测器类型(&amp;D)</string>
+    </property>
+    <addaction name="action_typeLSD"/>
+    <addaction name="action_typePSD"/>
+    <addaction name="action_typeLBD"/>
+   </widget>
    <addaction name="menu_file"/>
+   <addaction name="menu_detType"/>
    <addaction name="menu_theme"/>
    <addaction name="menu_help"/>
   </widget>
@@ -1004,6 +1095,8 @@
    <addaction name="action_openfile"/>
    <addaction name="action_analyze"/>
    <addaction name="separator"/>
+   <addaction name="action_waveform"/>
+   <addaction name="action_ngamma"/>
    <addaction name="action_linear"/>
    <addaction name="action_logarithm"/>
    <addaction name="separator"/>
@@ -1156,6 +1249,75 @@
     <enum>QAction::NoRole</enum>
    </property>
   </action>
+  <action name="action_typeLSD">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>LSD探测器</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_typePSD">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>PSD探测器</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_typeLBD">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>LBD探测器</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_waveform">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="lresource.qrc">
+     <normaloff>:/resource/image/waveform.png</normaloff>:/resource/image/waveform.png</iconset>
+   </property>
+   <property name="text">
+    <string>波形图</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_ngamma">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="lresource.qrc">
+     <normaloff>:/resource/image/scatter.png</normaloff>:/resource/image/scatter.png</iconset>
+   </property>
+   <property name="text">
+    <string>n-γ甄别图</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
@@ -1166,6 +1328,7 @@
   </customwidget>
  </customwidgets>
  <resources>
+  <include location="lresource.qrc"/>
   <include location="../3rdParty/resource/resource.qrc"/>
   <include location="../3rdParty/resource/resource.qrc"/>
  </resources>

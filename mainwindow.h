@@ -80,12 +80,6 @@ private slots:
 
     void on_action_colorTheme_triggered();
 
-    void on_action_clock_triggered();
-
-    void on_action_shotNum_triggered();
-
-    void on_action_stop_triggered();
-
     void on_action_linear_triggered(bool checked);
 
     void on_action_logarithm_triggered(bool checked);
@@ -116,15 +110,27 @@ private slots:
 
     void on_action_init_triggered();
 
+    void on_action_clock_triggered(bool checked);
+
+    void on_action_shotNum_triggered(bool checked);
+
+    void on_action_stop_triggered(bool checked);
+
+    void on_action_status_triggered(bool checked);
+
 private:
     Ui::MainWindow *ui;
     CommHelper* mCommHelper = nullptr;
     PCIeCommSdk mPCIeCommSdk;
     DetSettingWindow *mDetSettingWindow = nullptr;
     NetSettingWindow *mNetSettingWindow = nullptr;
-
+    bool mIsAlarm[2] = {false, false};//0-温度 1-电压
     bool mIsMeasuring = false;
     quint8 mCurrentPageIndex = 1;
+    bool mEnableAutoUpdateShotnum = false;//是否启用自动更新炮号
+    bool mEnableClockSynchronization = false;//是否启用时钟同步
+    bool mEnableEmergencyStop = false;//是否启用紧急停机
+    bool mIsEmergencyStop = false;//紧急停机状态
 
     bool mIsDarkTheme = true;
     bool mThemeColorEnable = true;

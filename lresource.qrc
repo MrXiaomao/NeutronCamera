@@ -6,5 +6,9 @@
         <file>resource/image/stop.png</file>
         <file>resource/image/tip.png</file>
         <file>resource/image/pictogram.png</file>
+        <file>resource/image/curve.png</file>
+        <file>resource/image/scatter.png</file>
+        <file>resource/image/waveform.png</file>
+        <file>resource/image/status.png</file>
     </qresource>
 </RCC>
