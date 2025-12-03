@@ -1032,7 +1032,7 @@
                    </sizepolicy>
                   </property>
                   <property name="text">
-                   <string>测量时长/ms：</string>
+                   <string>采集时长/ms：</string>
                   </property>
                   <property name="alignment">
                    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -1579,6 +1579,8 @@
     </property>
     <addaction name="action_open"/>
     <addaction name="separator"/>
+    <addaction name="action_data_compress"/>
+    <addaction name="separator"/>
     <addaction name="action_exit"/>
    </widget>
    <widget class="QMenu" name="menu_help">
@@ -1660,7 +1662,25 @@
    <addaction name="separator"/>
    <addaction name="action_exit"/>
   </widget>
-  <action name="action_open">
+  <action name="action_data_compress">
+   <property name="icon">
+    <iconset resource="lresource.qrc">
+     <normaloff>:/resource/image/compress.png</normaloff>:/resource/image/compress.png</iconset>
+   </property>
+   <property name="text">
+    <string>压缩数据(&amp;O)...</string>
+   </property>
+   <property name="iconText">
+    <string>压缩数据</string>
+   </property>
+   <property name="toolTip">
+    <string>压缩数据</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+    <action name="action_open">
    <property name="icon">
     <iconset resource="../3rdParty/resource/resource.qrc">
      <normaloff>:/openfile.png</normaloff>:/openfile.png</iconset>

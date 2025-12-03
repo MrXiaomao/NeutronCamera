@@ -10,5 +10,6 @@
         <file>resource/image/scatter.png</file>
         <file>resource/image/waveform.png</file>
         <file>resource/image/status.png</file>
+        <file>resource/image/compress.png</file>
     </qresource>
 </RCC>

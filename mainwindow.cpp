@@ -1140,6 +1140,21 @@ void MainWindow::on_action_open_triggered()
     qInfo().noquote() << tr("打开离线数据分析程序");
 }
 
+void MainWindow::on_action_data_compress_triggered()
+{
+    QString program = QCoreApplication::applicationFilePath();
+    QStringList arguments;
+    arguments.append("-c");
+    arguments.append("compress");
+
+    static int num = 0;
+    arguments.append("-num");
+    arguments.append(QString::number(num));
+    num++;
+    QProcess::startDetached(program, arguments);
+
+    qInfo().noquote() << tr("打开数据压缩与上传程序");
+}
 
 void MainWindow::on_action_startMeasure_triggered()
 {

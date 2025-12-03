@@ -10,6 +10,7 @@ CONFIG += c++17
 
 SOURCES += \
     commhelper.cpp \
+    datacompress.cpp \
     detsettingwindow.cpp \
     globalsettings.cpp \
     main.cpp \
@@ -22,6 +23,7 @@ SOURCES += \
 
 HEADERS += \
     commhelper.h \
+    datacompress.h \
     detsettingwindow.h \
     netsettingwindow.h \
     offlinewindow.h \
@@ -33,6 +35,7 @@ HEADERS += \
     switchbutton.h
 
 FORMS += \
+    datacompress.ui \
     detsettingwindow.ui \
     mainwindow.ui \
     netsettingwindow.ui \
@@ -134,3 +137,5 @@ include($$PWD/../3rdParty/hdf5/C++/hdf5Wrapper.pri)
 # PRECOMPILED_HEADER += stable.h
 
 win32: LIBS += -lsetupapi
+
+DISTFILES +=

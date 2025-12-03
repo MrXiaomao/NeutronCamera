@@ -66,6 +66,8 @@ private slots:
 
     void on_action_open_triggered();
 
+    void on_action_data_compress_triggered();
+
     void on_action_startMeasure_triggered();
 
     void on_action_stopMeasure_triggered();
