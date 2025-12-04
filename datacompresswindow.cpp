@@ -6,18 +6,286 @@
 #include <QRandomGenerator>
 #include <QMap>
 #include <QFileInfo>
+#include <QFile>
 #include <QDir>
 #include "globalsettings.h"
 
 #include <array>
 #include <QVector>
 #include <cstring>
+#include <QThread>
+#include <QMutexLocker>
+
+// ========== DataAnalysisWorker 实现 ==========
+
+DataAnalysisWorker::DataAnalysisWorker(QObject *parent)
+    : QObject(parent)
+    , mThreshold(200)
+    , mTimePerFile(50)
+    , mStartTime(0)
+    , mEndTime(0)
+    , mCancelled(false)
+{
+}
+
+DataAnalysisWorker::~DataAnalysisWorker()
+{
+}
+
+void DataAnalysisWorker::setParameters(const QString& dataDir,
+                                      const QStringList& fileList,
+                                      const QString& outfileName,
+                                      int threshold,
+                                      int timePerFile,
+                                      int startTime,
+                                      int endTime)
+{
+    QMutexLocker locker(&mMutex);
+    mDataDir = dataDir;
+    mFileList = fileList;
+    mOutfileName = outfileName;
+    mThreshold = threshold;
+    mTimePerFile = timePerFile;
+    mStartTime = startTime;
+    mEndTime = endTime;
+    mCancelled = false;
+}
+
+void DataAnalysisWorker::cancelAnalysis()
+{
+    QMutexLocker locker(&mMutex);
+    mCancelled = true;
+}
+
+void DataAnalysisWorker::startAnalysis()
+{
+    getValidWave();
+}
+
+bool DataAnalysisWorker::readBin4Ch_fast(const QString& path,
+                                         QVector<qint16>& ch0,
+                                         QVector<qint16>& ch1,
+                                         QVector<qint16>& ch2,
+                                         QVector<qint16>& ch3,
+                                         bool littleEndian)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+
+    const qint64 headBytes = 0;
+    const qint64 tailBytes = 0;
+
+    const qint64 fileSize = f.size();
+    if (fileSize < headBytes + tailBytes) return false;
+
+    const qint64 payloadBytes = fileSize - headBytes - tailBytes;
+    if (payloadBytes % 2 != 0) return false;
+
+    const qint64 totalSamples = payloadBytes / 2;
+    if (totalSamples % 4 != 0) return false;
+    const qint64 samplesPerChannel = totalSamples / 4;
+
+    ch0.resize(samplesPerChannel);
+    ch1.resize(samplesPerChannel);
+    ch2.resize(samplesPerChannel);
+    ch3.resize(samplesPerChannel);
+
+    uchar* p = f.map(headBytes, payloadBytes);
+    if (!p) return false;
+
+    const quint16* src = reinterpret_cast<const quint16*>(p);
+
+    if (littleEndian) {
+        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 8) {
+            quint16 v0 = src[i + 0];
+            quint16 v1 = src[i + 1];
+            quint16 v2 = src[i + 2];
+            quint16 v3 = src[i + 3];
+            quint16 v4 = src[i + 4];
+            quint16 v5 = src[i + 5];
+            quint16 v6 = src[i + 6];
+            quint16 v7 = src[i + 7];
+
+            v0 = qFromLittleEndian(v0); v1 = qFromLittleEndian(v1);
+            v2 = qFromLittleEndian(v2); v3 = qFromLittleEndian(v3);
+            v4 = qFromLittleEndian(v4); v5 = qFromLittleEndian(v5);
+            v6 = qFromLittleEndian(v6); v7 = qFromLittleEndian(v7);
+
+            ch3[j] = static_cast<qint16>(v0)/4;ch3[j+1] = static_cast<qint16>(v1)/4;
+            ch2[j] = static_cast<qint16>(v2)/4;ch2[j+1] = static_cast<qint16>(v3)/4;
+            ch0[j] = static_cast<qint16>(v4)/4;ch0[j+1] = static_cast<qint16>(v5)/4;
+            ch1[j] = static_cast<qint16>(v6)/4;ch1[j+1] = static_cast<qint16>(v7)/4;
+        }
+    } else {
+        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 8) {
+            quint16 v0 = src[i + 0];
+            quint16 v1 = src[i + 1];
+            quint16 v2 = src[i + 2];
+            quint16 v3 = src[i + 3];
+            quint16 v4 = src[i + 4];
+            quint16 v5 = src[i + 5];
+            quint16 v6 = src[i + 6];
+            quint16 v7 = src[i + 7];
+
+            v0 = qFromBigEndian(v0); v1 = qFromBigEndian(v1);
+            v2 = qFromBigEndian(v2); v3 = qFromBigEndian(v3);
+            v4 = qFromBigEndian(v4); v5 = qFromBigEndian(v5);
+            v6 = qFromBigEndian(v6); v7 = qFromBigEndian(v7);
+            ch3[j] = static_cast<qint16>(v0)/4; ch3[j+1] = static_cast<qint16>(v1)/4;
+            ch2[j] = static_cast<qint16>(v2)/4; ch2[j+1] = static_cast<qint16>(v3)/4;
+            ch0[j] = static_cast<qint16>(v4)/4; ch0[j+1] = static_cast<qint16>(v5)/4;
+            ch1[j] = static_cast<qint16>(v6)/4; ch1[j+1] = static_cast<qint16>(v7)/4;
+        }
+    }
+
+    f.unmap(p);
+    return true;
+}
+
+void DataAnalysisWorker::getValidWave()
+{
+    QString dataDir, outfileName;
+    QStringList fileList;
+    int threshold, timePerFile, startTime, endTime;
+    
+    {
+        QMutexLocker locker(&mMutex);
+        dataDir = mDataDir;
+        fileList = mFileList;
+        outfileName = mOutfileName;
+        threshold = mThreshold;
+        timePerFile = mTimePerFile;
+        startTime = mStartTime;
+        endTime = mEndTime;
+    }
+
+    emit logMessage(QString("开始处理波形数据，阈值: %1").arg(threshold), QtInfoMsg);
+
+    // 设置触发阈值前后波形点数
+    int pre_points = 20;
+    int post_points = 512 - pre_points - 1;
+
+    if (dataDir.isEmpty()) {
+        emit logMessage("数据目录路径为空", QtWarningMsg);
+        emit analysisFinished(false, "数据目录路径为空");
+        return;
+    }
+
+    //读取界面的起止时间
+    int startFile = startTime / timePerFile + 1;
+    int endFile = endTime / timePerFile + 1;
+
+    emit logMessage(QString("处理时间范围: %1 ms - %2 ms (文件范围: %3 - %4)").arg(
+        startTime).arg(endTime).arg(startFile).arg(endFile-1), QtInfoMsg);
+
+    // 创建HDF5文件路径（在数据目录下）
+    QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
+    emit logMessage(QString("输出文件路径: %1").arg(hdf5FilePath), QtInfoMsg);
+
+    //读取文件，提取有效波形
+    //6个光纤口，每个光纤口4个通道
+    int totalBoards = 6;
+    int processedBoards = 0;
+    
+    for(int j=1; j<=6; ++j) {
+        {
+            QMutexLocker locker(&mMutex);
+            if (mCancelled) {
+                emit logMessage("分析已取消", QtWarningMsg);
+                emit analysisFinished(false, "分析已取消");
+                return;
+            }
+        }
+
+        emit logMessage(QString("开始处理板卡%1的数据...").arg(j), QtInfoMsg);
+
+        //对每个通道的有效波形数据进行合并
+        QVector<std::array<qint16, 512>> wave_ch0_all;
+        QVector<std::array<qint16, 512>> wave_ch1_all;
+        QVector<std::array<qint16, 512>> wave_ch2_all;
+        QVector<std::array<qint16, 512>> wave_ch3_all;
+
+        int totalFiles = endFile - startFile;
+        int processedFiles = 0;
+        
+        for (int fileID = startFile; fileID < endFile; ++fileID) {
+            {
+                QMutexLocker locker(&mMutex);
+                if (mCancelled) {
+                    emit logMessage("分析已取消", QtWarningMsg);
+                    emit analysisFinished(false, "分析已取消");
+                    return;
+                }
+            }
+
+            QString fileName = QString("%1data%2.bin").arg(j).arg(fileID);
+            QString filePath = QDir(dataDir).filePath(fileName);
+            QVector<qint16> ch0, ch1, ch2, ch3;
+            if (!readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)) {
+                emit logMessage(QString("板卡%1 文件%2: 读取失败或文件不存在").arg(j).arg(fileName), QtWarningMsg);
+                continue;
+            }
+            processedFiles++;
+
+            //扣基线，调整数据
+            qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch0);
+            DataCompressWindow::adjustDataWithBaseline(ch0, baseline_ch, j, 1);
+            qint16 baseline_ch2 = DataCompressWindow::calculateBaseline(ch1);
+            DataCompressWindow::adjustDataWithBaseline(ch1, baseline_ch2, j, 2);
+            qint16 baseline_ch3 = DataCompressWindow::calculateBaseline(ch2);
+            DataCompressWindow::adjustDataWithBaseline(ch2, baseline_ch3, j, 3);
+            qint16 baseline_ch4 = DataCompressWindow::calculateBaseline(ch3);
+            DataCompressWindow::adjustDataWithBaseline(ch3, baseline_ch4, j, 4);
+
+            //提取有效波形
+            QVector<std::array<qint16, 512>> wave_ch0 = DataCompressWindow::overThreshold(ch0, 1, threshold, pre_points, post_points);
+            QVector<std::array<qint16, 512>> wave_ch1 = DataCompressWindow::overThreshold(ch1, 2, threshold, pre_points, post_points);
+            QVector<std::array<qint16, 512>> wave_ch2 = DataCompressWindow::overThreshold(ch2, 3, threshold, pre_points, post_points);
+            QVector<std::array<qint16, 512>> wave_ch3 = DataCompressWindow::overThreshold(ch3, 4, threshold, pre_points, post_points);
+
+            //合并有效波形
+            wave_ch0_all.append(wave_ch0);
+            wave_ch1_all.append(wave_ch1);
+            wave_ch2_all.append(wave_ch2);
+            wave_ch3_all.append(wave_ch3);
+
+            // 发送进度更新
+            int totalProgress = totalBoards * totalFiles;
+            int currentProgress = (processedBoards * totalFiles) + processedFiles;
+            emit progressUpdated(currentProgress, totalProgress);
+        }
+
+        emit logMessage(QString("板卡%1: 已处理 %2/%3 个文件").arg(j).arg(processedFiles).arg(totalFiles), QtInfoMsg);
+
+        // 存储有效波形数据到HDF5文件
+        emit logMessage(QString("正在写入板卡%1的波形数据...").arg(j), QtInfoMsg);
+        if (!DataCompressWindow::writeWaveformToHDF5(hdf5FilePath, j, wave_ch0_all, wave_ch1_all, wave_ch2_all, wave_ch3_all)) {
+            emit logMessage(QString("写入板卡%1的波形数据失败，请检查文件路径和权限").arg(j), QtCriticalMsg);
+            emit analysisFinished(false, QString("写入板卡%1的波形数据失败").arg(j));
+            return;
+        } else {
+            emit logMessage(QString("板卡%1写入成功: 通道0=%2个波形, 通道1=%3个波形, 通道2=%4个波形, 通道3=%5个波形")
+                        .arg(j)
+                        .arg(wave_ch0_all.size())
+                        .arg(wave_ch1_all.size())
+                        .arg(wave_ch2_all.size())
+                        .arg(wave_ch3_all.size()), QtInfoMsg);
+        }
+
+        processedBoards++;
+    }
+
+    emit logMessage(QString("所有波形数据处理完成，已保存到: %1").arg(hdf5FilePath), QtInfoMsg);
+    emit analysisFinished(true, "数据分析完成");
+}
 
 DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::DataCompressWindow)
     , mIsDarkTheme(isDarkTheme)
     , mainWindow(static_cast<QGoodWindowHelper*>(parent))
+    , mAnalysisThread(nullptr)
+    , mAnalysisWorker(nullptr)
 {
     ui->setupUi(this);
 
@@ -86,6 +354,18 @@ DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
 
 DataCompressWindow::~DataCompressWindow()
 {
+    // 清理工作线程
+    if (mAnalysisWorker && mAnalysisThread) {
+        mAnalysisWorker->cancelAnalysis();
+        mAnalysisThread->quit();
+        mAnalysisThread->wait(5000); // 等待最多5秒
+        if (mAnalysisThread->isRunning()) {
+            mAnalysisThread->terminate();
+            mAnalysisThread->wait();
+        }
+        mAnalysisWorker->deleteLater();
+        mAnalysisThread->deleteLater();
+    }
     delete ui;
 }
 
@@ -300,8 +580,8 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
 
     QVector<QVector<qint16>> wave_CH1 = readWave(outfileName.toStdString(), "data");
     ui->pushButton_startUpload->setEnabled(false);
-    ui->progressBar->setValue(0);
-    ui->progressBar->setMaximum(wave_CH1.size());
+    ui->progressBar_2->setValue(0);
+    ui->progressBar_2->setMaximum(wave_CH1.size());
 
     // 保存到数据库
     {
@@ -354,7 +634,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
                     return;
                 }
 
-                ui->progressBar->setValue(i);
+                ui->progressBar_2->setValue(i);
                 count = 0;
                 shotNumList.clear();
                 timestampList.clear();
@@ -380,7 +660,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
             }
         }
 
-        ui->progressBar->setValue(100);
+        ui->progressBar_2->setValue(100);
         db.close();
         QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("数据上传完成！"));
         ui->pushButton_startUpload->setEnabled(true);
@@ -969,6 +1249,12 @@ QString DataCompressWindow::humanReadableSize(qint64 bytes)
 
 void DataCompressWindow::on_action_analyze_triggered()
 {
+    // 如果已有分析在进行中，不重复启动
+    if (mAnalysisThread && mAnalysisThread->isRunning()) {
+        QMessageBox::information(this, "提示", "数据分析正在进行中，请等待完成。");
+        return;
+    }
+
     replyWriteLog("========================================", QtInfoMsg);
     replyWriteLog("开始数据压缩分析", QtInfoMsg);
     
@@ -976,6 +1262,7 @@ void DataCompressWindow::on_action_analyze_triggered()
     QString dataDir = ui->textBrowser_filepath->toPlainText();
     if (dataDir.isEmpty()) {
         replyWriteLog("数据目录路径为空", QtWarningMsg);
+        QMessageBox::warning(this, "警告", "数据目录路径为空！");
         return;
     }
     
@@ -1019,16 +1306,69 @@ void DataCompressWindow::on_action_analyze_triggered()
         replyWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
     }
 
-    //提取有效数据
-    getValidWave(mfileList, outfileName, th);
+    // 创建并启动工作线程
+    // 如果已有线程在运行，先停止并清理
+    if (mAnalysisThread) {
+        if (mAnalysisThread->isRunning()) {
+            // 如果有worker，先取消分析
+            if (mAnalysisWorker) {
+                mAnalysisWorker->cancelAnalysis();
+                disconnect(mAnalysisWorker, nullptr, this, nullptr);
+            }
+            mAnalysisThread->quit();
+            mAnalysisThread->wait(2000); // 等待最多2秒
+            if (mAnalysisThread->isRunning()) {
+                mAnalysisThread->terminate();
+                mAnalysisThread->wait();
+            }
+        }
+        // 清理旧对象
+        disconnect(mAnalysisThread, nullptr, nullptr, nullptr);
+        if (mAnalysisWorker) {
+            mAnalysisWorker->deleteLater();
+            mAnalysisWorker = nullptr;
+        }
+        mAnalysisThread->deleteLater();
+        mAnalysisThread = nullptr;
+    }
+
+    mAnalysisThread = new QThread(this);
+    mAnalysisWorker = new DataAnalysisWorker();
+
+    // 设置参数
+    int timePerFile = ui->spinBox_oneFileTime->value();
+    int startTime = ui->spinBox_startT->value();
+    int endTime = ui->spinBox_endT->value();
     
-    replyWriteLog("数据压缩分析完成", QtInfoMsg);
-    //压缩后的文件大小
-    QFileInfo fi(hdf5FilePath);
-    qint64 sizeBytes = fi.size();
-    ui->lineEdit_fileSize->setText(humanReadableSize(sizeBytes));
-    replyWriteLog(QString("压缩后文件大小: %1").arg(humanReadableSize(sizeBytes)), QtInfoMsg);
-    replyWriteLog("========================================", QtInfoMsg);
+    mAnalysisWorker->setParameters(dataDir, mfileList, outfileName, th, 
+                                   timePerFile, startTime, endTime);
+
+    // 将worker移动到工作线程
+    mAnalysisWorker->moveToThread(mAnalysisThread);
+
+    // 连接信号和槽（使用QueuedConnection确保线程安全）
+    connect(mAnalysisThread, &QThread::started, mAnalysisWorker, &DataAnalysisWorker::startAnalysis);
+    connect(mAnalysisWorker, &DataAnalysisWorker::logMessage, 
+            this, &DataCompressWindow::onAnalysisLogMessage, Qt::QueuedConnection);
+    connect(mAnalysisWorker, &DataAnalysisWorker::progressUpdated, 
+            this, &DataCompressWindow::onAnalysisProgress, Qt::QueuedConnection);
+    connect(mAnalysisWorker, &DataAnalysisWorker::analysisFinished, 
+            this, &DataCompressWindow::onAnalysisFinished, Qt::QueuedConnection);
+    connect(mAnalysisWorker, &DataAnalysisWorker::analysisError, 
+            this, &DataCompressWindow::onAnalysisError, Qt::QueuedConnection);
+    
+    // 不在这里设置自动清理，由onAnalysisFinished统一处理
+
+    // 禁用开始按钮，防止重复启动
+    ui->action_analyze->setEnabled(false);
+    ui->toolButton_start->setEnabled(false);
+    
+    // 初始化进度条
+    ui->progressBar->setValue(0);
+    ui->progressBar->setMaximum(0); // 初始值设为0，表示不确定
+
+    // 启动工作线程
+    mAnalysisThread->start();
 }
 
 
@@ -1111,5 +1451,91 @@ void DataCompressWindow::validateTimeRange()
         QMessageBox::warning(this, "输入警告", 
                             QString("起始时间不能大于结束时间，结束时间已自动调整为 %1 ms").arg(startTime));
     }
+}
+
+// 工作线程相关的槽函数实现
+void DataCompressWindow::onAnalysisLogMessage(const QString& msg, QtMsgType msgType)
+{
+    // 这个槽函数在工作线程中通过信号调用，会自动切换到UI线程执行
+    replyWriteLog(msg, msgType);
+}
+
+void DataCompressWindow::onAnalysisProgress(int current, int total)
+{
+    // 更新进度条（在UI线程中执行）
+    if (total > 0) {
+        ui->progressBar->setMaximum(total);
+        ui->progressBar->setValue(current);
+    }
+}
+
+void DataCompressWindow::onAnalysisFinished(bool success, const QString& message)
+{
+    // 恢复UI状态
+    ui->action_analyze->setEnabled(true);
+    ui->toolButton_start->setEnabled(true);
+
+    if (success) {
+        replyWriteLog("数据压缩分析完成", QtInfoMsg);
+        
+        // 更新文件大小显示
+        QString dataDir = ui->textBrowser_filepath->toPlainText();
+        QString outfileName = ui->lineEdit_outputFile->text().trimmed();
+        if (!outfileName.endsWith(".h5", Qt::CaseSensitive)) {
+            outfileName += ".h5";
+        }
+        QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
+        
+        QFileInfo fi(hdf5FilePath);
+        if (fi.exists()) {
+            qint64 sizeBytes = fi.size();
+            ui->lineEdit_fileSize->setText(humanReadableSize(sizeBytes));
+            replyWriteLog(QString("压缩后文件大小: %1").arg(humanReadableSize(sizeBytes)), QtInfoMsg);
+        }
+        
+        replyWriteLog("========================================", QtInfoMsg);
+    } else {
+        replyWriteLog(QString("数据分析失败: %1").arg(message), QtCriticalMsg);
+        QMessageBox::critical(this, "错误", QString("数据分析失败: %1").arg(message));
+    }
+
+    // Worker已经完成工作，现在停止线程并清理
+    // 注意：这里必须在UI线程中执行，确保线程安全
+    if (mAnalysisThread) {
+        // 先断开worker的信号连接，避免后续信号触发
+        if (mAnalysisWorker) {
+            disconnect(mAnalysisWorker, nullptr, this, nullptr);
+        }
+        
+        // 停止线程
+        if (mAnalysisThread->isRunning()) {
+            mAnalysisThread->quit();
+            // 等待线程结束（最多等待3秒）
+            if (!mAnalysisThread->wait(3000)) {
+                // 如果等待超时，强制终止
+                replyWriteLog("警告：线程未能正常结束，强制终止", QtWarningMsg);
+                mAnalysisThread->terminate();
+                mAnalysisThread->wait();
+            }
+        }
+        
+        // 断开线程的所有连接
+        disconnect(mAnalysisThread, nullptr, nullptr, nullptr);
+        
+        // 清理worker对象（线程已停止，可以安全删除）
+        if (mAnalysisWorker) {
+            mAnalysisWorker->deleteLater();
+            mAnalysisWorker = nullptr;
+        }
+        
+        // 清理线程对象
+        mAnalysisThread->deleteLater();
+        mAnalysisThread = nullptr;
+    }
+}
+
+void DataCompressWindow::onAnalysisError(const QString& error)
+{
+    replyWriteLog(QString("错误: %1").arg(error), QtCriticalMsg);
 }
 

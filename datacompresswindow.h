@@ -2,6 +2,9 @@
 #define DATACOMPRESSWINDOW_H
 
 #include <QMainWindow>
+#include <QThread>
+#include <QMutex>
+#include <QObject>
 #include <array>
 
 #include "QGoodWindowHelper"
@@ -10,6 +13,55 @@
 namespace Ui {
 class DataCompressWindow;
 }
+
+// 数据分析工作线程类
+class DataAnalysisWorker : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit DataAnalysisWorker(QObject *parent = nullptr);
+    ~DataAnalysisWorker();
+
+    void setParameters(const QString& dataDir, 
+                      const QStringList& fileList,
+                      const QString& outfileName,
+                      int threshold,
+                      int timePerFile,
+                      int startTime,
+                      int endTime);
+
+public slots:
+    void startAnalysis();
+    void cancelAnalysis();
+
+signals:
+    void logMessage(const QString& msg, QtMsgType msgType);
+    void progressUpdated(int current, int total);
+    void analysisFinished(bool success, const QString& message);
+    void analysisError(const QString& error);
+
+private:
+    bool readBin4Ch_fast(const QString& path,
+                        QVector<qint16>& ch0,
+                        QVector<qint16>& ch1,
+                        QVector<qint16>& ch2,
+                        QVector<qint16>& ch3,
+                        bool littleEndian = true);
+
+    void getValidWave();
+
+    QString mDataDir;
+    QStringList mFileList;
+    QString mOutfileName;
+    int mThreshold;
+    int mTimePerFile;
+    int mStartTime;
+    int mEndTime;
+    
+    QMutex mMutex;
+    bool mCancelled;
+};
 
 class QCustomPlot;
 class DataCompressWindow : public QMainWindow
@@ -109,6 +161,13 @@ private slots:
     // 验证时间范围输入
     void validateTimeRange();
 
+private slots:
+    // 工作线程相关的槽函数
+    void onAnalysisLogMessage(const QString& msg, QtMsgType msgType);
+    void onAnalysisProgress(int current, int total);
+    void onAnalysisFinished(bool success, const QString& message);
+    void onAnalysisError(const QString& error);
+
 private:
     Ui::DataCompressWindow *ui;
     bool mIsDarkTheme = true;
@@ -118,6 +177,10 @@ private:
     QFileInfoList mfileinfoList;
     QStringList mfileList;
     QString mShotNum;
+    
+    // 工作线程相关
+    QThread* mAnalysisThread;
+    DataAnalysisWorker* mAnalysisWorker;
 };
 
 #endif // DATACOMPRESSWINDOW_H
