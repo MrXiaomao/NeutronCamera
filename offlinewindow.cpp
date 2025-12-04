@@ -1,6 +1,7 @@
 #include "offlinewindow.h"
 #include "ui_offlinewindow.h"
 #include "globalsettings.h"
+#include "datacompresswindow.h"
 
 OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     : QMainWindow(parent)
@@ -33,6 +34,20 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
             mainWindow->fixMenuBarWidth();
         }
     });
+
+    // 连接时间范围验证信号
+    // connect(ui->spinBox_time1, &QSpinBox::editingFinished, this, &OfflineWindow::validateTime1Range);
+    
+    // 当最大测量时间改变时，更新 spinBox 的最大值
+    // connect(ui->line_measure_endT, &QLineEdit::textChanged, this, [this](const QString& text) {
+    //     bool ok;
+    //     int maxTime = text.toInt(&ok);
+    //     if (ok && maxTime > 0) {
+    //         ui->spinBox_time1->setMaximum(maxTime);
+    //         // 验证当前值
+    //         validateTime1Range();
+    //     }
+    // });
 }
 
 OfflineWindow::~OfflineWindow()
@@ -51,21 +66,6 @@ void OfflineWindow::initUi()
         actionGrp->addAction(ui->action_waveform);
         actionGrp->addAction(ui->action_ngamma);
         emit ui->action_waveform->triggered(true);
-    }
-
-    // 工作日志
-    {
-        QGraphicsScene *scene = new QGraphicsScene(this);
-        scene->setObjectName("logGraphicsScene");
-        QGraphicsTextItem *textItem = scene->addText(tr("工作日志"));
-        textItem->setObjectName("logGraphicsTextItem");
-        textItem->setPos(0,0);
-        //textItem->setRotation(-90);
-        ui->graphicsView->setFrameStyle(0);
-        ui->graphicsView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        ui->graphicsView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        ui->graphicsView->setFixedHeight(30);
-        ui->graphicsView->setScene(scene);
     }
 
     {
@@ -534,88 +534,128 @@ void OfflineWindow::on_action_openfile_triggered()
 {
     GlobalSettings settings;
     QString lastPath = settings.value("Global/Offline/LastFileDir", QDir::homePath()).toString();
-    //QString filter = "二进制文件 (*.bin);;所有文件 (*.*)";
-    //QString filePath = QFileDialog::getOpenFileName(this, tr("打开测量数据文件"), lastPath, filter);
-    QString filePath = QFileDialog::getExistingDirectory(this, tr("选择测量数据存放目录"), lastPath);
+    QString dirPath = QFileDialog::getExistingDirectory(this, tr("选择测量数据存放目录"), lastPath);
 
     // 目录格式：炮号+日期+[cardIndex]测量数据[packIndex].bin
-    if (filePath.isEmpty())
+    if (dirPath.isEmpty())
         return;
 
-    if (!QFileInfo::exists(filePath+"/Settings.ini")){
+    settings.setValue("Global/Offline/LastFileDir", dirPath);
+    ui->textBrowser_filepath->setText(dirPath);
+    if (!QFileInfo::exists(dirPath+"/Settings.ini")){
         QMessageBox::information(this, tr("提示"), tr("路径无效，缺失\"Settings.ini\"文件！"));
         return;
     }
     else {
-        GlobalSettings settings(filePath+"/Settings.ini");
+        GlobalSettings settings(dirPath+"/Settings.ini");
         mShotNum = settings.value("Global/ShotNum", "00000").toString();
         emit reporWriteLog("炮号：" + mShotNum);
     }
 
-    settings.setValue("Global/Offline/LastFileDir", filePath);
-    ui->textBrowser_filepath->setText(filePath);
-
-    //加载目录下所有文件
-    loadRelatedFiles(filePath);
+    //加载目录下所有文件，罗列在表格中，统计给出文件大小
+    loadRelatedFiles(dirPath);
 }
 
 
-void OfflineWindow::loadRelatedFiles(const QString& filePath)
+void OfflineWindow::loadRelatedFiles(const QString& dirPath)
 {
     ui->tableWidget_file->setRowCount(0);
 
     //对目录下的配置文件信息进行解析，里面包含了炮号、测试开始时间、测量时长、以及探测器类型
 
-    QDir dir(filePath);
+    QDir dir(dirPath);
     if (dir.exists()) {
         dir.setFilter(QDir::Files);
         dir.setNameFilters(QStringList() << "*.bin");
         QStringList binFiles = dir.entryList();
-        foreach (const QString &filePath, binFiles) {
+        foreach (const QString &dirPath, binFiles) {
             // 这里应该对文件进一步解析，得到时间范围
 
             int row = ui->tableWidget_file->rowCount();
             ui->tableWidget_file->insertRow(row);
-            ui->tableWidget_file->setItem(row, 0, new QTableWidgetItem(QFileInfo(filePath).fileName()));
+            ui->tableWidget_file->setItem(row, 0, new QTableWidgetItem(QFileInfo(dirPath).fileName()));
         }
     }
+
+    // 使用静态函数获取.bin文件列表
+    QFileInfoList fileinfoList = DataCompressWindow::getBinFileList(dirPath);
+
+    // 使用静态函数提取文件名列表
+    mfileList = DataCompressWindow::extractFileNames(fileinfoList);
+
+    //统计测量时长，选取光纤口1数据来统计
+    int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "1data");
+
+    // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
+    int time_per = 50;
+    if (ui->cmb_fileTime->currentText() == "50ms") {
+        time_per = 50;
+    } else if (ui->cmb_fileTime->currentText() == "66ms") {
+        time_per = 66;
+    }
+    int measureTime = DataCompressWindow::calculateMeasureTime(count1data, time_per);
+
+    ui->line_measure_startT->setText("0");
+    ui->line_measure_endT->setText(QString::number(measureTime));
+
+    ui->spinBox_time1->setMaximum(measureTime);
+    
+    // 验证当前值
+    // validateTime1Range();
 }
 
 void OfflineWindow::on_action_analyze_triggered()
 {
+    // 从 RadioButton 提取单个文件包对应的时间长度（单位ms）
+    // radioButton 对应 1ms, radioButton_2 对应 10ms
+    int timeLength = 1; // 默认值 1ms
+    if (ui->radioButton_2->isChecked()) {
+        timeLength = 10; // radioButton_2 选中时使用 10ms
+    } else if (ui->radioButton->isChecked()) {
+        timeLength = 1; // radioButton 选中时使用 1ms
+    }
+    
+    // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
+    int time_per = 50;
+    PCIeCommSdk::CaptureTime captureTime = PCIeCommSdk::oldCaptureTime;
+    if (ui->cmb_fileTime->currentText() == "50ms") {
+        captureTime = PCIeCommSdk::newCaptureTime;
+        time_per = 50;
+    } else if (ui->cmb_fileTime->currentText() == "66ms") {
+        captureTime = PCIeCommSdk::oldCaptureTime;
+        time_per = 66;
+    }
+    
     //由于每个文件的能谱时长是固定的，所有这里需要根据时刻计算出对应的是第几个文件
-    //这类假设每个文件能谱时长为50ms
-    // quint32 fileIndex = (float)(ui->spinBox_time1->value() + 49)/ 50;
+    qint32 time1 =ui->spinBox_time1->value();
+    quint32 fileIndex = (float)(ui->spinBox_time1->value() + time_per-1)/ time_per;
 
-    // //每个文件里面对于的是4个通道，根据通道号判断是第几个文件
-    // quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
-    // quint32 deviceIndex = (cameraIndex + 3) / 4;
+    //t1-水平相机
+    {
+        //每个文件里面对应的是4个通道，根据通道号判断是第几个文件
+        quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+        quint32 deviceIndex = (cameraIndex + 3) / 4;
+        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
 
-    // //t1-水平相机
-    // {
-    //     QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
-    //     mPCIeCommSdk.setCaptureParamter(cameraIndex, ui->spinBox_time1->value());
-    //     if (!mPCIeCommSdk.openHistoryFile(filePath))
-    //     {
-    //         QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
-    //     }
-    // }
+        mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
+        if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
+        {
+            QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+        }
+    }
 
-    // //t1-垂直相机
-    // {
-    //     cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
-    //     deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
-    //     QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
-    //     mPCIeCommSdk.setCaptureParamter(cameraIndex, ui->spinBox_time1->value());
-    //     if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
-    //     {
-    //         QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
-    //     }
-    // }
-    // return;
-
-    // mPCIeCommSdk.setCaptureParamter(1, ui->spinBox_time1->value());
-    // mPCIeCommSdk.openHistoryFile("D:\\work\\Qt\\MicroDetector\\build_NeutronCamera\\x64\\qt5.15.2\\cache\\100\\2025-12-01_09-30-21\\1data1.bin");
+    //t1-垂直相机
+    {
+        quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
+        quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
+        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
+        mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
+        if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
+        {
+            QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+        }
+    }
+    return;
 
     {
         QVector<qint16> waveformPairs[2];// = generateArray(50, 50, 0, 25, 1000, 35);
@@ -851,9 +891,9 @@ void OfflineWindow::applyColorTheme()
             checkBox->setStyleSheet(styleSheet);
         }
 
-        QGraphicsScene *scene = this->findChild<QGraphicsScene*>("logGraphicsScene");
-        QGraphicsTextItem *textItem = (QGraphicsTextItem*)scene->items()[0];
-        textItem->setHtml(mIsDarkTheme ? QString("<font color='white'>工作日志</font>") : QString("<font color='black'>工作日志</font>"));
+        // QGraphicsScene *scene = this->findChild<QGraphicsScene*>("logGraphicsScene");
+        // QGraphicsTextItem *textItem = (QGraphicsTextItem*)scene->items()[0];
+        // textItem->setHtml(mIsDarkTheme ? QString("<font color='white'>工作日志</font>") : QString("<font color='black'>工作日志</font>"));
 
         // 窗体背景色
         customPlot->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Window) : Qt::white));
@@ -961,14 +1001,20 @@ void OfflineWindow::replyWaveform(quint8 timestampIndex, quint8 cameraIndex, QVe
     //实测曲线
     QCustomPlot* customPlot = nullptr;
     if (ui->action_typeLSD->isChecked())
+    {
         customPlot = ui->spectroMeter_LSD_waveform;
+        ui->spectroMeter_LSD_spectrum->hide();
+    }
     else
+    {
         customPlot = ui->spectroMeter_waveform;
+        ui->spectroMeter_spectrum->hide();
+    }
     QVector<double> keys, values;
     quint32 yMin = 1e10;
     quint32 yMax = 0;
     for (int i=0; i<waveformBytes.size(); ++i){
-        keys << (double)i*100/waveformBytes.size() ;
+        keys << (double)i*2 ;//每个数据点2ns
         values << waveformBytes[i];
         yMin = qMin(yMin, (quint32)waveformBytes[i]);
         yMax = qMax(yMax, (quint32)waveformBytes[i]);
@@ -997,6 +1043,9 @@ void OfflineWindow::replyWaveform(quint8 timestampIndex, quint8 cameraIndex, QVe
             customPlot->graph(5)->setData(keys, values);
     }
 
+    // 设置 X 轴标题
+    customPlot->xAxis->setLabel(tr("时间(ns)"));
+    
     customPlot->xAxis->rescale(true);
     customPlot->yAxis->rescale(true);
     customPlot->replot(QCustomPlot::rpQueuedReplot);
@@ -1198,6 +1247,7 @@ void OfflineWindow::on_action_typeLSD_triggered(bool checked)
 {
     if (checked){
         ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LSD);
+        ui->spectroMeter_LSD_spectrum->hide();
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1213,6 +1263,7 @@ void OfflineWindow::on_action_typePSD_triggered(bool checked)
 {
     if (checked){
         ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
+        ui->spectroMeter_spectrum->hide();
         this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1230,6 +1281,7 @@ void OfflineWindow::on_action_typeLBD_triggered(bool checked)
 {
     if (checked){
         ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
+        ui->spectroMeter_spectrum->hide();
         this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1265,6 +1317,33 @@ void OfflineWindow::on_action_ngamma_triggered(bool checked)
         ui->spectroMeter_horCamera_FOM->setVisible(true);
         ui->spectroMeter_verCamera_PSD->setVisible(true);
         ui->spectroMeter_verCamera_FOM->setVisible(true);
+    }
+}
+
+// 验证时间范围输入
+void OfflineWindow::validateTime1Range()
+{
+    // 获取最大测量时间
+    QString maxTimeStr = ui->line_measure_endT->text();
+    bool ok;
+    int maxTime = maxTimeStr.toInt(&ok);
+    
+    if (!ok || maxTime <= 0) {
+        // 如果最大值无效，不进行验证
+        return;
+    }
+    
+    // 更新 spinBox 的最大值（QSpinBox会自动限制输入值不超过最大值）
+    ui->spinBox_time1->setMaximum(maxTime);
+    
+    // 获取当前输入值
+    int currentTime = ui->spinBox_time1->value();
+    
+    // 如果当前值超过最大值，自动调整为最大值
+    if (currentTime > maxTime) {
+        ui->spinBox_time1->setValue(maxTime);
+        QMessageBox::warning(this, "输入警告", 
+                            QString("输入的时间值超过了最大测量时间，已自动调整为 %1 ms").arg(maxTime));
     }
 }
 

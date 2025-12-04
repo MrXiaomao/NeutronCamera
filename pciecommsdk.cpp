@@ -4,7 +4,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QDebug>
-
+#include "datacompresswindow.h"
 PCIeCommSdk::PCIeCommSdk(QObject *parent)
     : QObject{parent}
 {
@@ -308,128 +308,181 @@ void PCIeCommSdk::replyCaptureData(quint8 cardIndex/*PCIe卡序号*/, quint32 pa
     }
 }
 
-void PCIeCommSdk::analyzeHistoryData(quint8 cameraIndex, quint32 time1, QByteArray& data)
+
+/**
+ * @brief PCIeCommSdk::analyzeHistorySpectrumData 离线分析能谱历史数据
+ * @param cameraIndex 相机序号
+ * @param remainTime 剩余时间，用于计算采集时刻 
+ * @param filePath 历史数据文件路径
+ */
+void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint32 remainTime, QString filePath)
+{
+    //根据通道号计算对应采集卡的第几通道
+    // quint8 cameraNo = cameraIndex % 4 - 1;
+
+    /* 能谱数据（总大小512*2B）
+        * 包头           FFAB
+        * 数据类型        00D2
+        * 能谱序号        000000
+        * 测量时间        0000
+        * 保留位          0000 0000 0000
+        * 伽马能谱数据     248*2
+        * 中子能谱数据     248*2
+        * 绝对时间        0000 0000 0000 0000
+        * 保留位          0000 0000 0000
+        * 包尾            FFCD
+    */
+    /*if (data.startsWith(QByteArray::fromHex("FFAB00D2"))){
+        if (data.size() >= 1024){
+            QByteArray chunk = data.left(1024);
+
+            bool ok;
+            //能谱序号 高位16bi表示这是第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
+            QByteArray head = chunk.left(4);
+            quint32 serialNumber = qbswap(chunk.mid(4, 2).toHex().toUInt(&ok, 16));
+            quint32 serialNumberRef = chunk.mid(6, 1).toInt();
+            quint16 time = qbswap(chunk.mid(7, 2).toHex().toUShort(&ok, 16));//测量时间
+            QByteArray reserve1 = chunk.mid(9, 7);
+            QByteArray gamma = chunk.mid(16, 496);  //62*4*2
+            QByteArray neutron = chunk.mid(512, 496);
+            quint64 absoluteTime = qbswap(chunk.mid(1008, 8).toHex().toUInt(&ok, 16));//绝对时间
+            QByteArray reserve2 = chunk.mid(1016, 6);
+            QByteArray tail = chunk.right(2);
+
+            //数据包的起始时间戳/ns
+            quint64 timestamp = (serialNumber - 1) * 50 + serialNumberRef;
+            if (timestamp == mTimestampMs1){
+                QByteArray gamma = chunk.mid(cameraNo*124, 124);
+                QByteArray neutron = chunk.mid(cameraNo*124, 124);
+                {
+                    QVector<quint16> data;
+                    for (int i=0; i<gamma.size(); i+=2){
+                        bool ok;
+                        //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
+                        quint16 amplitude = gamma.mid(i, 2).toHex().toUShort(&ok, 16);
+                        data.append(qbswap(amplitude));
+                    }
+
+                    emit reportGammaSpectrum(1, cameraIndex, data);
+                }
+
+                {
+                    QVector<quint16> data;
+                    for (int i=0; i<neutron.size(); i+=2){
+                        bool ok;
+                        //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
+                        quint16 amplitude = neutron.mid(i, 2).toHex().toUShort(&ok, 16);
+                        data.append(qbswap(amplitude));
+                    }
+
+                    emit reportNeutronSpectrum(1, cameraIndex, data);
+                }
+            }
+        }
+    }*/
+}
+
+/**
+ * @brief PCIeCommSdk::analyzeHistoryWaveformData 离线分析波形历史数据，兼容旧版和新版FPGA数据协议
+ * 波形数据排列方式：ch3, ch3, ch2, ch2, ch0, ch0, ch1, ch1...（逐点交织）
+ * @param cameraIndex 相机序号
+ * @param timeLength 要提取的波形时间长度，单位ms
+ * @param remainTime 剩余时间，用于计算采集时刻 
+ * @param filePath 历史数据文件路径
+ */
+void PCIeCommSdk::analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLength, quint32 remainTime, QString filePath)
 {
     //根据通道号计算对应采集卡的第几通道
     quint8 cameraNo = cameraIndex % 4 - 1;
 
-    {
-        /* 原始数据格式(总大小200000000B)
-         * 包头              FFAB
-         * 数据类型           00D3
-         * 包序号             0000
-         * 测量时间           0000
-         * 包头时间戳         0000 0000 0000 0000
-         * 原始数据           200,000,000-256
-         * 包尾时间戳         0000 0000 0000 0000
-         * 保留位            0000 0000 0000
-         * 包尾              FFCD
-        */
-        if (data.startsWith(QByteArray::fromHex("FFAB00D3"))){
-            if (data.size() >= 200000000){
-                QByteArray chunk = data.left(200000000);
-
-                bool ok;
-                QByteArray head = chunk.left(4);
-                quint16 serialNumber = qbswap(chunk.mid(4, 2).toHex().toUShort(&ok, 16));//包序号
-                quint16 time = qbswap(chunk.mid(6, 2).toHex().toUShort(&ok, 16));//测量时间
-                quint16 headTimeStamp = qbswap(chunk.mid(8, 8).toHex().toULongLong(&ok, 16));//包头时间戳
-                QByteArray raw = chunk.mid(16, 200000000-256);
-                quint16 tailTimeStamp = qbswap(chunk.mid(200000000-256, 8).toHex().toULongLong(&ok, 16));//包头时间戳
-                QByteArray reserve = chunk.mid(200000000-248, 6);
-                QByteArray tail = chunk.right(2);
-            }
-        }
-
-        /* 能谱数据（总大小512*2B）
-         * 包头           FFAB
-         * 数据类型        00D2
-         * 能谱序号        000000
-         * 测量时间        0000
-         * 保留位          0000 0000 0000
-         * 伽马能谱数据     248*2
-         * 中子能谱数据     248*2
-         * 绝对时间        0000 0000 0000 0000
-         * 保留位          0000 0000 0000
-         * 包尾            FFCD
-        */
-        if (data.startsWith(QByteArray::fromHex("FFAB00D2"))){
-            if (data.size() >= 1024){
-                QByteArray chunk = data.left(1024);
-
-                bool ok;
-                //能谱序号 高位16bi表示这是第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
-                QByteArray head = chunk.left(4);
-                quint32 serialNumber = qbswap(chunk.mid(4, 2).toHex().toUInt(&ok, 16));
-                quint32 serialNumberRef = chunk.mid(6, 1).toInt();
-                quint16 time = qbswap(chunk.mid(7, 2).toHex().toUShort(&ok, 16));//测量时间
-                QByteArray reserve1 = chunk.mid(9, 7);
-                QByteArray gamma = chunk.mid(16, 496);  //62*4*2
-                QByteArray neutron = chunk.mid(512, 496);
-                quint64 absoluteTime = qbswap(chunk.mid(1008, 8).toHex().toUInt(&ok, 16));//绝对时间
-                QByteArray reserve2 = chunk.mid(1016, 6);
-                QByteArray tail = chunk.right(2);
-
-                //数据包的其实时间戳/ns
-                quint64 timestamp = (serialNumber - 1) * 50 + serialNumberRef;
-                if (timestamp == mTimestampMs1){
-                    QByteArray gamma = chunk.mid(cameraNo*124, 124);
-                    QByteArray neutron = chunk.mid(cameraNo*124, 124);
-                    {
-                        QVector<quint16> data;
-                        for (int i=0; i<gamma.size(); i+=2){
-                            bool ok;
-                            //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
-                            quint16 amplitude = gamma.mid(i, 2).toHex().toUShort(&ok, 16);
-                            data.append(qbswap(amplitude));
-                        }
-
-                        emit reportGammaSpectrum(1, cameraIndex, data);
-                    }
-
-                    {
-                        QVector<quint16> data;
-                        for (int i=0; i<neutron.size(); i+=2){
-                            bool ok;
-                            //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
-                            quint16 amplitude = neutron.mid(i, 2).toHex().toUShort(&ok, 16);
-                            data.append(qbswap(amplitude));
-                        }
-
-                        emit reportNeutronSpectrum(1, cameraIndex, data);
-                    }
-                }
-            }
-        }
+    QVector<qint16> ch0, ch1, ch2, ch3;
+    QVector<qint16> targetdata;
+    if (!DataAnalysisWorker::readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)) {
+        // emit logMessage(QString("文件%1: 读取失败或文件不存在").arg(filePath), QtWarningMsg);
+        qDebug() << "文件" << filePath << "读取失败或文件不存在";
+        return;
     }
 
-    //旧数据包解析方法，待废弃使用......
-    {
-        //采集ns总时间是：1024*1024*32*2ns,正好等于单个通道的数据总长度64MB,等于是1ns对应一个字节的数据
-        quint32 capture_timelength = 1024 * 1024 * 32 * 2;
+    //计算出是当前文件波形的第几个数据点
+    int index = remainTime * 1000 * 1000/ 2;
+    int point_num = timeLength * 1000 * 1000 / 2;
 
-        //将时间戳ms换算成ns
-        quint64 cut_timestamp_start = mTimestampMs1 * 1000 * 1000;
+    //提取通道号的数据cameraNo
+    QVector<qint16> waveform;
+    if (cameraNo == 0) {
+        //扣基线，调整数据
+        qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch0);
+        //根据相机序号计算出是第几块光纤卡
+        int board_index = (cameraIndex-1)/4+1;
+        DataCompressWindow::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
+        //提取数据
+        waveform = ch0.mid(index, point_num);
+    } else if (cameraNo == 1) {
+        //扣基线，调整数据
+        qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch1);
+        //根据相机序号计算出是第几块光纤卡
+        int board_index = (cameraIndex-1)/4+1;
+        DataCompressWindow::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
+        //提取数据
+        waveform = ch1.mid(index, point_num);
+    } else if (cameraNo == 2) {
+        //扣基线，调整数据
+        qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch2);
+        //根据相机序号计算出是第几块光纤卡
+        int board_index = (cameraIndex-1)/4+1;
+        DataCompressWindow::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
+        //提取数据
+        waveform = ch2.mid(index, point_num);
+    } else if (cameraNo == 3) {
+        //扣基线，调整数据
+        qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch3);
+        //根据相机序号计算出是第几块光纤卡
+        int board_index = (cameraIndex-1)/4+1;
+        DataCompressWindow::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
+        //提取数据
+        waveform = ch3.mid(index, point_num);
+    }
 
-        //256M分成4个通道，每个通道64M，
-        quint32 chunk_size = capture_timelength;
-        QByteArray chunk_channel = data.mid(cameraNo*chunk_size, chunk_size);
+    emit reportWaveform(1, cameraIndex, waveform);
+    
+    /* 原始数据格式(总大小200000000B)
+        * 包头              FFAB
+        * 数据类型           00D3
+        * 包序号             0000
+        * 测量时间           0000
+        * 包头时间戳         0000 0000 0000 0000
+        * 原始数据           200,000,000-256
+        * 包尾时间戳         0000 0000 0000 0000
+        * 保留位            0000 0000 0000
+        * 包尾              FFCD
+    */
+    /*if (data.startsWith(QByteArray::fromHex("FFAB00D3"))){
+        if (data.size() >= 200000000){
+            QByteArray chunk = data.left(200000000);
 
-        //根据时间戳范围截取需要的数据段，1ms对应数据长度就是1*1000*1000ns，这里只显示1us数据吧
-        QByteArray chunk_time = chunk_channel.mid(cut_timestamp_start, 1000);
-        chunk_time.reserve(1000);
-
-        //数据流类型是int16
-        QVector<qint16> waveform;
-        for (int i=0; i<chunk_time.size(); i+=2){
             bool ok;
-            //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
-            qint16 amplitude = chunk_time.mid(i, 2).toHex().toShort(&ok, 16);
-            waveform.append(qbswap(amplitude) / 4);
+            QByteArray head = chunk.left(4);
+            quint16 serialNumber = qbswap(chunk.mid(4, 2).toHex().toUShort(&ok, 16));//包序号
+            quint16 time = qbswap(chunk.mid(6, 2).toHex().toUShort(&ok, 16));//测量时间
+            quint16 headTimeStamp = qbswap(chunk.mid(8, 8).toHex().toULongLong(&ok, 16));//包头时间戳
+            QByteArray raw = chunk.mid(16, 200000000-256);
+            quint16 tailTimeStamp = qbswap(chunk.mid(200000000-256, 8).toHex().toULongLong(&ok, 16));//包头时间戳
+            QByteArray reserve = chunk.mid(200000000-248, 6);
+            QByteArray tail = chunk.right(2);
         }
-
-        emit reportWaveform(1, cameraIndex, waveform);
     }
+
+
+    quint32 pack_head_size = 128/8;//包头字节数
+    quint32 pack_tail_size = 128/8;//包尾字节数
+    
+    //旧的数据包没有包头包尾
+    if(mCaptureTime == oldCaptureTime)
+    {
+        pack_head_size = 0;
+        pack_tail_size = 0;
+    }
+    */
 }
 
 #include "globalsettings.h"
@@ -450,39 +503,45 @@ void PCIeCommSdk::replySettingFinished()
     writeWaveformMode((TriggerMode)triggerMode, (WaveformLength)length);
 }
 
-/*设置采集参数*/
-void PCIeCommSdk::setCaptureParamter(quint8 cameraIndex, quint32 time1)
+
+/**
+ * @brief PCIeCommSdk::setCaptureParamter 设置离线分析时刻参数
+ * @param captureTime 单个文件对应采集时间
+ * @param cameraIndex 相机序号
+ * @param timeLength 要提取的波形时间长度，单位ms
+ * @param time1 提取波形起始时刻，单位ms
+ */
+void PCIeCommSdk::setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex, quint32 timeLength, quint32 time1)
 {
+    mCaptureTime = captureTime;
     mCameraIndex = cameraIndex;
     mTimestampMs1 = time1;
+    mTimeLength = timeLength;
+    mRemainTime = time1 % captureTime;
 }
 
 #include <QRegularExpression>
 bool PCIeCommSdk::openHistoryFile(QString filename)
 {
-    QFile file(filename);
-    if (file.open(QIODevice::ReadOnly)){
-        quint32 cardIndex =1;
-        quint32 packIndex = 1;
-        QRegularExpression re("\\d+"); // \d+ 匹配一个或多个数字
-        auto matches = re.globalMatch(QFileInfo(filename).baseName());
-        QStringList numbers;
+    /*
+    // 从文件名中提取卡号和包序号
+    quint32 cardIndex =1;
+    quint32 packIndex = 1;
+    QRegularExpression re("\\d+"); // \d+ 匹配一个或多个数字
+    auto matches = re.globalMatch(QFileInfo(filename).baseName());
+    QStringList numbers;
 
-        while (matches.hasNext()) {
-            QRegularExpressionMatch match = matches.next();
-            numbers.append(match.captured(0));
-        }
-        cardIndex = numbers.at(0).toUInt();
-        packIndex = numbers.at(1).toUInt();
+    while (matches.hasNext()) {
+        QRegularExpressionMatch match = matches.next();
+        numbers.append(match.captured(0));
+    }
+    cardIndex = numbers.at(0).toUInt();
+    packIndex = numbers.at(1).toUInt();
+    */
+    analyzeHistoryWaveformData(mCameraIndex, mTimeLength, mRemainTime, filename);
+    // analyzeHistorySpectrumData(mCameraIndex, mRemainTime, filename);
+    return true;
 
-        QByteArray data = file.readAll();            
-        analyzeHistoryData(mCameraIndex, mTimestampMs1, data);
-        file.close();
-        return true;
-    }
-    else{
-        return false;
-    }
 }
 
 bool PCIeCommSdk::switchPower(quint32 channel, bool on)

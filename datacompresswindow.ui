@@ -252,27 +252,9 @@
          </spacer>
         </item>
         <item>
-         <widget class="QGraphicsView" name="graphicsView">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize">
-           <size>
-            <width>12</width>
-            <height>20</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>16777215</width>
-            <height>40</height>
-           </size>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+         <widget class="QLabel" name="label_17">
+          <property name="text">
+           <string>运行日志</string>
           </property>
          </widget>
         </item>
@@ -357,7 +339,11 @@
               </widget>
              </item>
              <item>
-              <widget class="QLineEdit" name="line_measure_startT"/>
+              <widget class="QLineEdit" name="line_measure_startT">
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+              </widget>
              </item>
              <item>
               <widget class="QLabel" name="label_14">
@@ -367,7 +353,11 @@
               </widget>
              </item>
              <item>
-              <widget class="QLineEdit" name="line_measure_endT"/>
+              <widget class="QLineEdit" name="line_measure_endT">
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+              </widget>
              </item>
             </layout>
            </widget>

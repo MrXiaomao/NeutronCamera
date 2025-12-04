@@ -81,6 +81,9 @@ private slots:
 
     void on_action_ngamma_triggered(bool checked);
 
+    // 验证时间范围输入
+    void validateTime1Range();
+
 private:
     Ui::OfflineWindow *ui;
     bool mIsDarkTheme = true;
@@ -90,6 +93,7 @@ private:
     PCIeCommSdk mPCIeCommSdk;
     QString mShotNum;
 
+    QStringList mfileList;
     void applyColorTheme();
 };
 

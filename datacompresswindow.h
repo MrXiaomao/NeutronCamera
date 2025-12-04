@@ -5,6 +5,8 @@
 #include <QThread>
 #include <QMutex>
 #include <QObject>
+#include <QFileInfo>
+#include <QDir>
 #include <array>
 
 #include "QGoodWindowHelper"
@@ -30,7 +32,15 @@ public:
                       int timePerFile,
                       int startTime,
                       int endTime);
+    static bool readBin4Ch_fast(const QString& path,
+        QVector<qint16>& ch0,
+        QVector<qint16>& ch1,
+        QVector<qint16>& ch2,
+        QVector<qint16>& ch3,
+        bool littleEndian = true);
 
+    void getValidWave();
+    
 public slots:
     void startAnalysis();
     void cancelAnalysis();
@@ -42,14 +52,6 @@ signals:
     void analysisError(const QString& error);
 
 private:
-    bool readBin4Ch_fast(const QString& path,
-                        QVector<qint16>& ch0,
-                        QVector<qint16>& ch1,
-                        QVector<qint16>& ch2,
-                        QVector<qint16>& ch3,
-                        bool littleEndian = true);
-
-    void getValidWave();
 
     QString mDataDir;
     QStringList mFileList;
@@ -93,6 +95,21 @@ public:
 
     // 给出容量的最佳表示方法
     static QString humanReadableSize(qint64 bytes);
+
+    // 从目录获取所有.bin文件列表（按名称排序）
+    static QFileInfoList getBinFileList(const QString& dirPath);
+
+    // 计算文件信息列表的总大小
+    static qint64 calculateTotalSize(const QFileInfoList& fileinfoList);
+
+    // 从文件信息列表提取文件名列表
+    static QStringList extractFileNames(const QFileInfoList& fileinfoList);
+
+    // 统计以指定前缀开头的文件数量
+    static int countFilesByPrefix(const QStringList& fileList, const QString& prefix);
+
+    // 计算测量时长
+    static int calculateMeasureTime(int fileCount, int timePerFile);
 
     //从当前目录下遍历读取6个光纤口的二进制波形数据，并筛选出有效波形
     void getValidWave(QStringList& fileList, QString outfileName, int threshold = 200);
