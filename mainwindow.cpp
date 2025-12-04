@@ -20,9 +20,8 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     applyColorTheme();
 
     connect(this, SIGNAL(reporWriteLog(const QString&,QtMsgType)), this, SLOT(replyWriteLog(const QString&,QtMsgType)));
-    connect(this, SIGNAL(reportKernelDensitySpectrumPSD(quint8,QVector<QPair<double,double>>&)), this, SLOT(replyKernelDensitySpectrumPSD(quint8,QVector<QPair<double,double>>&)));
-    connect(this, SIGNAL(reportKernelDensitySpectrumFoM(quint8,QVector<QVector<QPair<double,double>>>&)), this, SLOT(replyKernelDensitySpectrumFoM(quint8,QVector<QVector<QPair<double,double>>>&)));
-    connect(this, SIGNAL(reportSpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)), this, SLOT(replySpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)));
+    connect(this, SIGNAL(reportNeutronSpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)), this, SLOT(replyNeutronSpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)));
+    connect(this, SIGNAL(reportGammaSpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)), this, SLOT(replyGammaSpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)));
 
     ui->toolButton_startMeasure->setDefaultAction(ui->action_startMeasure);
     ui->toolButton_stopMeasure->setDefaultAction(ui->action_stopMeasure);
@@ -68,7 +67,6 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
     });
-    connect(&mPCIeCommSdk, &PCIeCommSdk::reportWaveform, this, &MainWindow::replyWaveform);
 
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
@@ -189,19 +187,27 @@ void MainWindow::initUi()
     {
         ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Fixed);
         ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);//编号
-        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);//电源
-        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);//偏压
-        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);//选通
+        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);//1#电源
+        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);//1#偏压
+        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);//1#电源
+        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);//1#偏压
+        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);//选通
         ui->tableWidget_camera->horizontalHeader()->setFixedHeight(30);
         ui->tableWidget_camera->setColumnWidth(0, 35);
         ui->tableWidget_camera->setColumnWidth(1, 50);
         ui->tableWidget_camera->setColumnWidth(2, 77);
         ui->tableWidget_camera->setColumnWidth(3, 77);
         ui->tableWidget_camera->setColumnWidth(4, 77);
-        ui->leftStackedWidget->setFixedWidth(320);
+        ui->tableWidget_camera->setColumnWidth(5, 77);
+        ui->tableWidget_camera->setColumnWidth(6, 77);
         for (int i=0; i<DETNUMBER_MAX; ++i)
             ui->tableWidget_camera->setRowHeight(i, 30);
-        ui->tableWidget_camera->setFixedHeight(572);
+        quint16 maxWidth = 0;
+        for (int i=0; i<ui->tableWidget_camera->columnCount(); ++i)
+            maxWidth += ui->tableWidget_camera->columnWidth(i);
+        ui->tableWidget_camera->setFixedWidth(maxWidth);
+        ui->tableWidget_camera->setFixedHeight(19*30+2);
+        ui->leftStackedWidget->setFixedWidth(maxWidth+2);
 
         ui->tableWidget_camera->setSpan(0,0,11,1);
         ui->tableWidget_camera->setSpan(11,0,7,1);
@@ -216,15 +222,27 @@ void MainWindow::initUi()
         }
 
         for (int row=0; row<ui->tableWidget_camera->rowCount(); ++row){
-            for (int column=2; column<=4; ++column){
+            for (int column=2; column<=6; ++column){
                 SwitchButton* cell = new SwitchButton(this);
                 if (column == 2){
-                    cell->setObjectName(QString("Power#%1").arg(row+1));
+                    cell->setObjectName(QString("1#Power#%1").arg(row+1));
+                    cell->setProperty("isPower", true);
+                    cell->setProperty("index", row + 1);
+                    cell->setChecked(true);
+                }
+                else if (column == 3){
+                    cell->setObjectName(QString("1#Voltage#%1").arg(row+1));
+                    cell->setProperty("isVoltage", true);
+                    cell->setProperty("index", row + 1);
+                    cell->setChecked(true);
+                }
+                else if (column == 4){
+                    cell->setObjectName(QString("2#Power#%1").arg(row+1));
                     cell->setProperty("isPower", true);
                     cell->setProperty("index", row + 1);
                 }
-                else if (column == 3){
-                    cell->setObjectName(QString("Voltage#%1").arg(row+1));
+                else if (column == 5){
+                    cell->setObjectName(QString("2#Voltage#%1").arg(row+1));
                     cell->setProperty("isVoltage", true);
                     cell->setProperty("index", row + 1);
                 }
@@ -238,9 +256,9 @@ void MainWindow::initUi()
                     QColor bgColorOn = cell->getBgColorOn();
                     bgColorOff = QColor(82, 0, 195);
                     cell->setBgColor(bgColorOff, bgColorOn);
+                    cell->setChecked(true);
                 }
-                ui->tableWidget_camera->setCellWidget(row, column, cell);
-                cell->setChecked(true);
+                ui->tableWidget_camera->setCellWidget(row, column, cell);                
 
                 connect(cell, &SwitchButton::toggled, this, [=](bool checked){
                     SwitchButton* button = qobject_cast<SwitchButton*>(sender());
@@ -250,7 +268,13 @@ void MainWindow::initUi()
                     else if (column == 3) {
                         mPCIeCommSdk.switchVoltage(row + 1, checked);
                     }
-                    else if (column == 4) {
+                    else if (column == 4){
+                        mPCIeCommSdk.switchBackupPower(row + 1, checked);
+                    }
+                    else if (column == 5) {
+                        mPCIeCommSdk.switchBackupVoltage(row + 1, checked);
+                    }
+                    else if (column == 6) {
                         mPCIeCommSdk.switchBackupChannel(row + 1, checked);
                     }
                 });
@@ -258,13 +282,25 @@ void MainWindow::initUi()
         }
 
         connect(&mPCIeCommSdk, &PCIeCommSdk::reportPowerStatus, this, [=](quint32 moduleNo, bool on){
-            SwitchButton* button = this->findChild<SwitchButton*>(QString("Power#%1").arg(moduleNo));
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("1#Power#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
         });
         connect(&mPCIeCommSdk, &PCIeCommSdk::reportVoltageStatus, this, [=](quint32 moduleNo, bool on){
-            SwitchButton* button = this->findChild<SwitchButton*>(QString("Voltage#%1").arg(moduleNo));
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("1#Voltage#%1").arg(moduleNo));
+            if (button){
+                button->setChecked(on);
+            }
+        });
+        connect(&mPCIeCommSdk, &PCIeCommSdk::reportBackupPowerStatus, this, [=](quint32 moduleNo, bool on){
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("2#Power#%1").arg(moduleNo));
+            if (button){
+                button->setChecked(on);
+            }
+        });
+        connect(&mPCIeCommSdk, &PCIeCommSdk::reportBackupVoltageStatus, this, [=](quint32 moduleNo, bool on){
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("2#Voltage#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
@@ -402,31 +438,13 @@ void MainWindow::initUi()
     {
         //中间布局
         {
-            QSplitter *splitterH1 = new QSplitter(Qt::Horizontal,ui->spectroMeterPageInfoWidget_LSD);
-            splitterH1->setHandleWidth(2);
-            splitterH1->addWidget(ui->spectroMeter_horCamera_PSD);
-            splitterH1->addWidget(ui->spectroMeter_horCamera_FOM);
-            splitterH1->setSizes(QList<int>() << 100000 << 100000);
-            splitterH1->setCollapsible(0,false);
-            splitterH1->setCollapsible(1,false);
-
-            QSplitter *splitterH2 = new QSplitter(Qt::Horizontal,ui->spectroMeterPageInfoWidget_LSD);
-            splitterH2->setHandleWidth(2);
-            splitterH2->addWidget(ui->spectroMeter_verCamera_PSD);
-            splitterH2->addWidget(ui->spectroMeter_verCamera_FOM);
-            splitterH2->setSizes(QList<int>() << 100000 << 100000);
-            splitterH2->setCollapsible(0,false);
-            splitterH2->setCollapsible(1,false);
-
             QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget_LSD);
             splitterV1->setHandleWidth(2);
-            splitterV1->addWidget(ui->spectroMeter_top);
-            splitterV1->addWidget(splitterH1);
-            splitterV1->addWidget(splitterH2);
-            splitterV1->setSizes(QList<int>() << 100000 << 400000 << 400000);
+            splitterV1->addWidget(ui->spectroMeter_neutronSpectrum);
+            splitterV1->addWidget(ui->spectroMeter_gammaSpectrum);
+            splitterV1->setSizes(QList<int>() << 100000 << 100000);
             splitterV1->setCollapsible(0,false);
             splitterV1->setCollapsible(1,false);
-            splitterV1->setCollapsible(2,false);
 
             ui->spectroMeterPageInfoWidget_LSD->layout()->addWidget(splitterV1);
         }
@@ -620,11 +638,8 @@ void MainWindow::initUi()
         }
     }
 
-    initCustomPlot(ui->spectroMeter_top, tr(""), tr("Energy Counts"));
-    initCustomPlot(ui->spectroMeter_horCamera_PSD, tr("水平 n:γ Energy(keVee) PSD图"), tr(""));
-    initCustomPlot(ui->spectroMeter_horCamera_FOM, tr("水平 FOM图"), tr(""));
-    initCustomPlot(ui->spectroMeter_verCamera_PSD, tr("垂直 n:γ Energy(keVee) PSD图"), tr(""));
-    initCustomPlot(ui->spectroMeter_verCamera_FOM, tr("垂直 FOM图"), tr(""));
+    initCustomPlot(ui->spectroMeter_neutronSpectrum, tr(""), tr("中子能谱"));
+    initCustomPlot(ui->spectroMeter_gammaSpectrum, tr(""), tr("伽马能谱"));
 
     initCustomPlot(ui->spectroMeter_time1, tr(""), tr("时刻1 Energy Counts"));
     initCustomPlot(ui->spectroMeter_time2, tr(""), tr("时刻2 Energy Counts"));
@@ -689,6 +704,8 @@ void MainWindow::initUi()
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupPower(moduleNo, true);
+                mPCIeCommSdk.switchBackupVoltage(moduleNo, true);
                 mPCIeCommSdk.switchBackupChannel(moduleNo, true);
             }
             else{
@@ -704,6 +721,8 @@ void MainWindow::initUi()
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupPower(moduleNo, true);
+                mPCIeCommSdk.switchBackupVoltage(moduleNo, true);
                 mPCIeCommSdk.switchBackupChannel(moduleNo, true);
             }
             else{
@@ -724,6 +743,8 @@ void MainWindow::initUi()
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupPower(moduleNo, true);
+                mPCIeCommSdk.switchBackupVoltage(moduleNo, true);
                 mPCIeCommSdk.switchBackupChannel(moduleNo, true);
             }
             else{
@@ -739,6 +760,8 @@ void MainWindow::initUi()
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupPower(moduleNo, true);
+                mPCIeCommSdk.switchBackupVoltage(moduleNo, true);
                 mPCIeCommSdk.switchBackupChannel(moduleNo, true);
             }
             else{
@@ -759,6 +782,8 @@ void MainWindow::initUi()
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupPower(moduleNo, true);
+                mPCIeCommSdk.switchBackupVoltage(moduleNo, true);
                 mPCIeCommSdk.switchBackupChannel(moduleNo, true);
             }
             else{
@@ -771,6 +796,12 @@ void MainWindow::initUi()
                 ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(Qt::red);
 
                 qCritical().noquote() << "模组#" << moduleNo << " 运放板电流异常，电流值：" << QString::number(pairs[row].first, 2, 'f') << "mA";
+
+                mPCIeCommSdk.switchPower(moduleNo, false);
+                mPCIeCommSdk.switchVoltage(moduleNo, false);
+                mPCIeCommSdk.switchBackupPower(moduleNo, true);
+                mPCIeCommSdk.switchBackupVoltage(moduleNo, true);
+                mPCIeCommSdk.switchBackupChannel(moduleNo, true);
             }
             else{
                 ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
@@ -846,17 +877,6 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
     customPlot->axisRect()->setupFullAxesBox(true);
 
     if (customPlot == ui->spectroMeter_time1 || customPlot == ui->spectroMeter_time2 || customPlot == ui->spectroMeter_time3){
-        //默认对数
-        QSharedPointer<QCPAxisTickerLog> logTicker(new QCPAxisTickerLog);
-        customPlot->yAxis->setTicker(logTicker);
-        //customPlot->yAxis2->setTicker(logTicker);
-        customPlot->yAxis->setScaleType(QCPAxis::ScaleType::stLogarithmic);
-        customPlot->yAxis->setNumberFormat("eb");//使用科学计数法表示刻度
-        customPlot->yAxis->setNumberPrecision(0);//小数点后面小数位数
-        customPlot->yAxis2->setTicker(logTicker);
-        customPlot->yAxis2->setScaleType(QCPAxis::ScaleType::stLogarithmic);
-        customPlot->yAxis2->setNumberFormat("eb");//使用科学计数法表示刻度
-        customPlot->yAxis2->setNumberPrecision(0);//小数点后面小数位数
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
 
@@ -874,25 +894,14 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->setName(title[i]);
         }
     }
-    else if (customPlot == ui->spectroMeter_top){
-        //默认对数
-        QSharedPointer<QCPAxisTickerLog> logTicker(new QCPAxisTickerLog);
-        customPlot->yAxis->setTicker(logTicker);
-        //customPlot->yAxis2->setTicker(logTicker);
-        customPlot->yAxis->setScaleType(QCPAxis::ScaleType::stLogarithmic);
-        customPlot->yAxis->setNumberFormat("eb");//使用科学计数法表示刻度
-        customPlot->yAxis->setNumberPrecision(0);//小数点后面小数位数
-        customPlot->yAxis2->setTicker(logTicker);
-        customPlot->yAxis2->setScaleType(QCPAxis::ScaleType::stLogarithmic);
-        customPlot->yAxis2->setNumberFormat("eb");//使用科学计数法表示刻度
-        customPlot->yAxis2->setNumberPrecision(0);//小数点后面小数位数
+    else if (customPlot == ui->spectroMeter_neutronSpectrum){
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
 
         QColor colors[] = {Qt::red, Qt::darkRed, Qt::green, Qt::darkGreen, Qt::blue, Qt::darkBlue};
-        QString title[] = {"t1 水平", "t1 垂直", "t2 水平", "t2 垂直", "t3 水平", "t3 垂直"};
+        QString title[] = {"水平", "垂直"};
         customPlot->legend->setVisible(true);
-        for (int i=0; i<6; ++i){
+        for (int i=0; i<2; ++i){
             QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
             graph->setAntialiased(false);
             graph->setPen(QPen(colors[i]));
@@ -901,99 +910,25 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->setSelectable(QCP::SelectionType::stNone);
             graph->setName(title[i]);
         }
-#if 1
-        customPlot->legend->setVisible(false);
-        //添加可选项
-        static int index = 0;
-        for (int i=0; i<6; ++i){
-            QCheckBox* checkBox = new QCheckBox(customPlot);
-            checkBox->setText(title[i]);
-            checkBox->setObjectName(tr(""));
-            QIcon actionIcon = roundPixmap(QSize(16,16), colors[i]);
-            checkBox->setIcon(actionIcon);
-            checkBox->setProperty("index", i+1);
-            checkBox->setChecked(true);
-            connect(checkBox, &QCheckBox::stateChanged, this, [=](int state){
-                int index = checkBox->property("index").toInt();
-                QCPGraph *graph = customPlot->graph(i);
-                if (graph){
-                    graph->setVisible(Qt::CheckState::Checked == state ? true : false);
-                    customPlot->replot();
-                }
-            });
-        }
-        connect(customPlot, &QCustomPlot::afterLayout, this, [=](){
-            QCustomPlot* customPlot = qobject_cast<QCustomPlot*>(sender());
-            QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
-            int i = 0;
-            for (auto checkBox : checkBoxs){
-                checkBox->move(customPlot->axisRect()->topRight().x() - 120, customPlot->axisRect()->topRight().y() + i++ * 20 + 10);
-            }
-        });
-#endif
     }
-    else if (customPlot == ui->spectroMeter_horCamera_PSD || customPlot == ui->spectroMeter_verCamera_PSD){
-        QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
-        graph->setAntialiased(false);
-        graph->setLineStyle(QCPGraph::lsNone);
-        graph->setSelectable(QCP::SelectionType::stNone);
-        graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, Qt::red, 3));//显示散点图
+    else if (customPlot == ui->spectroMeter_gammaSpectrum){
+        customPlot->xAxis->setRange(0, 2048);
+        customPlot->yAxis->setRange(0, 10000);
 
-        QCPColorMap *colorMap = new QCPColorMap(customPlot->xAxis, customPlot->yAxis);
-        colorMap->setName("colorMap");
-
-        colorMap->data()->setSize(100, 100);// 设置网格维度
-        colorMap->data()->setRange(QCPRange(0, 10000), QCPRange(0, 1.0));// 设置网格数据范围
-        colorMap->data()->fillAlpha(0);
-
-        QCPColorScale *colorScale = new QCPColorScale(customPlot);
-        customPlot->plotLayout()->addElement(0, 1, colorScale);
-        colorScale->setType(QCPAxis::atRight);
-        colorScale->setDataRange(QCPRange(0, 100));//颜色值取值范围
-
-        //重新定义色带 （蓝绿黄红）
-        QCPColorGradient gradient = QCPColorGradient::gpJet;
-        // gradient.setColorStopAt(0, QColor(0, 0, 200));
-        // gradient.setColorStopAt(1, QColor(255, 0, 0));
-        colorScale->setGradient(gradient);
-
-        colorMap->setColorScale(colorScale);// 色图与颜色条关联
-        colorMap->setGradient(gradient/*QCPColorGradient::gpSpectrum*/);
-        colorMap->rescaleDataRange();
-
-        QCPMarginGroup *marginGroup = new QCPMarginGroup(customPlot);
-        customPlot->axisRect()->setMarginGroup(QCP::msBottom|QCP::msTop, marginGroup);
-        colorScale->setMarginGroup(QCP::msBottom|QCP::msTop, marginGroup);
-        colorScale->setRangeDrag(false);
-        colorScale->setRangeZoom(false);
-        customPlot->rescaleAxes();
-    }
-    else if (customPlot == ui->spectroMeter_horCamera_FOM || customPlot == ui->spectroMeter_verCamera_FOM){
-        QSharedPointer<QCPAxisTicker> ticker(new QCPAxisTicker);
-        customPlot->yAxis->setTicker(ticker);
-        customPlot->xAxis->setRange(0, 1);
-        customPlot->yAxis->setRange(0, 250);
-
-        QColor colors[] = {RGB(0x64,0x91,0xAF), Qt::red, Qt::black};
-        QString title[] = {"Original data", "Gamma", "Neutron"};
+        QColor colors[] = {Qt::red, Qt::darkRed, Qt::green, Qt::darkGreen, Qt::blue, Qt::darkBlue};
+        QString title[] = {"水平", "垂直"};
         customPlot->legend->setVisible(true);
-        for (int i=0; i<3; ++i){
+        for (int i=0; i<2; ++i){
             QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
             graph->setAntialiased(false);
             graph->setPen(QPen(colors[i]));
             graph->selectionDecorator()->setPen(QPen(colors[i]));
-            if (i == 0){
-                graph->setLineStyle(QCPGraph::lsNone);
-                graph->setSelectable(QCP::SelectionType::stNone);
-                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
-            }
-            else {
-                graph->setLineStyle(QCPGraph::lsLine);
-                graph->setSelectable(QCP::SelectionType::stNone);
-            }
+            graph->setLineStyle(QCPGraph::lsLine);
+            graph->setSelectable(QCP::SelectionType::stNone);
             graph->setName(title[i]);
         }
     }
+
     customPlot->replot();
     connect(customPlot->xAxis, SIGNAL(rangeChanged(const QCPRange &)), customPlot->xAxis2, SLOT(setRange(const QCPRange &)));
     connect(customPlot->yAxis, SIGNAL(rangeChanged(const QCPRange &)), customPlot->yAxis2, SLOT(setRange(const QCPRange &)));
@@ -1234,49 +1169,6 @@ void MainWindow::on_action_stopMeasure_triggered()
     mCommHelper->disconnectServer();
 }
 
-#include <QtMath>
-void MainWindow::replyWaveform(quint8 timestampIndex, quint8 cameraOrientation, QVector<quint16>& waveformBytes)
-{
-    //实测曲线
-    QCustomPlot* customPlot = ui->spectroMeter_top;
-    QVector<double> keys, values;
-    quint32 yMin = 1e10;
-    quint32 yMax = 0;
-    for (int i=0; i<waveformBytes.size(); ++i){
-        keys << i ;
-        values << waveformBytes[i];
-        yMin = qMin(yMin, (quint32)waveformBytes[i]);
-        yMax = qMax(yMax, (quint32)waveformBytes[i]);
-    }
-    double spaceDisc = 0;
-    if (yMax != yMin){
-        spaceDisc = (yMax - yMin) * 0.15;
-    }
-
-    if (timestampIndex == 1){
-        if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
-            customPlot->graph(0)->setData(keys, values);
-        else
-            customPlot->graph(1)->setData(keys, values);
-    }
-    else if (timestampIndex == 2){
-        if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
-            customPlot->graph(2)->setData(keys, values);
-        else
-            customPlot->graph(3)->setData(keys, values);
-    }
-    else if (timestampIndex == 3){
-        if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
-            customPlot->graph(4)->setData(keys, values);
-        else
-            customPlot->graph(5)->setData(keys, values);
-    }
-
-    customPlot->xAxis->rescale(true);
-    customPlot->yAxis->rescale(false);
-    customPlot->yAxis->setRange(yMin-spaceDisc, yMax+spaceDisc);
-    customPlot->replot(QCustomPlot::rpQueuedReplot);
-}
 
 void MainWindow::on_action_about_triggered()
 {
@@ -1519,12 +1411,6 @@ void MainWindow::on_action_linear_triggered(bool checked)
 {
     QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
     for (auto customPlot : customPlots){
-        if (customPlot == ui->spectroMeter_horCamera_PSD ||
-            customPlot == ui->spectroMeter_horCamera_FOM ||
-            customPlot == ui->spectroMeter_verCamera_PSD ||
-            customPlot == ui->spectroMeter_verCamera_FOM)
-            continue;
-
         customPlot->yAxis->setSubTicks(false);
         customPlot->yAxis2->setSubTicks(false);
 
@@ -1544,12 +1430,6 @@ void MainWindow::on_action_logarithm_triggered(bool checked)
 {
     QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
     for (auto customPlot : customPlots){
-        if (customPlot == ui->spectroMeter_horCamera_PSD ||
-            customPlot == ui->spectroMeter_horCamera_FOM ||
-            customPlot == ui->spectroMeter_verCamera_PSD ||
-            customPlot == ui->spectroMeter_verCamera_FOM)
-            continue;
-
         customPlot->yAxis->setSubTicks(true);
         customPlot->yAxis2->setSubTicks(true);
 
@@ -1565,45 +1445,57 @@ void MainWindow::on_action_logarithm_triggered(bool checked)
 
 void MainWindow::on_pushButton_openPower_clicked()
 {
-    QList<SwitchButton*> buttons = this->findChildren<SwitchButton*>();
-    for (auto btn : buttons){
-        if (btn->property("isPower").toBool()){
-            btn->setChecked(true);
-        }
-    }
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+        mPCIeCommSdk.switchPower(moduleNo, true);
 }
 
 
 void MainWindow::on_pushButton_closePower_clicked()
 {
-    QList<SwitchButton*> buttons = this->findChildren<SwitchButton*>();
-    for (auto btn : buttons){
-        if (btn->property("isPower").toBool()){
-            btn->setChecked(false);
-        }
-    }
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+        mPCIeCommSdk.switchPower(moduleNo, false);
+}
+
+
+void MainWindow::on_pushButton_openPower_2_clicked()
+{
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+        mPCIeCommSdk.switchBackupPower(moduleNo, true);
+}
+
+
+void MainWindow::on_pushButton_closePower_2_clicked()
+{
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+        mPCIeCommSdk.switchBackupPower(moduleNo, false);
 }
 
 
 void MainWindow::on_pushButton_openVoltage_clicked()
 {
-    QList<SwitchButton*> buttons = this->findChildren<SwitchButton*>();
-    for (auto btn : buttons){
-        if (btn->property("isVoltage").toBool()){
-            btn->setChecked(true);
-        }
-    }
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+        mPCIeCommSdk.switchVoltage(moduleNo, true);
 }
 
 
 void MainWindow::on_pushButton_closeVoltage_clicked()
 {
-    QList<SwitchButton*> buttons = this->findChildren<SwitchButton*>();
-    for (auto btn : buttons){
-        if (btn->property("isVoltage").toBool()){
-            btn->setChecked(false);
-        }
-    }
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+        mPCIeCommSdk.switchVoltage(moduleNo, false);
+}
+
+
+void MainWindow::on_pushButton_openVoltage_2_clicked()
+{
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+        mPCIeCommSdk.switchBackupVoltage(moduleNo, true);
+}
+
+
+void MainWindow::on_pushButton_closeVoltage_2_clicked()
+{
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+        mPCIeCommSdk.switchBackupVoltage(moduleNo, false);
 }
 
 
@@ -1674,13 +1566,25 @@ void MainWindow::on_pushButton_selChannel2_clicked()
 void MainWindow::on_action_typeLSD_triggered(bool checked)
 {
     if (checked){
-        ui->tableWidget_camera->setColumnHidden(4, true);
-        ui->leftStackedWidget->setFixedWidth(240);
+        ui->tableWidget_camera->setColumnHidden(6, true);
+
+        quint16 maxWidth = 0;
+        for (int i=0; i<ui->tableWidget_camera->columnCount(); ++i){
+            if (!ui->tableWidget_camera->isColumnHidden(i))
+                maxWidth += ui->tableWidget_camera->columnWidth(i);
+        }
+        ui->tableWidget_camera->setFixedWidth(maxWidth);
+        ui->leftStackedWidget->setFixedWidth(maxWidth+2);
+
+        ui->label_12->hide();
+        ui->label_18->hide();
+        ui->spinBox_timeNode2->hide();
+        ui->spinBox_timeNode3->hide();
         ui->pushButton_selChannel1->hide();
         ui->pushButton_selChannel2->hide();
 
         if (!ui->action_status->isChecked())
-            ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);//spectroMeterPageInfoWidget_LSD
+            ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LSD);//spectroMeterPageInfoWidget_LSD
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1692,8 +1596,20 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
 void MainWindow::on_action_typePSD_triggered(bool checked)
 {
     if (checked){
-        ui->tableWidget_camera->setColumnHidden(4, false);
-        ui->leftStackedWidget->setFixedWidth(320);
+        ui->tableWidget_camera->setColumnHidden(6, false);
+
+        quint16 maxWidth = 0;
+        for (int i=0; i<ui->tableWidget_camera->columnCount(); ++i){
+            if (!ui->tableWidget_camera->isColumnHidden(i))
+                maxWidth += ui->tableWidget_camera->columnWidth(i);
+        }
+        ui->tableWidget_camera->setFixedWidth(maxWidth);
+        ui->leftStackedWidget->setFixedWidth(maxWidth+2);
+
+        ui->label_12->show();
+        ui->label_18->show();
+        ui->spinBox_timeNode2->show();
+        ui->spinBox_timeNode3->show();
         ui->pushButton_selChannel1->show();
         ui->pushButton_selChannel2->show();
 
@@ -1710,8 +1626,20 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
 void MainWindow::on_action_typeLBD_triggered(bool checked)
 {
     if (checked){
-        ui->tableWidget_camera->setColumnHidden(4, true);
-        ui->leftStackedWidget->setFixedWidth(240);
+        ui->tableWidget_camera->setColumnHidden(6, true);
+
+        quint16 maxWidth = 0;
+        for (int i=0; i<ui->tableWidget_camera->columnCount(); ++i){
+            if (!ui->tableWidget_camera->isColumnHidden(i))
+                maxWidth += ui->tableWidget_camera->columnWidth(i);
+        }
+        ui->tableWidget_camera->setFixedWidth(maxWidth);
+        ui->leftStackedWidget->setFixedWidth(maxWidth+2);
+
+        ui->label_12->show();
+        ui->label_18->show();
+        ui->spinBox_timeNode2->show();
+        ui->spinBox_timeNode3->show();
         ui->pushButton_selChannel1->hide();
         ui->pushButton_selChannel2->hide();
 
@@ -1780,131 +1708,8 @@ QVector<QVector<quint16>> generateArray(int rows, int cols, int centerX, int cen
     return array;
 }
 
-void MainWindow::replyKernelDensitySpectrumPSD(quint8 cameraOrientation, QVector<QPair<double ,double>>& pairs)
-{
-    // 核密度图谱
-    QCPColorMap* colorMap = nullptr;
-    QCustomPlot* customPlot = nullptr;
-    if (PCIeCommSdk::CameraOrientation::Horizontal == cameraOrientation){
-        customPlot = ui->spectroMeter_horCamera_PSD;
-    }
-    else{
-        customPlot = ui->spectroMeter_verCamera_PSD;
-    }
 
-    colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
-    QCPColorScale *colorScale = colorMap->colorScale();
-    QCPColorGradient gradient = colorScale->gradient();
-
-    QVector<double> x, y;
-    QVector<QColor> z;
-    for (auto pair : pairs){
-        x << pair.first;
-        y << pair.second;
-    }
-
-    //‌数据预处理部分
-    double max_x, min_x;
-    double max_y, min_y;
-    max_x = *std::max_element(std::begin(x), std::end(x));
-    min_x = *std::min_element(std::begin(x), std::end(x));
-    max_y = *std::max_element(std::begin(y), std::end(y));
-    min_y = *std::min_element(std::begin(y), std::end(y));
-
-    //‌网格划分和密度计算
-    quint32 NLevel=200;//   %划分等级100份
-    QVector<QVector<quint32>> color_Map(NLevel+1, QVector<quint32>(NLevel+1, 0));//创建(NLevel+1)×(NLevel+1)的零矩阵，用于存储密度
-    double step_x = (max_x-min_x)/(NLevel-1);//  % x轴步长
-    double step_y = (max_y-min_y)/(NLevel-1);//  % y轴步长
-
-    //‌第一次循环：计算密度分布‌
-    //遍历所有数据点，计算每个点所在的网格坐标
-    for (auto pair : pairs){
-        quint32 color_Map_x = quint32((pair.first-min_x)/step_x)+1;// - 计算x方向网格索引
-        quint32 color_Map_y = quint32((pair.second-min_y)/step_y)+1;// - 计算y方向网格索引
-        color_Map[color_Map_x][color_Map_y]++;//- 对应网格位置计数加1
-    }
-
-    //第二次循环：获取每个点的密度值‌
-    //再次遍历所有数据点，根据网格索引获取对应的密度值
-    for (auto pair : pairs){
-        quint32 color_Map_x = quint32((pair.first-min_x)/step_x)+1;// - 计算x方向网格索引
-        quint32 color_Map_y = quint32((pair.second-min_y)/step_y)+1;// - 计算y方向网格索引
-        z << gradient.color(color_Map[color_Map_x][color_Map_y], QCPRange(0, 100), false);
-    }
-
-    customPlot->graph(0)->setData(x, y, z);    
-
-    // 网络定义为50*50吧
-    // int gridRow = pairs.size();
-    // int gridColumn = gridRow;
-    // colorMap->data()->setSize(gridColumn, gridRow);// 设置网格维度
-    // colorMap->data()->setRange(QCPRange(0, 10000), QCPRange(0., 0.6));// 设置网格数据范围
-
-    //将随机数转换到网格坐标中来
-    // GaussianRandomGenerator generator;
-    // const int PAIR_COUNT = 100000;
-    // auto gaussianPairs = generator.generateGaussianPairs(PAIR_COUNT);
-    // // 将随机数转换到网格坐标中来
-    // QVector<QVector<quint16>> ref(gridColumn, QVector<quint16>(gridRow, 0));
-    // for (const auto& pair : pairs) {
-    //     int keyIndex, valueIndex;
-    //     colorMap->data()->coordToCell(pair.first, pair.second, &keyIndex, &valueIndex);
-    //     if (keyIndex>=0 && keyIndex<gridColumn && valueIndex>=0 && valueIndex<gridRow)
-    //         ref[keyIndex][valueIndex]++;
-    //     else{
-    //         qDebug() << "invalid data:" << pair.first << pair.second << keyIndex << valueIndex;
-    //     }
-    // }
-
-    // for (int xIndex=0; xIndex<gridColumn; ++xIndex)
-    // {
-    //     for (int yIndex=0; yIndex<gridRow; ++yIndex)
-    //     {
-    //         if (pairs[xIndex][yIndex] == 0)
-    //             colorMap->data()->setAlpha(xIndex, yIndex, 0);
-    //         else
-    //             colorMap->data()->setCell(xIndex, yIndex, pairs[xIndex][yIndex]);
-
-    //         //qDebug() << xIndex << yIndex << pairs[xIndex][yIndex];
-    //     }
-    // }
-
-    // colorMap->rescaleDataRange(true);
-    customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
-}
-
-void MainWindow::replyKernelDensitySpectrumFoM(quint8 cameraOrientation, QVector<QVector<QPair<double ,double>>>& pairs)
-{
-    // 核密度图谱
-    QCustomPlot* customPlot = nullptr;
-    if (PCIeCommSdk::CameraOrientation::Horizontal == cameraOrientation){
-        customPlot = ui->spectroMeter_horCamera_FOM;
-    }
-    else{
-        customPlot = ui->spectroMeter_verCamera_FOM;
-    }
-
-    QColor clrs[] = {QColor::fromRgb(0x87,0xBA,0xDD), Qt::red, Qt::black};
-    for (int i=0; i<=2; ++i){
-        QVector<double> x, y;
-        QVector<QColor> z;
-        for (auto pair : pairs[i]){
-            x << pair.first;
-            y << pair.second;
-            z << clrs[i];
-        }
-
-        customPlot->graph(i)->setData(x, y, z);
-    }
-
-    customPlot->xAxis->rescale(true);
-    customPlot->yAxis->rescale(true);
-    customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
-}
-
-
-void MainWindow::replySpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<quint16,quint16>>& pairs)
+void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<quint16,quint16>>& pairs)
 {
     //实测曲线
     QCustomPlot* customPlot = nullptr;
@@ -1945,6 +1750,46 @@ void MainWindow::replySpectrum(quint8 timestampIndex, quint8 cameraOrientation, 
 }
 
 
+void MainWindow::replyGammaSpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<quint16,quint16>>& pairs)
+{
+    //实测曲线
+    QCustomPlot* customPlot = nullptr;
+    if (timestampIndex == 1){
+        customPlot = ui->spectroMeter_time1;
+    }
+    else if (timestampIndex == 2){
+        customPlot = ui->spectroMeter_time2;
+    }
+    else if (timestampIndex == 3){
+        customPlot = ui->spectroMeter_time3;
+    }
+
+    QVector<double> keys, values;
+    quint16 yMin = 1e10;
+    quint16 yMax = 0;
+    for (auto pair : pairs){
+        keys << pair.first ;
+        values << pair.second;
+        yMin = qMin(yMin, (quint16)pair.second);
+        yMax = qMax(yMax, (quint16)pair.second);
+    }
+
+    double spaceDisc = 0;
+    if (yMax != yMin){
+        spaceDisc = (yMax - yMin) * 0.15;
+    }
+
+    if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
+        customPlot->graph(0)->setData(keys, values);
+    else
+        customPlot->graph(1)->setData(keys, values);
+
+    customPlot->xAxis->rescale(true);
+    customPlot->yAxis->rescale(false);
+    customPlot->yAxis->setRange(yMin-spaceDisc, yMax+spaceDisc);
+    customPlot->replot(QCustomPlot::rpQueuedReplot);
+}
+
 void MainWindow::on_pushButton_preview_clicked()
 {
     // 将随机数转换到网格坐标中来
@@ -1958,68 +1803,14 @@ void MainWindow::on_pushButton_preview_clicked()
     //         qDebug() << "invalid data:" << pair.first << pair.second << keyIndex << valueIndex;
     //     }
     // }
-    {
-        QVector<QPair<double ,double>> spectrumPairs;// = generateArray(50, 50, 0, 25, 1000, 35);
-        QFile file("./PSD.csv");
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
-            QTextStream stream(&file);
-            while (!stream.atEnd())
-            {
-                QString line = stream.readLine();
-                QStringList row = line.split(',', Qt::SkipEmptyParts);
-                if (row.size() == 2)
-                {
-                    spectrumPairs.push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
-                }
-            }
-            file.close();
-
-            emit reportKernelDensitySpectrumPSD(PCIeCommSdk::CameraOrientation::Horizontal, spectrumPairs);
-            emit reportKernelDensitySpectrumPSD(PCIeCommSdk::CameraOrientation::Vertical, spectrumPairs);
-        }
-    }
-
-    if (1){
-        /*限制数据显示范围*/
-        double f1_b1 = 0.5085;
-        double f1_c1 = 0.0033;
-        double f2_b1 = 0.5270;
-        double f2_c1 = 0.0050;
-        double limit_x1 = f1_b1-8*f1_c1/1.414;
-        double limit_x2 = f2_b1+8*f2_c1/1.414;
-
-        QVector<QPair<double ,double>> spectrumPair[3];
-        QFile file("./FoM.csv");
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
-            QTextStream stream(&file);
-            while (!stream.atEnd())
-            {
-                QString line = stream.readLine();
-                QStringList row = line.split(',', Qt::SkipEmptyParts);
-                if (row.size() == 4)
-                {
-                    if (row.at(0).toDouble()>=limit_x1 && row.at(0).toDouble()<=limit_x2){
-                        spectrumPair[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
-                        spectrumPair[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toDouble()));
-                        spectrumPair[2].push_back(qMakePair(row.at(0).toDouble(), row.at(3).toDouble()));
-                    }
-                }
-            }
-            file.close();
-
-            QVector<QVector<QPair<double ,double>>> spectrumPairs;
-            spectrumPairs.push_back(spectrumPair[0]);
-            spectrumPairs.push_back(spectrumPair[1]);
-            spectrumPairs.push_back(spectrumPair[2]);
-            emit reportKernelDensitySpectrumFoM(PCIeCommSdk::CameraOrientation::Horizontal, spectrumPairs);
-            emit reportKernelDensitySpectrumFoM(PCIeCommSdk::CameraOrientation::Vertical, spectrumPairs);
-        }
-    }
 
     {
-
         QVector<QPair<quint16 ,quint16>> spectrumPair[3];
-        QFile file("./Spectrum.csv");
+        QFile file("./spectrum_lsd.csv");
+        if (ui->action_typeLBD->isChecked())
+            file.setFileName("./spectrum_lbd.csv");
+        else if (ui->action_typePSD)
+            file.setFileName("./spectrum_psd.csv");
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
             QTextStream stream(&file);
             while (!stream.atEnd())
@@ -2035,12 +1826,23 @@ void MainWindow::on_pushButton_preview_clicked()
             }
             file.close();
 
-            emit reportSpectrum(1, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
-            emit reportSpectrum(1, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[1]);
-            emit reportSpectrum(2, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
-            emit reportSpectrum(2, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
-            emit reportSpectrum(3, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[1]);
-            emit reportSpectrum(3, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
+            if (ui->action_typePSD->isChecked() || ui->action_typeLSD->isChecked()){
+                emit reportNeutronSpectrum(1, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
+                emit reportNeutronSpectrum(1, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[1]);
+                emit reportNeutronSpectrum(2, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
+                emit reportNeutronSpectrum(2, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
+                emit reportNeutronSpectrum(3, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[1]);
+                emit reportNeutronSpectrum(3, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
+            }
+
+            if (ui->action_typeLBD->isChecked() || ui->action_typeLSD->isChecked()){
+                emit reportGammaSpectrum(1, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
+                emit reportGammaSpectrum(1, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[1]);
+                emit reportGammaSpectrum(2, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
+                emit reportGammaSpectrum(2, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
+                emit reportGammaSpectrum(3, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[1]);
+                emit reportGammaSpectrum(3, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[2]);
+            }
         }
     }
 }

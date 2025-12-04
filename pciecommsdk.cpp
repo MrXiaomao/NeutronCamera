@@ -9,7 +9,6 @@ PCIeCommSdk::PCIeCommSdk(QObject *parent)
     : QObject{parent}
 {
     mDevices = enumDevices();
-    qDebug() << QString("Devices found: %1").arg(mDevices.count());
 }
 
 
@@ -295,11 +294,11 @@ void PCIeCommSdk::replyCaptureData(quint8 cardIndex/*PCIe卡序号*/, quint32 pa
                 chunk_time.reserve(1000);
 
                 //数据流类型是int16
-                QVector<quint16> waveform;
+                QVector<qint16> waveform;
                 for (int i=0; i<chunk_time.size(); i+=2){
                     bool ok;
                     //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
-                    quint16 amplitude = chunk_time.mid(i, 2).toHex().toUShort(&ok, 16);
+                    qint16 amplitude = chunk_time.mid(i, 2).toHex().toShort(&ok, 16);
                     waveform.append(qbswap(amplitude) / 4);
                 }
 
@@ -421,11 +420,11 @@ void PCIeCommSdk::analyzeHistoryData(quint8 cameraIndex, quint32 time1, QByteArr
         chunk_time.reserve(1000);
 
         //数据流类型是int16
-        QVector<quint16> waveform;
+        QVector<qint16> waveform;
         for (int i=0; i<chunk_time.size(); i+=2){
             bool ok;
             //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
-            quint16 amplitude = chunk_time.mid(i, 2).toHex().toUShort(&ok, 16);
+            qint16 amplitude = chunk_time.mid(i, 2).toHex().toShort(&ok, 16);
             waveform.append(qbswap(amplitude) / 4);
         }
 
@@ -499,6 +498,22 @@ bool PCIeCommSdk::switchVoltage(quint32 channel, bool on)
     mMapVoltage[channel] = on;
 
     emit reportVoltageStatus(channel, on);
+    return true;
+}
+
+bool PCIeCommSdk::switchBackupPower(quint32 channel, bool on)
+{
+    mMapBackupPower[channel] = on;
+
+    emit reportBackupPowerStatus(channel, on);
+    return true;
+}
+
+bool PCIeCommSdk::switchBackupVoltage(quint32 channel, bool on)
+{
+    mMapBackupVoltage[channel] = on;
+
+    emit reportBackupVoltageStatus(channel, on);
     return true;
 }
 

@@ -50,16 +50,13 @@ public:
 
 public slots:
     void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    void replyWaveform(quint8, quint8, QVector<quint16>&);
-    void replySpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
-    void replyKernelDensitySpectrumPSD(quint8, QVector<QPair<double ,double>>&);// 核密度图谱
-    void replyKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合
+    void replyNeutronSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);//中子能谱
+    void replyGammaSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);//伽马能谱
 
 signals:
     void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    void reportSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
-    void reportKernelDensitySpectrumPSD(quint8, QVector<QPair<double ,double>>&);// 核密度图谱
-    void reportKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合
+    void reportNeutronSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
+    void reportGammaSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
 
 private slots:
     void on_action_exit_triggered();
@@ -93,6 +90,14 @@ private slots:
     void on_pushButton_openVoltage_clicked();
 
     void on_pushButton_closeVoltage_clicked();
+
+    void on_pushButton_openPower_2_clicked();
+
+    void on_pushButton_closePower_2_clicked();
+
+    void on_pushButton_openVoltage_2_clicked();
+
+    void on_pushButton_closeVoltage_2_clicked();
 
     void on_action_cfgParam_triggered();
 

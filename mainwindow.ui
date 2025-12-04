@@ -280,12 +280,22 @@
             </column>
             <column>
              <property name="text">
-              <string>电源</string>
+              <string>1#电源</string>
              </property>
             </column>
             <column>
              <property name="text">
-              <string>偏压</string>
+              <string>1#偏压</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>2#电源</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>2#偏压</string>
              </property>
             </column>
             <column>
@@ -379,7 +389,7 @@
           <item>
            <widget class="QPushButton" name="pushButton_openPower">
             <property name="text">
-             <string>电源开</string>
+             <string>1#电源开</string>
             </property>
             <property name="icon">
              <iconset resource="../3rdParty/resource/resource.qrc">
@@ -390,7 +400,29 @@
           <item>
            <widget class="QPushButton" name="pushButton_openVoltage">
             <property name="text">
-             <string>偏压开</string>
+             <string>1#偏压开</string>
+            </property>
+            <property name="icon">
+             <iconset resource="../3rdParty/resource/resource.qrc">
+              <normaloff>:/work-on.png</normaloff>:/work-on.png</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_openPower_2">
+            <property name="text">
+             <string>2#电源开</string>
+            </property>
+            <property name="icon">
+             <iconset resource="../3rdParty/resource/resource.qrc">
+              <normaloff>:/work-on.png</normaloff>:/work-on.png</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_openVoltage_2">
+            <property name="text">
+             <string>2#偏压开</string>
             </property>
             <property name="icon">
              <iconset resource="../3rdParty/resource/resource.qrc">
@@ -432,7 +464,7 @@
           <item>
            <widget class="QPushButton" name="pushButton_closePower">
             <property name="text">
-             <string>电源关</string>
+             <string>1#电源关</string>
             </property>
             <property name="icon">
              <iconset resource="../3rdParty/resource/resource.qrc">
@@ -443,7 +475,29 @@
           <item>
            <widget class="QPushButton" name="pushButton_closeVoltage">
             <property name="text">
-             <string>偏压关</string>
+             <string>1#偏压关</string>
+            </property>
+            <property name="icon">
+             <iconset resource="../3rdParty/resource/resource.qrc">
+              <normaloff>:/work-off.png</normaloff>:/work-off.png</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_closePower_2">
+            <property name="text">
+             <string>2#电源关</string>
+            </property>
+            <property name="icon">
+             <iconset resource="../3rdParty/resource/resource.qrc">
+              <normaloff>:/work-off.png</normaloff>:/work-off.png</iconset>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_closeVoltage_2">
+            <property name="text">
+             <string>2#偏压关</string>
             </property>
             <property name="icon">
              <iconset resource="../3rdParty/resource/resource.qrc">
@@ -527,12 +581,12 @@
         <item row="0" column="0">
          <widget class="QStackedWidget" name="stackedWidget">
           <property name="currentIndex">
-           <number>2</number>
+           <number>0</number>
           </property>
           <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
-           <layout class="QVBoxLayout" name="verticalLayout_7">
+           <layout class="QVBoxLayout" name="verticalLayout_5">
             <property name="spacing">
-             <number>2</number>
+             <number>0</number>
             </property>
             <property name="leftMargin">
              <number>0</number>
@@ -547,26 +601,10 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QCustomPlot" name="spectroMeter_top" native="true"/>
+             <widget class="QCustomPlot" name="spectroMeter_neutronSpectrum" native="true"/>
             </item>
             <item>
-             <layout class="QGridLayout" name="gridLayout_2">
-              <property name="spacing">
-               <number>2</number>
-              </property>
-              <item row="0" column="0">
-               <widget class="QCustomPlot" name="spectroMeter_horCamera_PSD" native="true"/>
-              </item>
-              <item row="0" column="1">
-               <widget class="QCustomPlot" name="spectroMeter_horCamera_FOM" native="true"/>
-              </item>
-              <item row="1" column="0">
-               <widget class="QCustomPlot" name="spectroMeter_verCamera_PSD" native="true"/>
-              </item>
-              <item row="1" column="1">
-               <widget class="QCustomPlot" name="spectroMeter_verCamera_FOM" native="true"/>
-              </item>
-             </layout>
+             <widget class="QCustomPlot" name="spectroMeter_gammaSpectrum" native="true"/>
             </item>
            </layout>
           </widget>
@@ -1475,6 +1513,12 @@
                     <horstretch>0</horstretch>
                     <verstretch>0</verstretch>
                    </sizepolicy>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>40</height>
+                   </size>
                   </property>
                   <property name="alignment">
                    <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>

@@ -24,7 +24,6 @@ public:
 
     bool loadOfflineFilename(const QString&);
     void loadRelatedFiles(const QString& src);
-    void startAnalyze();
 
     QPixmap maskPixmap(QPixmap, QSize sz, QColor clrMask);
     QPixmap roundPixmap(QSize sz, QColor clrOut = Qt::gray);//单圆
@@ -41,13 +40,14 @@ public:
 
 public slots:
     void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    void replyWaveform(quint8, quint8, QVector<quint16>&);
+    void replyWaveform(quint8, quint8, QVector<qint16>&);
     void replySpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
     void replyKernelDensitySpectrumPSD(quint8, QVector<QPair<double ,double>>&);// 核密度图谱
     void replyKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合
 
 signals:
     void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    void reportWaveform(quint8, quint8, QVector<qint16>&);
     void reportSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
     void reportKernelDensitySpectrumPSD(quint8, QVector<QPair<double ,double>>&);// 核密度图谱
     void reportKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合

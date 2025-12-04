@@ -322,6 +322,9 @@
          <widget class="QCustomPlot" name="spectroMeter_LSD_waveform" native="true"/>
         </item>
         <item>
+         <widget class="QCustomPlot" name="spectroMeter_LSD_spectrum" native="true"/>
+        </item>
+        <item>
          <layout class="QHBoxLayout" name="horizontalLayout_3">
           <property name="spacing">
            <number>0</number>
@@ -352,7 +355,7 @@
       <widget class="QWidget" name="spectroMeterPageInfoWidget_PSD_LBD">
        <layout class="QVBoxLayout" name="verticalLayout_7">
         <property name="spacing">
-         <number>2</number>
+         <number>0</number>
         </property>
         <property name="leftMargin">
          <number>0</number>
@@ -1118,6 +1121,9 @@
    <property name="checkable">
     <bool>true</bool>
    </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
    <property name="icon">
     <iconset resource="../3rdParty/resource/resource.qrc">
      <normaloff>:/line.png</normaloff>:/line.png</iconset>
@@ -1134,6 +1140,9 @@
     <bool>true</bool>
    </property>
    <property name="checked">
+    <bool>false</bool>
+   </property>
+   <property name="enabled">
     <bool>true</bool>
    </property>
    <property name="icon">
