@@ -77,6 +77,11 @@ public:
                                      const QVector<std::array<qint16, 512>>& wave_ch2,
                                      const QVector<std::array<qint16, 512>>& wave_ch3);
 
+    // 读取波形数据，这里是有效波形
+    // 读取 wave_CH1.h5 中的数据集 data（行 = 脉冲数, 列 = 采样点数）
+    // 返回 QVector<QVector<float>>，尺寸为 [numPulses x numSamples] = [35679 x 512]
+    static QVector<QVector<qint16>> readWave(const std::string &fileName, const std::string &dsetName);
+
     Q_SIGNAL void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
     Q_SLOT void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
 
@@ -112,6 +117,7 @@ private:
     class QGoodWindowHelper *mainWindow = nullptr;
     QFileInfoList mfileinfoList;
     QStringList mfileList;
+    QString mShotNum;
 };
 
 #endif // DATACOMPRESSWINDOW_H

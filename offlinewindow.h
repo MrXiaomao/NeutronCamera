@@ -53,10 +53,6 @@ signals:
     void reportKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合
 
 private slots:
-    void on_pushButton_test_clicked();
-
-    void on_pushButton_startUpload_clicked();
-
     void on_action_openfile_triggered();
 
     void on_action_analyze_triggered();
@@ -81,7 +77,6 @@ private slots:
 
     void on_action_typeLBD_triggered(bool checked);
 
-
     void on_action_waveform_triggered(bool checked);
 
     void on_action_ngamma_triggered(bool checked);
@@ -93,6 +88,7 @@ private:
     QColor mThemeColor = QColor(255,255,255);
     class QGoodWindowHelper *mainWindow = nullptr;
     PCIeCommSdk mPCIeCommSdk;
+    QString mShotNum;
 
     void applyColorTheme();
 };

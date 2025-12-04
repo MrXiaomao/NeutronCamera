@@ -1,6 +1,6 @@
 #include "mainwindow.h"
 #include "offlinewindow.h"
-#include "datacompress.h"
+#include "datacompresswindow.h"
 #include "globalsettings.h"
 #include "darkstyle.h"
 
@@ -93,6 +93,14 @@ int main(int argc, char *argv[])
 
     // 启用新的日子记录类
     QString filename = QFileInfo(QCoreApplication::applicationFilePath()).baseName();
+    QStringList args = QCoreApplication::arguments();
+    if (args.contains("-m") && args.contains("offline")){
+        filename += ".offline";
+    }
+    else if (args.contains("-c") && args.contains("compress")){
+        filename += ".compress";
+    }
+
     QString sConfFilename = QString("./config/%1.log4qt.conf").arg(filename);
     if (QFileInfo::exists(sConfFilename)){
         Log4Qt::PropertyConfigurator::configure(sConfFilename);
@@ -156,17 +164,13 @@ int main(int argc, char *argv[])
     }
 
     QGoodWindowHelper w;
-    QStringList args = QCoreApplication::arguments();
-    int type = 0;
     if (args.contains("-m") && args.contains("offline")){
         QApplication::setApplicationName("中子相机数据处理离线版");
         mMainWindow = new OfflineWindow(isDarkTheme, &w);
-        type = 1;
     }
     else if (args.contains("-c") && args.contains("compress")){
         QApplication::setApplicationName("中子相机数据压缩与上传");
         mMainWindow = new DataCompressWindow(isDarkTheme, &w);
-        type = 2;
     }
     else
         mMainWindow = new MainWindow(isDarkTheme, &w);
@@ -179,12 +183,7 @@ int main(int argc, char *argv[])
     int x = (screenRect.width() - w.width()) / 2;
     int y = (screenRect.height() - w.height()) / 2;
     w.move(x, y);
-    if(type==2){  
-        w.setWindowState(w.windowState());
-    }
-    else{
-        w.setWindowState(w.windowState() | Qt::WindowMaximized);
-    }
+    w.setWindowState(w.windowState() | Qt::WindowMaximized);
     w.show();
 
     int ret = a.exec();

@@ -1,15 +1,13 @@
-#include "datacompress.h"
-#include "ui_datacompress.h"
+#include "datacompresswindow.h"
+#include "ui_datacompresswindow.h"
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QRandomGenerator>
 #include <QMap>
-#include <algorithm>
 #include <QFileInfo>
 #include <QDir>
 #include "globalsettings.h"
-#include "H5Cpp.h"
 
 #include <array>
 #include <QVector>
@@ -177,10 +175,81 @@ void DataCompressWindow::on_pushButton_test_clicked()
     QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("数据库连接成功！"));
 }
 
+// 读取波形数据，这里是有效波形
+// 读取 wave_CH1.h5 中的数据集 data（行 = 脉冲数, 列 = 采样点数）
+// 返回 QVector<QVector<float>>，尺寸为 [numPulses x numSamples] = [35679 x 512]
+QVector<QVector<qint16>> DataCompressWindow::readWave(const std::string &fileName,
+                                                 const std::string &dsetName)
+{
+    QVector<QVector<qint16>> wave_CH1;
+
+    try {
+        H5::H5File file(fileName, H5F_ACC_RDONLY);
+        H5::DataSet dataset = file.openDataSet(dsetName);
+        H5::DataSpace dataspace = dataset.getSpace();
+
+        const int RANK = dataspace.getSimpleExtentNdims();
+        if (RANK != 2) {
+            return {};
+        }
+
+        hsize_t dims[2];
+        dataspace.getSimpleExtentDims(dims, nullptr);
+        // 约定：dims[0] = 脉冲数（35679），dims[1] = 采样点数（512）
+        hsize_t numPulses  = dims[0];
+        hsize_t numSamples = dims[1];
+
+        if (numSamples != 512) {
+            return {};
+        }
+
+        // 先读到一维 buffer（int16）
+        std::vector<short> buffer(numPulses * numSamples);
+        dataset.read(buffer.data(), H5::PredType::NATIVE_SHORT);
+
+        // 填到 QVector<QVector<float>>：wave_CH1[pulse][sample]
+        wave_CH1.resize(static_cast<int>(numPulses));
+        for (int p = 0; p < static_cast<int>(numPulses); ++p) {
+            wave_CH1[p].resize(static_cast<int>(numSamples));
+            for (int s = 0; s < static_cast<int>(numSamples); ++s) {
+                short v = buffer[p * numSamples + s];      // 行主序：第 p 行第 s 列
+                wave_CH1[p][s] = v;
+            }
+        }
+    }
+    catch (const H5::FileIException &e) {
+        e.printErrorStack();
+        return {};
+    }
+    catch (const H5::DataSetIException &e) {
+        e.printErrorStack();
+        return {};
+    }
+    catch (const H5::DataSpaceIException &e) {
+        e.printErrorStack();
+        return {};
+    }
+
+    return wave_CH1;
+}
+
 void DataCompressWindow::on_pushButton_startUpload_clicked()
 {
-    if (ui->lineEdit_host->text().isEmpty())
+    if (ui->lineEdit_host->text().isEmpty()){
+        QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("请填写远程数据库信息！"));
         return;
+    }
+
+    // 读取 HDF5 中的 N x 512 波形数据
+    QString outfileName = ui->lineEdit_outputFile->text().trimmed();
+    // 检查是否已有.h5后缀（区分大小写）
+    if (!outfileName.endsWith(".h5", Qt::CaseSensitive)) {
+        outfileName += ".h5";
+    }
+    if (!QFileInfo::exists(outfileName)){
+        QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("压缩文件不存在！"));
+        return;
+    }
 
     QSqlDatabase db = QSqlDatabase::addDatabase("QMYSQL");
     db.setHostName(ui->lineEdit_host->text());
@@ -214,13 +283,13 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
     //创建用户表
     QString sql = "CREATE TABLE IF NOT EXISTS Spectrum ("
                   "id INT PRIMARY KEY AUTO_INCREMENT,"
-                  "shotNum int UNSIGNED,"
+                  "shotNum char(5),"
                   "timestamp datetime,";
     for (int i=1; i<=512; ++i){
         if (i==512)
-            sql += QString("data%1 smallint UNSIGNED)").arg(i);
+            sql += QString("data%1 smallint)").arg(i);
         else
-            sql += QString("data%1 smallint UNSIGNED,").arg(i);
+            sql += QString("data%1 smallint,").arg(i);
     }
     replyWriteLog(QString("创建数据表SQL: %1").arg(sql), QtDebugMsg);
     if (!query.exec(sql)){
@@ -228,6 +297,11 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
         QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据表格创建失败！") + query.lastError().text());
         return;
     }
+
+    QVector<QVector<qint16>> wave_CH1 = readWave(outfileName.toStdString(), "data");
+    ui->pushButton_startUpload->setEnabled(false);
+    ui->progressBar->setValue(0);
+    ui->progressBar->setMaximum(wave_CH1.size());
 
     // 保存到数据库
     {
@@ -248,38 +322,94 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
 
         QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
         query.prepare(sql);
-        for (int k=1; k<=16; k++){
-            query.bindValue(":shotNum", 100);
-            query.bindValue(":timestamp", timestamp);
-            for (int i=1; i<=512; ++i){
-                quint16 data = QRandomGenerator::global()->bounded(1000, 15000);
-                query.bindValue(QString(":data%1").arg(i), data);
+
+        //批量插入，效率高
+        QVariantList shotNumList;
+        QVariantList timestampList;
+        QVariantList dataList[512];
+
+        // 单次最大插入512条记录，这里每次插入100条记录吧
+        int count = 0;
+        for (int i=0; i<wave_CH1.size(); ++i){
+            shotNumList << mShotNum;
+            timestampList << timestamp;
+
+            for (int j=0; j<512; ++j){
+                dataList[j] << (qint16)wave_CH1[i][j];
+                QApplication::processEvents();
             }
-            if (!query.exec() || query.numRowsAffected() == 0){
-                QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据表写入失败！") + query.lastError().text());
+
+            if (++count == 100){
+                query.prepare(sql);
+                query.bindValue(":shotNum", shotNumList);
+                query.bindValue(":timestamp", timestampList);
+                for (int i=0; i<512; ++i){
+                    query.bindValue(QString(":data%1").arg(i+1), dataList[i]);
+                }
+
+                if (!query.execBatch()){
+                    QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据上传失败！") + query.lastError().text());
+                    db.close();
+                    ui->pushButton_startUpload->setEnabled(true);
+                    return;
+                }
+
+                ui->progressBar->setValue(i);
+                count = 0;
+                shotNumList.clear();
+                timestampList.clear();
+                for (int j=0; j<512; ++j)
+                    dataList[j].clear();
+            }
+        }
+
+        if (count != 0){
+            query.prepare(sql);
+            query.bindValue(":shotNum", shotNumList);
+            query.bindValue(":timestamp", timestampList);
+            for (int i=0; i<512; ++i){
+                query.bindValue(QString(":data%1").arg(i+1), dataList[i]);
+            }
+
+            //执行预处理命令
+            if (!query.execBatch()){
+                QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据上传失败！") + query.lastError().text());
                 db.close();
+                ui->pushButton_startUpload->setEnabled(true);
                 return;
             }
         }
-    }
 
-    db.close();
-    QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("数据上传完成！"));
+        ui->progressBar->setValue(100);
+        db.close();
+        QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("数据上传完成！"));
+        ui->pushButton_startUpload->setEnabled(true);
+        return;
+    }
 }
 
 void DataCompressWindow::on_action_choseDir_triggered()
 {
     GlobalSettings settings;
-    QString lastPath = settings.value("Global/LastFileDir", QDir::homePath()).toString();
+    QString lastPath = settings.value("Global/Offline/LastFileDir", QDir::homePath()).toString();
     QString filePath = QFileDialog::getExistingDirectory(this, tr("选择测量数据存放目录"), lastPath);
 
     // 目录格式：炮号+日期+[cardIndex]测量数据[packIndex].bin
     if (filePath.isEmpty())
         return;
 
-    settings.setValue("Global/LastFileDir", filePath);
+    settings.setValue("Global/Offline/LastFileDir", filePath);
     ui->textBrowser_filepath->setText(filePath);
-    this->setWindowTitle(filePath + " - 中子相机数据处理离线版");
+    if (!QFileInfo::exists(filePath+"/Settings.ini")){
+        QMessageBox::information(this, tr("提示"), tr("路径无效，缺失\"Settings.ini\"文件！"));
+        return;
+    }
+    else {
+        GlobalSettings settings(filePath+"/Settings.ini");
+        mShotNum = settings.value("Global/ShotNum", "00000").toString();
+        emit reporWriteLog("炮号：" + mShotNum);
+    }
+
 
     //加载目录下所有文件，罗列在表格中，统计给出文件大小
     mfileList = loadRelatedFiles(filePath);
@@ -870,7 +1000,6 @@ void DataCompressWindow::on_action_analyze_triggered()
     // 创建HDF5文件路径（在数据目录下） 
     QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
     replyWriteLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
-    
 
     //检查文件是否存在，如果存在则询问用户是否删除
     if (QFileInfo::exists(hdf5FilePath)) {

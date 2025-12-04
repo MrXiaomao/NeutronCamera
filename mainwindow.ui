@@ -1668,7 +1668,7 @@
      <normaloff>:/resource/image/compress.png</normaloff>:/resource/image/compress.png</iconset>
    </property>
    <property name="text">
-    <string>压缩数据(&amp;O)...</string>
+    <string>压缩数据(&amp;C)...</string>
    </property>
    <property name="iconText">
     <string>压缩数据</string>
@@ -1680,7 +1680,7 @@
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-    <action name="action_open">
+  <action name="action_open">
    <property name="icon">
     <iconset resource="../3rdParty/resource/resource.qrc">
      <normaloff>:/openfile.png</normaloff>:/openfile.png</iconset>

@@ -612,33 +612,6 @@
           <string>远程数据库</string>
          </property>
          <layout class="QGridLayout" name="gridLayout">
-          <item row="3" column="0">
-           <widget class="QLabel" name="label_6">
-            <property name="text">
-             <string>密码：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QSpinBox" name="spinBox_port">
-            <property name="minimum">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <number>65536</number>
-            </property>
-            <property name="value">
-             <number>3306</number>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QLineEdit" name="lineEdit_host">
-            <property name="placeholderText">
-             <string>如 127.0.0.1</string>
-            </property>
-           </widget>
-          </item>
           <item row="1" column="0">
            <widget class="QLabel" name="label_7">
             <property name="text">
@@ -646,7 +619,14 @@
             </property>
            </widget>
           </item>
-          <item row="5" column="0" colspan="2">
+          <item row="0" column="0">
+           <widget class="QLabel" name="label">
+            <property name="text">
+             <string>主机：</string>
+            </property>
+           </widget>
+          </item>
+          <item row="6" column="0" colspan="2">
            <layout class="QHBoxLayout" name="horizontalLayout">
             <item>
              <widget class="QPushButton" name="pushButton_test">
@@ -664,10 +644,10 @@
             </item>
            </layout>
           </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="label_9">
-            <property name="text">
-             <string>用户名：</string>
+          <item row="3" column="1">
+           <widget class="QLineEdit" name="lineEdit_password">
+            <property name="echoMode">
+             <enum>QLineEdit::Password</enum>
             </property>
            </widget>
           </item>
@@ -678,17 +658,30 @@
             </property>
            </widget>
           </item>
-          <item row="0" column="0">
-           <widget class="QLabel" name="label">
+          <item row="3" column="0">
+           <widget class="QLabel" name="label_6">
             <property name="text">
-             <string>主机：</string>
+             <string>密码：</string>
             </property>
            </widget>
           </item>
-          <item row="3" column="1">
-           <widget class="QLineEdit" name="lineEdit_password">
-            <property name="echoMode">
-             <enum>QLineEdit::Password</enum>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="lineEdit_host">
+            <property name="placeholderText">
+             <string>如 127.0.0.1</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QSpinBox" name="spinBox_port">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>65536</number>
+            </property>
+            <property name="value">
+             <number>3306</number>
             </property>
            </widget>
           </item>
@@ -704,6 +697,23 @@
              </size>
             </property>
            </spacer>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_9">
+            <property name="text">
+             <string>用户名：</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0" colspan="2">
+           <widget class="QProgressBar" name="progressBar">
+            <property name="maximum">
+             <number>100</number>
+            </property>
+            <property name="value">
+             <number>0</number>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>
@@ -740,7 +750,7 @@
      <x>0</x>
      <y>0</y>
      <width>966</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -793,7 +803,6 @@
    </attribute>
    <addaction name="action_choseDir"/>
    <addaction name="action_analyze"/>
-   <addaction name="separator"/>
    <addaction name="separator"/>
    <addaction name="action_exit"/>
   </widget>

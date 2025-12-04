@@ -3,6 +3,7 @@ temp/rcc/qrc_resource.o
 temp/rcc/qrc_qgoodwindow_style.o
 temp/rcc/qrc_qgoodcentralwidget_icons.o
 temp/obj/commhelper.o
+temp/obj/datacompresswindow.o
 temp/obj/detsettingwindow.o
 temp/obj/globalsettings.o
 temp/obj/main.o
@@ -118,6 +119,7 @@ temp/obj/H5PropList.o
 temp/obj/H5StrType.o
 temp/obj/H5VarLenType.o
 temp/obj/moc_commhelper.o
+temp/obj/moc_datacompresswindow.o
 temp/obj/moc_detsettingwindow.o
 temp/obj/moc_netsettingwindow.o
 temp/obj/moc_offlinewindow.o

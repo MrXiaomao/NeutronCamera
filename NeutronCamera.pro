@@ -10,7 +10,7 @@ CONFIG += c++17
 
 SOURCES += \
     commhelper.cpp \
-    datacompress.cpp \
+    datacompresswindow.cpp \
     detsettingwindow.cpp \
     globalsettings.cpp \
     main.cpp \
@@ -23,7 +23,7 @@ SOURCES += \
 
 HEADERS += \
     commhelper.h \
-    datacompress.h \
+    datacompresswindow.h \
     detsettingwindow.h \
     netsettingwindow.h \
     offlinewindow.h \
@@ -35,7 +35,7 @@ HEADERS += \
     switchbutton.h
 
 FORMS += \
-    datacompress.ui \
+    datacompresswindow.ui \
     detsettingwindow.ui \
     mainwindow.ui \
     netsettingwindow.ui \

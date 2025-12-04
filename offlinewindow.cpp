@@ -1,9 +1,5 @@
 #include "offlinewindow.h"
 #include "ui_offlinewindow.h"
-#include <QSqlDatabase>
-#include <QSqlQuery>
-#include <QSqlError>
-#include <QRandomGenerator>
 #include "globalsettings.h"
 
 OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
@@ -541,118 +537,6 @@ void OfflineWindow::startAnalyze()
 
 }
 
-void OfflineWindow::on_pushButton_test_clicked()
-{
-    //连接数据库
-    if (ui->lineEdit_host->text().isEmpty())
-        return;
-
-    QSqlDatabase db = QSqlDatabase::addDatabase("QMYSQL");
-    db.setHostName(ui->lineEdit_host->text());
-    db.setPort(ui->spinBox_port->value());
-    db.setDatabaseName("mysql");
-    db.setUserName(ui->lineEdit_username->text());
-    db.setPassword(ui->lineEdit_password->text());
-    db.open();
-    if (!db.isOpen()) {
-        QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("连接MySQL数据库失败！"));
-        return;
-    }
-
-    db.close();
-    QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("数据库连接成功！"));
-}
-
-void OfflineWindow::on_pushButton_startUpload_clicked()
-{
-    if (ui->lineEdit_host->text().isEmpty())
-        return;
-
-    QSqlDatabase db = QSqlDatabase::addDatabase("QMYSQL");
-    db.setHostName(ui->lineEdit_host->text());
-    db.setPort(ui->spinBox_port->value());
-    db.setDatabaseName("mysql");
-    db.setUserName(ui->lineEdit_username->text());
-    db.setPassword(ui->lineEdit_password->text());
-    db.open();
-    if (!db.isOpen()) {
-        QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("连接MySQL数据库失败！"));
-        return;
-    }
-
-    // 先判断数据库是否存在
-    QSqlQuery query;
-    if (!query.exec("CREATE DATABASE IF NOT EXISTS NeutronCamera")) {
-        qDebug() << "Failed to create database:" << query.lastError().text();
-        QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据库创建失败！") + query.lastError().text());
-        return;
-    }
-
-    // 关闭当前连接，重新连接到数据库 NeutronCamera
-    db.close();
-    db.setDatabaseName("NeutronCamera");
-    if (!db.open()) {
-        QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("连接数据库失败！"));
-        return;
-    }
-
-    //创建用户表
-    QString sql = "CREATE TABLE IF NOT EXISTS Spectrum ("
-                  "id INT PRIMARY KEY AUTO_INCREMENT,"
-                  "shotNum int UNSIGNED,"
-                  "timestamp datetime,";
-    for (int i=1; i<=512; ++i){
-        if (i==512)
-            sql += QString("data%1 smallint UNSIGNED)").arg(i);
-        else
-            sql += QString("data%1 smallint UNSIGNED,").arg(i);
-    }
-    qDebug() << sql;
-    if (!query.exec(sql)){
-        db.close();
-        QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据表格创建失败！") + query.lastError().text());
-        return;
-    }
-
-    // 保存到数据库
-    {
-        QString sql = "INSERT INTO Spectrum (shotNum, timestamp,";
-        for (int i=1; i<=512; ++i){
-            if (i==512)
-                sql += QString("data%1)").arg(i);
-            else
-                sql += QString("data%1,").arg(i);
-        }
-        sql += " VALUES (:shotNum, :timestamp,";
-        for (int i=1; i<=512; ++i){
-            if (i==512)
-                sql += QString(":data%1)").arg(i);
-            else
-                sql += QString(":data%1,").arg(i);
-        }
-
-        QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
-        query.prepare(sql);
-        for (int k=1; k<=16; k++){
-            query.bindValue(":shotNum", 100);
-            query.bindValue(":timestamp", timestamp);
-            for (int i=1; i<=512; ++i){
-                quint16 data = QRandomGenerator::global()->bounded(1000, 15000);
-                query.bindValue(QString(":data%1").arg(i), data);
-            }
-            if (!query.exec() || query.numRowsAffected() == 0){
-                QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据表写入失败！") + query.lastError().text());
-                db.close();
-                return;
-            }
-        }
-    }
-
-    db.close();
-    QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("数据上传完成！"));
-}
-
-
 void OfflineWindow::on_action_openfile_triggered()
 {
     GlobalSettings settings;
@@ -669,10 +553,14 @@ void OfflineWindow::on_action_openfile_triggered()
         QMessageBox::information(this, tr("提示"), tr("路径无效，缺失\"Settings.ini\"文件！"));
         return;
     }
+    else {
+        GlobalSettings settings(filePath+"/Settings.ini");
+        mShotNum = settings.value("Global/ShotNum", "00000").toString();
+        emit reporWriteLog("炮号：" + mShotNum);
+    }
 
-    settings.setValue("Global/LastFileDir", filePath);
+    settings.setValue("Global/Offline/LastFileDir", filePath);
     ui->textBrowser_filepath->setText(filePath);
-    this->setWindowTitle(filePath + " - 中子相机数据处理离线版");
 
     //加载目录下所有文件
     loadRelatedFiles(filePath);
@@ -702,37 +590,39 @@ void OfflineWindow::loadRelatedFiles(const QString& filePath)
 
 void OfflineWindow::on_action_analyze_triggered()
 {
-    // //由于每个文件的能谱时长是固定的，所有这里需要根据时刻计算出对应的是第几个文件
-    // //这类假设每个文件能谱时长为50ms
-    // quint32 fileIndex = (float)(ui->spinBox_time1->value() + 49)/ 50;
+    //由于每个文件的能谱时长是固定的，所有这里需要根据时刻计算出对应的是第几个文件
+    //这类假设每个文件能谱时长为50ms
+    quint32 fileIndex = (float)(ui->spinBox_time1->value() + 49)/ 50;
 
-    // //每个文件里面对于的是4个通道，根据通道号判断是第几个文件
-    // quint32 deviceIndex = (ui->comboBox_horCamera->currentIndex()+4) / 4;
+    //每个文件里面对于的是4个通道，根据通道号判断是第几个文件
+    quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+    quint32 deviceIndex = (cameraIndex + 3) / 4;
 
-    // //t1-水平相机
-    // {
-    //     QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
-    //     mPCIeCommSdk.setCaptureParamter(PCIeCommSdk::Horizontal, ui->spinBox_time1->value());
-    //     if (!mPCIeCommSdk.openHistoryData(filePath))
-    //     {
-    //         QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
-    //     }
-    // }
+    //t1-水平相机
+    {
+        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
+        mPCIeCommSdk.setCaptureParamter(cameraIndex, ui->spinBox_time1->value());
+        if (!mPCIeCommSdk.openHistoryFile(filePath))
+        {
+            QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+        }
+    }
 
-    // //t1-垂直相机
-    // {
-    //     deviceIndex = (ui->comboBox_horCamera->currentIndex()+12) / 4;
-    //     QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
-    //     mPCIeCommSdk.setCaptureParamter(PCIeCommSdk::Vertical, ui->spinBox_time1->value());
-    //     if (!mPCIeCommSdk.openHistoryData(filePath))
-    //     {
-    //         QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
-    //     }
-    // }
-    // return;
+    //t1-垂直相机
+    {
+        cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
+        deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
+        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
+        mPCIeCommSdk.setCaptureParamter(cameraIndex, ui->spinBox_time1->value());
+        if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
+        {
+            QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+        }
+    }
+    return;
 
-    mPCIeCommSdk.setCaptureParamter(1, ui->spinBox_time1->value());
-    mPCIeCommSdk.openHistoryData("D:\\work\\Qt\\MicroDetector\\build_NeutronCamera\\x64\\qt5.15.2\\cache\\100\\2025-12-01_09-30-21\\1data1.bin");
+    // mPCIeCommSdk.setCaptureParamter(1, ui->spinBox_time1->value());
+    // mPCIeCommSdk.openHistoryFile("D:\\work\\Qt\\MicroDetector\\build_NeutronCamera\\x64\\qt5.15.2\\cache\\100\\2025-12-01_09-30-21\\1data1.bin");
 
     {
         QVector<QPair<double ,double>> spectrumPairs;// = generateArray(50, 50, 0, 25, 1000, 35);
@@ -1040,8 +930,10 @@ QPixmap OfflineWindow::dblroundPixmap(QSize sz, QColor clrIn, QColor clrOut)
 }
 
 #include <QtMath>
-void OfflineWindow::replyWaveform(quint8 timestampIndex, quint8 cameraOrientation, QVector<quint16>& waveformBytes)
+void OfflineWindow::replyWaveform(quint8 timestampIndex, quint8 cameraIndex, QVector<quint16>& waveformBytes)
 {
+    quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
+
     //实测曲线
     QCustomPlot* customPlot = nullptr;
     if (ui->action_typeLSD->isChecked())

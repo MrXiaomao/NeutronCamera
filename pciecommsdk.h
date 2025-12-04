@@ -385,9 +385,9 @@ public:
     Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
     Q_SIGNAL void reportFileWriteElapsedtime(quint32, quint32);
     Q_SIGNAL void reportCaptureFinished();
-    Q_SIGNAL void reportWaveform(quint8, quint8, QVector<quint16>&);
-    Q_SIGNAL void reportNeutronSpectrum(quint8, quint8, QVector<quint16>&);
-    Q_SIGNAL void reportGammaSpectrum(quint8, quint8, QVector<quint16>&);
+    Q_SIGNAL void reportWaveform(quint8/*时刻*/, quint8/*相机索引*/, QVector<quint16>&);
+    Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<quint16>&);
+    Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<quint16>&);
 
     Q_SIGNAL void reportPowerStatus(quint32, bool);
     Q_SIGNAL void reportVoltageStatus(quint32, bool);
@@ -413,7 +413,8 @@ public:
     /*设置采集参数*/
     void setCaptureParamter(quint8, quint32);
 
-    bool openHistoryData(QString filename);
+    bool openHistoryFile(QString filename);
+    void analyzeHistoryData(quint8 cameraIndex, quint32 time1, QByteArray&);
 
     bool switchPower(quint32, bool);
     bool switchVoltage(quint32, bool);
@@ -479,7 +480,9 @@ private:
     QStringList mDevices;
     QMap<quint32, bool> mThreadRunning;
     quint8 mCameraIndex = 1;/*相机序号*/
-    quint32 mTimestampMs1 = 1000;/*分析时刻*/
+    quint32 mTimestampMs1 = 10;/*分析时刻*/
+    quint32 mTimestampMs2 = 20;/*分析时刻*/
+    quint32 mTimestampMs3 = 30;/*分析时刻*/
 };
 
 #endif // PCIECOMMSDK_H
