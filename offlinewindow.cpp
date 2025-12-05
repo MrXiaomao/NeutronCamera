@@ -2,6 +2,7 @@
 #include "ui_offlinewindow.h"
 #include "globalsettings.h"
 #include "datacompresswindow.h"
+#include "H5Cpp.h"
 
 OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     : QMainWindow(parent)
@@ -73,9 +74,18 @@ void OfflineWindow::initUi()
         QToolButton* button = qobject_cast<QToolButton*>(action->associatedWidgets().last());
         button->setCursor(QCursor(Qt::PointingHandCursor));
         connect(button, &QToolButton::pressed, this, [=](){
-            QString cacheDir = QFileDialog::getExistingDirectory(this);
-            if (!cacheDir.isEmpty()){
-                ui->lineEdit_savePath->setText(cacheDir);
+            GlobalSettings settings;
+            QString lastPath = settings.value("Global/Offline/LastSaveDir", QDir::homePath()).toString();
+            QString fileName = QFileDialog::getSaveFileName(this, tr("选择保存文件"), lastPath, tr("HDF5文件 (*.h5);;所有文件 (*.*)"));
+            if (!fileName.isEmpty()){
+                // 如果用户没有输入 .h5 后缀，自动添加
+                if (!fileName.endsWith(".h5", Qt::CaseInsensitive)) {
+                    fileName += ".h5";
+                }
+                ui->lineEdit_savePath->setText(fileName);
+                // 保存最后使用的目录
+                QFileInfo fileInfo(fileName);
+                settings.setValue("Global/Offline/LastSaveDir", fileInfo.absolutePath());
             }
         });
     }
@@ -838,7 +848,141 @@ void OfflineWindow::on_action_exit_triggered()
 
 void OfflineWindow::on_pushButton_export_clicked()
 {
+    QString filePath = ui->lineEdit_savePath->text();
+    if (filePath.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择保存路径！");
+        return;
+    }
+    if (!filePath.endsWith(".h5", Qt::CaseInsensitive)) {
+        filePath += ".h5";
+    }
 
+    // 获取当前显示的图表
+    QCustomPlot* customPlot = nullptr;
+    if (ui->action_typeLSD->isChecked())
+        customPlot = ui->spectroMeter_waveform_LSD;
+    else if (ui->action_typeLBD->isChecked())
+        customPlot = ui->spectroMeter_waveform_LBD;
+    else
+        customPlot = ui->spectroMeter_waveform_PSD;
+
+    if (!customPlot) {
+        QMessageBox::warning(this, "警告", "无法获取图表对象！");
+        return;
+    }
+
+    // 检查图表是否有数据
+    if (customPlot->graphCount() < 2) {
+        QMessageBox::warning(this, "警告", "图表中没有足够的数据！");
+        return;
+    }
+
+    // 从 graph(0) 获取 Horizontal 数据，从 graph(1) 获取 Vertical 数据
+    QCPGraph* horizontalGraph = customPlot->graph(0);
+    QCPGraph* verticalGraph = customPlot->graph(1);
+
+    if (!horizontalGraph || !verticalGraph) {
+        QMessageBox::warning(this, "警告", "无法获取图表数据！");
+        return;
+    }
+
+    // 提取 Horizontal 数据
+    QVector<QPair<double, double>> horizontalData;
+    if (horizontalGraph && horizontalGraph->data()) {
+        QSharedPointer<QCPGraphDataContainer> horizontalDataContainer = horizontalGraph->data();
+        if (horizontalDataContainer) {
+            for (auto it = horizontalDataContainer->begin(); it != horizontalDataContainer->end(); ++it) {
+                horizontalData.append(qMakePair(it->key, it->value));
+            }
+        }
+    }
+
+    // 提取 Vertical 数据
+    QVector<QPair<double, double>> verticalData;
+    if (verticalGraph && verticalGraph->data()) {
+        QSharedPointer<QCPGraphDataContainer> verticalDataContainer = verticalGraph->data();
+        if (verticalDataContainer) {
+            for (auto it = verticalDataContainer->begin(); it != verticalDataContainer->end(); ++it) {
+                verticalData.append(qMakePair(it->key, it->value));
+            }
+        }
+    }
+
+    if (horizontalData.isEmpty() && verticalData.isEmpty()) {
+        QMessageBox::warning(this, "警告", "图表中没有数据可保存！");
+        return;
+    }
+
+    // 将数据写入 HDF5 文件
+    try {
+        bool fileExists = QFileInfo::exists(filePath);
+        H5::H5File file(filePath.toStdString(), fileExists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
+
+        // 写入 Horizontal 数据集
+        if (!horizontalData.isEmpty() && horizontalData.size() > 0) {
+            QVector<double> horizontalFlatData;
+            horizontalFlatData.reserve(horizontalData.size() * 2);
+            for (const auto& pair : horizontalData) {
+                horizontalFlatData.append(pair.first);
+                horizontalFlatData.append(pair.second);
+            }
+            
+            // 检查数据是否有效，避免创建零大小的数据集
+            // horizontalFlatData 的大小应该是 horizontalData.size() * 2
+            if (horizontalFlatData.size() > 0 && horizontalFlatData.size() == horizontalData.size() * 2) {
+                hsize_t dims[2] = {static_cast<hsize_t>(horizontalData.size()), 2};
+                H5::DataSpace dataspace(2, dims);
+                
+                // 删除已存在的数据集
+                if (H5Lexists(file.getId(), "Horizontal", H5P_DEFAULT) > 0) {
+                    file.unlink("Horizontal");
+                }
+                
+                H5::DataSet horizontalDataset = file.createDataSet("Horizontal", H5::PredType::NATIVE_DOUBLE, dataspace);
+                horizontalDataset.write(horizontalFlatData.data(), H5::PredType::NATIVE_DOUBLE);
+                horizontalDataset.close();
+            }
+        }
+
+        // 写入 Vertical 数据集
+        if (!verticalData.isEmpty() && verticalData.size() > 0) {
+            QVector<double> verticalFlatData;
+            verticalFlatData.reserve(verticalData.size() * 2);
+            for (const auto& pair : verticalData) {
+                verticalFlatData.append(pair.first);
+                verticalFlatData.append(pair.second);
+            }
+            
+            // 检查数据是否有效，避免创建零大小的数据集
+            // verticalFlatData 的大小应该是 verticalData.size() * 2
+            if (verticalFlatData.size() > 0 && verticalFlatData.size() == verticalData.size() * 2) {
+                hsize_t dims[2] = {static_cast<hsize_t>(verticalData.size()), 2};
+                H5::DataSpace dataspace(2, dims);
+                
+                // 删除已存在的数据集
+                if (H5Lexists(file.getId(), "Vertical", H5P_DEFAULT) > 0) {
+                    file.unlink("Vertical");
+                }
+                
+                H5::DataSet verticalDataset = file.createDataSet("Vertical", H5::PredType::NATIVE_DOUBLE, dataspace);
+                verticalDataset.write(verticalFlatData.data(), H5::PredType::NATIVE_DOUBLE);
+                verticalDataset.close();
+            }
+        }
+
+        file.close();
+        
+        QMessageBox::information(this, "成功", QString("数据已成功保存到：\n%1").arg(filePath));
+        
+    } catch (const H5::FileIException& error) {
+        QMessageBox::critical(this, "错误", QString("保存文件失败：\n%1").arg(error.getDetailMsg().c_str()));
+    } catch (const H5::DataSetIException& error) {
+        QMessageBox::critical(this, "错误", QString("创建数据集失败：\n%1").arg(error.getDetailMsg().c_str()));
+    } catch (const H5::DataSpaceIException& error) {
+        QMessageBox::critical(this, "错误", QString("创建数据空间失败：\n%1").arg(error.getDetailMsg().c_str()));
+    } catch (...) {
+        QMessageBox::critical(this, "错误", "保存数据时发生未知错误！");
+    }
 }
 
 
@@ -1022,11 +1166,20 @@ void OfflineWindow::replyWaveform(quint8 timestampIndex, quint8 cameraIndex, QVe
     //实测曲线
     QCustomPlot* customPlot = nullptr;
     if (ui->action_typeLSD->isChecked())
+    {
         customPlot = ui->spectroMeter_waveform_LSD;
+        ui->spectroMeter_spectrum_LSD->hide();
+    }
     else if (ui->action_typeLBD->isChecked())
+    {
         customPlot = ui->spectroMeter_waveform_LBD;
+        ui->spectroMeter_spectrum_LBD->hide();
+    }
     else
+    {
         customPlot = ui->spectroMeter_waveform_PSD;
+        ui->spectroMeter_spectrum_PSD->hide();
+    }
 
     QVector<double> keys, values;
     for (int i=0; i<waveformBytes.size(); ++i){
@@ -1260,6 +1413,7 @@ void OfflineWindow::on_action_typeLSD_triggered(bool checked)
 {
     if (checked){
         ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LSD);
+        ui->spectroMeter_spectrum_LSD->hide();
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1275,6 +1429,7 @@ void OfflineWindow::on_action_typePSD_triggered(bool checked)
 {
     if (checked){
         ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD);
+        ui->spectroMeter_spectrum_PSD->hide();
         this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
@@ -1290,6 +1445,7 @@ void OfflineWindow::on_action_typeLBD_triggered(bool checked)
 {
     if (checked){
         ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LBD);
+        ui->spectroMeter_spectrum_LBD->hide();
         this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);

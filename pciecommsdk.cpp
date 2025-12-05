@@ -445,7 +445,7 @@ void PCIeCommSdk::analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLen
 
     QVector<QPair<double,double>> waveformPair;
     for (int i=0;i<waveform.size();++i)
-        waveformPair.push_back(qMakePair(i, waveform[i]));
+        waveformPair.push_back(qMakePair(i*2, waveform[i]));
     emit reportWaveform(1, cameraIndex, waveformPair);
     
     /* 原始数据格式(总大小200000000B)
