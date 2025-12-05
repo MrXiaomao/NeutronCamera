@@ -50,13 +50,13 @@ public:
 
 public slots:
     void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    void replyNeutronSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);//中子能谱
-    void replyGammaSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);//伽马能谱
+    void replyNeutronSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//中子能谱
+    void replyGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//伽马能谱
 
 signals:
     void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    void reportNeutronSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
-    void reportGammaSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
+    void reportNeutronSpectrum(quint8, quint8, QVector<QPair<double,double>>&);
+    void reportGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);
 
 private slots:
     void on_action_exit_triggered();

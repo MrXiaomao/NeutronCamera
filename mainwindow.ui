@@ -581,7 +581,7 @@
         <item row="0" column="0">
          <widget class="QStackedWidget" name="stackedWidget">
           <property name="currentIndex">
-           <number>0</number>
+           <number>1</number>
           </property>
           <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
            <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -608,7 +608,7 @@
             </item>
            </layout>
           </widget>
-          <widget class="QWidget" name="spectroMeterPageInfoWidget_PSD_LBD">
+          <widget class="QWidget" name="spectroMeterPageInfoWidget_PSD">
            <layout class="QVBoxLayout" name="verticalLayout_11">
             <property name="spacing">
              <number>2</number>
@@ -626,13 +626,41 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QCustomPlot" name="spectroMeter_time1" native="true"/>
+             <widget class="QCustomPlot" name="spectroMeter_time1_PSD" native="true"/>
             </item>
             <item>
-             <widget class="QCustomPlot" name="spectroMeter_time2" native="true"/>
+             <widget class="QCustomPlot" name="spectroMeter_time2_PSD" native="true"/>
             </item>
             <item>
-             <widget class="QCustomPlot" name="spectroMeter_time3" native="true"/>
+             <widget class="QCustomPlot" name="spectroMeter_time3_PSD" native="true"/>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="spectroMeterPageInfoWidget_LBD">
+           <layout class="QVBoxLayout" name="verticalLayout_7">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QCustomPlot" name="spectroMeter_time1_LBD" native="true"/>
+            </item>
+            <item>
+             <widget class="QCustomPlot" name="spectroMeter_time2_LBD" native="true"/>
+            </item>
+            <item>
+             <widget class="QCustomPlot" name="spectroMeter_time3_LBD" native="true"/>
             </item>
            </layout>
           </widget>

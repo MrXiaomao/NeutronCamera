@@ -385,9 +385,9 @@ public:
     Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
     Q_SIGNAL void reportFileWriteElapsedtime(quint32, quint32);
     Q_SIGNAL void reportCaptureFinished();
-    Q_SIGNAL void reportWaveform(quint8/*时刻*/, quint8/*相机索引*/, QVector<qint16>&);
-    Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<quint16>&);
-    Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<quint16>&);
+    Q_SIGNAL void reportWaveform(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
+    Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
+    Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
 
     Q_SIGNAL void reportPowerStatus(quint32, bool);
     Q_SIGNAL void reportVoltageStatus(quint32, bool);

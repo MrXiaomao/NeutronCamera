@@ -40,17 +40,17 @@ public:
 
 public slots:
     void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    void replyWaveform(quint8, quint8, QVector<qint16>&);
-    void replySpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
-    void replyKernelDensitySpectrumPSD(quint8, QVector<QPair<double ,double>>&);// 核密度图谱
-    void replyKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合
+    void replyWaveform(quint8, quint8, QVector<QPair<double,double>>&);
+    void replySpectrum(quint8, quint8, QVector<QPair<double,double>>&);
+    void replyKernelDensitySpectrumPSD(quint8, QVector<QPair<double,double>>&);// 核密度图谱
+    void replyKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double,double>>>&);// FoM拟合
 
 signals:
     void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    void reportWaveform(quint8, quint8, QVector<qint16>&);
-    void reportSpectrum(quint8, quint8, QVector<QPair<quint16,quint16>>&);
-    void reportKernelDensitySpectrumPSD(quint8, QVector<QPair<double ,double>>&);// 核密度图谱
-    void reportKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double ,double>>>&);// FoM拟合
+    void reportWaveform(quint8, quint8, QVector<QPair<double,double>>&);
+    void reportSpectrum(quint8, quint8, QVector<QPair<double,double>>&);
+    void reportKernelDensitySpectrumPSD(quint8, QVector<QPair<double,double>>&);// 核密度图谱
+    void reportKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double,double>>>&);// FoM拟合
 
 private slots:
     void on_action_openfile_triggered();

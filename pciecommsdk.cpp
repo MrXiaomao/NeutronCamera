@@ -240,24 +240,24 @@ void PCIeCommSdk::replyCaptureData(quint8 cardIndex/*PCIe卡序号*/, quint32 pa
                         QByteArray gamma = chunk.mid(currentNo*124, 124);
                         QByteArray neutron = chunk.mid(currentNo*124, 124);
                         {
-                            QVector<quint16> data;
+                            QVector<QPair<double,double>> data;
                             for (int i=0; i<gamma.size(); i+=2){
                                 bool ok;
                                 //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
                                 quint16 amplitude = gamma.mid(i, 2).toHex().toUShort(&ok, 16);
-                                data.append(qbswap(amplitude));
+                                data.append(qMakePair(i, qbswap(amplitude)));
                             }
 
                             emit reportGammaSpectrum(1, cameraOrientation, data);
                         }
 
                         {
-                            QVector<quint16> data;
+                            QVector<QPair<double,double>> data;
                             for (int i=0; i<neutron.size(); i+=2){
                                 bool ok;
                                 //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
                                 quint16 amplitude = neutron.mid(i, 2).toHex().toUShort(&ok, 16);
-                                data.append(qbswap(amplitude));
+                                data.append(qMakePair(i, qbswap(amplitude)));
                             }
 
                             emit reportNeutronSpectrum(1, cameraOrientation, data);
@@ -294,12 +294,12 @@ void PCIeCommSdk::replyCaptureData(quint8 cardIndex/*PCIe卡序号*/, quint32 pa
                 chunk_time.reserve(1000);
 
                 //数据流类型是int16
-                QVector<qint16> waveform;
+                QVector<QPair<double,double>> waveform;
                 for (int i=0; i<chunk_time.size(); i+=2){
                     bool ok;
                     //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
                     qint16 amplitude = chunk_time.mid(i, 2).toHex().toShort(&ok, 16);
-                    waveform.append(qbswap(amplitude) / 4);
+                    waveform.append(qMakePair(i, qbswap(amplitude) / 4));
                 }
 
                 emit reportWaveform(i+1, cameraOrientation, waveform);
@@ -376,24 +376,24 @@ void PCIeCommSdk::analyzeHistoryData(quint8 cameraIndex, quint32 time1, QByteArr
                     QByteArray gamma = chunk.mid(cameraNo*124, 124);
                     QByteArray neutron = chunk.mid(cameraNo*124, 124);
                     {
-                        QVector<quint16> data;
+                        QVector<QPair<double,double>> data;
                         for (int i=0; i<gamma.size(); i+=2){
                             bool ok;
                             //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
                             quint16 amplitude = gamma.mid(i, 2).toHex().toUShort(&ok, 16);
-                            data.append(qbswap(amplitude));
+                            data.append(qMakePair(i, qbswap(amplitude)));
                         }
 
                         emit reportGammaSpectrum(1, cameraIndex, data);
                     }
 
                     {
-                        QVector<quint16> data;
+                        QVector<QPair<double,double>> data;
                         for (int i=0; i<neutron.size(); i+=2){
                             bool ok;
                             //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
                             quint16 amplitude = neutron.mid(i, 2).toHex().toUShort(&ok, 16);
-                            data.append(qbswap(amplitude));
+                            data.append(qMakePair(i, qbswap(amplitude)));
                         }
 
                         emit reportNeutronSpectrum(1, cameraIndex, data);
@@ -420,12 +420,12 @@ void PCIeCommSdk::analyzeHistoryData(quint8 cameraIndex, quint32 time1, QByteArr
         chunk_time.reserve(1000);
 
         //数据流类型是int16
-        QVector<qint16> waveform;
+        QVector<QPair<double,double>> waveform;
         for (int i=0; i<chunk_time.size(); i+=2){
             bool ok;
             //每个通道的每个数据点还要除以4，才得到最后的全采样的数据值
             qint16 amplitude = chunk_time.mid(i, 2).toHex().toShort(&ok, 16);
-            waveform.append(qbswap(amplitude) / 4);
+            waveform.append(qMakePair(i, qbswap(amplitude) / 4));
         }
 
         emit reportWaveform(1, cameraIndex, waveform);

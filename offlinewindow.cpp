@@ -21,7 +21,7 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     connect(this, SIGNAL(reporWriteLog(const QString&,QtMsgType)), this, SLOT(replyWriteLog(const QString&,QtMsgType)));
     connect(this, SIGNAL(reportKernelDensitySpectrumPSD(quint8,QVector<QPair<double,double>>&)), this, SLOT(replyKernelDensitySpectrumPSD(quint8,QVector<QPair<double,double>>&)));
     connect(this, SIGNAL(reportKernelDensitySpectrumFoM(quint8,QVector<QVector<QPair<double,double>>>&)), this, SLOT(replyKernelDensitySpectrumFoM(quint8,QVector<QVector<QPair<double,double>>>&)));
-    connect(this, SIGNAL(reportSpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)), this, SLOT(replySpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)));
+    connect(this, SIGNAL(reportSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replySpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
 
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
@@ -103,8 +103,8 @@ void OfflineWindow::initUi()
 
             QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget_LSD);
             splitterV1->setHandleWidth(2);
-            splitterV1->addWidget(ui->spectroMeter_LSD_waveform);
-            splitterV1->addWidget(ui->spectroMeter_LSD_spectrum);
+            splitterV1->addWidget(ui->spectroMeter_waveform_LSD);
+            splitterV1->addWidget(ui->spectroMeter_spectrum_LSD);
             splitterV1->addWidget(splitterH1);
             splitterV1->addWidget(splitterH2);
             splitterV1->setSizes(QList<int>() << 100000 << 100000 << 400000 << 400000);
@@ -115,17 +115,27 @@ void OfflineWindow::initUi()
             ui->spectroMeterPageInfoWidget_LSD->layout()->addWidget(splitterV1);
         }
         {
-            QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget_PSD_LBD);
+            QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget_PSD);
             splitterV1->setHandleWidth(2);
-            splitterV1->addWidget(ui->spectroMeter_waveform);
-            splitterV1->addWidget(ui->spectroMeter_spectrum);
+            splitterV1->addWidget(ui->spectroMeter_waveform_PSD);
+            splitterV1->addWidget(ui->spectroMeter_spectrum_PSD);
             splitterV1->setSizes(QList<int>() << 100000 << 100000 << 100000);
             splitterV1->setCollapsible(0,false);
             splitterV1->setCollapsible(1,false);
             splitterV1->setCollapsible(2,false);
-            ui->spectroMeterPageInfoWidget_PSD_LBD->layout()->addWidget(splitterV1);
+            ui->spectroMeterPageInfoWidget_PSD->layout()->addWidget(splitterV1);
         }
-
+        {
+            QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget_LBD);
+            splitterV1->setHandleWidth(2);
+            splitterV1->addWidget(ui->spectroMeter_waveform_LBD);
+            splitterV1->addWidget(ui->spectroMeter_spectrum_LBD);
+            splitterV1->setSizes(QList<int>() << 100000 << 100000 << 100000);
+            splitterV1->setCollapsible(0,false);
+            splitterV1->setCollapsible(1,false);
+            splitterV1->setCollapsible(2,false);
+            ui->spectroMeterPageInfoWidget_LBD->layout()->addWidget(splitterV1);
+        }
 
         //大布局
         QSplitter *splitterH1 = new QSplitter(Qt::Horizontal,this);
@@ -215,15 +225,18 @@ void OfflineWindow::initUi()
     }
 
     {
-        initCustomPlot(ui->spectroMeter_LSD_waveform, tr(""), tr("波形"));
-        initCustomPlot(ui->spectroMeter_LSD_spectrum, tr(""), tr("能谱"));
+        initCustomPlot(ui->spectroMeter_waveform_LSD, tr(""), tr("波形"));
+        initCustomPlot(ui->spectroMeter_spectrum_LSD, tr(""), tr("能谱"));
         initCustomPlot(ui->spectroMeter_horCamera_PSD, tr("水平 n:γ Energy(keVee) PSD图"), tr(""));
         initCustomPlot(ui->spectroMeter_horCamera_FOM, tr("水平 FOM图"), tr(""));
         initCustomPlot(ui->spectroMeter_verCamera_PSD, tr("垂直 n:γ Energy(keVee) PSD图"), tr(""));
         initCustomPlot(ui->spectroMeter_verCamera_FOM, tr("垂直 FOM图"), tr(""));
 
-        initCustomPlot(ui->spectroMeter_waveform, tr(""), tr("波形"));
-        initCustomPlot(ui->spectroMeter_spectrum, tr(""), tr("能谱"));
+        initCustomPlot(ui->spectroMeter_waveform_PSD, tr(""), tr("波形"));
+        initCustomPlot(ui->spectroMeter_spectrum_PSD, tr(""), tr("中子能谱"));
+
+        initCustomPlot(ui->spectroMeter_waveform_LBD, tr(""), tr("波形"));
+        initCustomPlot(ui->spectroMeter_spectrum_LBD, tr(""), tr("伽马能谱"));
 
         QActionGroup *actionType = new QActionGroup(this);
         actionType->addAction(ui->action_typeLSD);
@@ -281,7 +294,10 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
     customPlot->yAxis->setLabel(axisYLabel);
     customPlot->axisRect()->setupFullAxesBox(true);
 
-    if (customPlot == ui->spectroMeter_waveform || customPlot == ui->spectroMeter_spectrum){
+    if (customPlot == ui->spectroMeter_waveform_PSD ||
+        customPlot == ui->spectroMeter_spectrum_PSD ||
+        customPlot == ui->spectroMeter_waveform_LBD ||
+        customPlot == ui->spectroMeter_spectrum_LBD){
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
 
@@ -299,7 +315,7 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
             graph->setName(title[i]);
         }
     }
-    else if (customPlot == ui->spectroMeter_LSD_waveform){
+    else if (customPlot == ui->spectroMeter_waveform_LSD){
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
 
@@ -316,7 +332,7 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
             graph->setName(title[i]);
         }
     }
-    else if (customPlot == ui->spectroMeter_LSD_spectrum){
+    else if (customPlot == ui->spectroMeter_spectrum_LSD){
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
 
@@ -617,23 +633,25 @@ void OfflineWindow::on_action_analyze_triggered()
     // mPCIeCommSdk.setCaptureParamter(1, ui->spinBox_time1->value());
     // mPCIeCommSdk.openHistoryFile("D:\\work\\Qt\\MicroDetector\\build_NeutronCamera\\x64\\qt5.15.2\\cache\\100\\2025-12-01_09-30-21\\1data1.bin");
 
+    //波形
     {
-        QVector<qint16> waveformPairs[2];// = generateArray(50, 50, 0, 25, 1000, 35);
+        QVector<QPair<double ,double>> waveformPairs[2];// = generateArray(50, 50, 0, 25, 1000, 35);
         QFile file("./waveform_lsd.csv");
         if (ui->action_typeLBD->isChecked())
             file.setFileName("./waveform_lbd.csv");
-        else if (ui->action_typePSD)
+        else if (ui->action_typePSD->isChecked())
             file.setFileName("./waveform_psd.csv");
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
             QTextStream stream(&file);
+            stream.readLine();//过滤掉标题头
             while (!stream.atEnd())
             {
                 QString line = stream.readLine();
                 QStringList row = line.split(',', Qt::SkipEmptyParts);
-                if (row.size() == 2)
+                if (row.size() >= 3)
                 {
-                    waveformPairs[0].push_back(row.at(0).toInt());
-                    waveformPairs[1].push_back(row.at(1).toInt());
+                    waveformPairs[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
+                    waveformPairs[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toDouble()));
                 }
             }
             file.close();
@@ -643,6 +661,7 @@ void OfflineWindow::on_action_analyze_triggered()
         }
     }
 
+    //PSD
     {
         QVector<QPair<double ,double>> spectrumPairs;// = generateArray(50, 50, 0, 25, 1000, 35);
         QFile file("./PSD.csv");
@@ -664,6 +683,7 @@ void OfflineWindow::on_action_analyze_triggered()
         }
     }
 
+    //FoM
     if (1){
         /*限制数据显示范围*/
         double f1_b1 = 0.5085;
@@ -701,26 +721,27 @@ void OfflineWindow::on_action_analyze_triggered()
         }
     }
 
+    //能谱
     {
 
-        QVector<QPair<quint16 ,quint16>> spectrumPair[3];
+        QVector<QPair<double,double>> spectrumPair[2];
         QFile file("./spectrum_lsd.csv");
         if (ui->action_typeLBD->isChecked())
-            file.setFileName("./spectrum_lbd.csv");
-        else if (ui->action_typePSD)
-            file.setFileName("./spectrum_psd.csv");
+            file.setFileName("./spectrum_lbd_r.csv");
+        else if (ui->action_typePSD->isChecked())
+            file.setFileName("./spectrum_psd_n.csv");
 
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
             QTextStream stream(&file);
+            stream.readLine();//过滤掉标题头
             while (!stream.atEnd())
             {
                 QString line = stream.readLine();
                 QStringList row = line.split(',', Qt::SkipEmptyParts);
-                if (row.size() == 4)
+                if (row.size() >= 3)
                 {
-                    spectrumPair[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toUInt()));
-                    spectrumPair[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toUInt()));
-                    spectrumPair[2].push_back(qMakePair(row.at(0).toDouble(), row.at(3).toUInt()));
+                    spectrumPair[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
+                    spectrumPair[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toDouble()));
                 }
             }
             file.close();
@@ -775,9 +796,32 @@ void OfflineWindow::on_action_exit_triggered()
 }
 
 
+#include <QDir>
 void OfflineWindow::on_pushButton_export_clicked()
 {
+    if (ui->lineEdit_savePath->text().isEmpty()){
+        QMessageBox::information(this, "提示", "导出路径为空！");
+        return;
+    }
 
+    QString filename = ui->lineEdit_savePath->text();
+    if (!QDir(filename).exists()){
+        QMessageBox::information(this, "提示", "导出路径为空！");
+        return;
+    }
+
+    filename += "/" + ui->lineEdit_filename->text();
+    if (!filename.endsWith(".csv"))
+        filename += ".csv";
+
+    if (ui->action_typeLBD->isChecked() || ui->action_typePSD->isChecked()){
+        //spectroMeter_waveform
+        //spectroMeter_spectrum
+    }
+    if (ui->action_typeLSD->isChecked()){
+        //spectroMeter_LSD_waveform
+        //spectroMeter_LSD_spectrum
+    }
 }
 
 
@@ -954,28 +998,23 @@ QPixmap OfflineWindow::dblroundPixmap(QSize sz, QColor clrIn, QColor clrOut)
 }
 
 #include <QtMath>
-void OfflineWindow::replyWaveform(quint8 timestampIndex, quint8 cameraIndex, QVector<qint16>& waveformBytes)
+void OfflineWindow::replyWaveform(quint8 timestampIndex, quint8 cameraIndex, QVector<QPair<double,double>>& waveformBytes)
 {
     quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
 
     //实测曲线
     QCustomPlot* customPlot = nullptr;
     if (ui->action_typeLSD->isChecked())
-        customPlot = ui->spectroMeter_LSD_waveform;
+        customPlot = ui->spectroMeter_waveform_LSD;
+    else if (ui->action_typeLBD->isChecked())
+        customPlot = ui->spectroMeter_waveform_LBD;
     else
-        customPlot = ui->spectroMeter_waveform;
+        customPlot = ui->spectroMeter_waveform_PSD;
+
     QVector<double> keys, values;
-    quint32 yMin = 1e10;
-    quint32 yMax = 0;
     for (int i=0; i<waveformBytes.size(); ++i){
-        keys << (double)i*100/waveformBytes.size() ;
-        values << waveformBytes[i];
-        yMin = qMin(yMin, (quint32)waveformBytes[i]);
-        yMax = qMax(yMax, (quint32)waveformBytes[i]);
-    }
-    double spaceDisc = 0;
-    if (yMax != yMin){
-        spaceDisc = (yMax - yMin) * 0.1;
+        keys << waveformBytes[i].first ;
+        values << waveformBytes[i].second;
     }
 
     if (timestampIndex == 1){
@@ -1002,10 +1041,10 @@ void OfflineWindow::replyWaveform(quint8 timestampIndex, quint8 cameraIndex, QVe
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void OfflineWindow::replySpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<quint16,quint16>>& pairs)
+void OfflineWindow::replySpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<double,double>>& pairs)
 {
     if (ui->action_typeLSD->isChecked()){
-        QCustomPlot* customPlot = ui->spectroMeter_LSD_spectrum;
+        QCustomPlot* customPlot = ui->spectroMeter_spectrum_LSD;
         QVector<double> keys, values;
         quint16 yMin = 1e10;
         quint16 yMax = 0;
@@ -1041,7 +1080,10 @@ void OfflineWindow::replySpectrum(quint8 timestampIndex, quint8 cameraOrientatio
     }
     else{
         QCustomPlot* customPlot = nullptr;
-        customPlot = ui->spectroMeter_spectrum;
+        if (ui->action_typePSD->isChecked())
+            customPlot = ui->spectroMeter_spectrum_PSD;
+        else
+            customPlot = ui->spectroMeter_spectrum_LBD;
 
         QVector<double> keys, values;
         quint16 yMin = 1e10;
@@ -1212,14 +1254,14 @@ void OfflineWindow::on_action_typeLSD_triggered(bool checked)
 void OfflineWindow::on_action_typePSD_triggered(bool checked)
 {
     if (checked){
-        ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
+        ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD);
         this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
         settings.setValue("Global/DetType", "PSD");
 
-        ui->spectroMeter_spectrum->yAxis->setLabel("中子能谱");
-        ui->spectroMeter_spectrum->replot();
+        // ui->spectroMeter_spectrum_PSD->yAxis->setLabel("中子能谱");
+        // ui->spectroMeter_spectrum_PSD->replot();
         ui->action_waveform->setVisible(false);
         ui->action_ngamma->setVisible(false);
     }
@@ -1229,14 +1271,14 @@ void OfflineWindow::on_action_typePSD_triggered(bool checked)
 void OfflineWindow::on_action_typeLBD_triggered(bool checked)
 {
     if (checked){
-        ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD_LBD);
+        ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LBD);
         this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(CONFIG_FILENAME);
         settings.setValue("Global/DetType", "LBD");
 
-        ui->spectroMeter_spectrum->yAxis->setLabel("伽马能谱");//γ Energy(keVee) Counts
-        ui->spectroMeter_spectrum->replot();
+        // ui->spectroMeter_spectrum_LBD->yAxis->setLabel("伽马能谱");//γ Energy(keVee) Counts
+        // ui->spectroMeter_spectrum_LBD->replot();
         ui->action_waveform->setVisible(false);
         ui->action_ngamma->setVisible(false);
     }
@@ -1246,8 +1288,8 @@ void OfflineWindow::on_action_typeLBD_triggered(bool checked)
 void OfflineWindow::on_action_waveform_triggered(bool checked)
 {
     if (checked){
-        ui->spectroMeter_LSD_waveform->setVisible(true);
-        ui->spectroMeter_LSD_spectrum->setVisible(true);
+        ui->spectroMeter_waveform_LSD->setVisible(true);
+        ui->spectroMeter_spectrum_LSD->setVisible(true);
         ui->spectroMeter_horCamera_PSD->setVisible(false);
         ui->spectroMeter_horCamera_FOM->setVisible(false);
         ui->spectroMeter_verCamera_PSD->setVisible(false);
@@ -1259,8 +1301,8 @@ void OfflineWindow::on_action_waveform_triggered(bool checked)
 void OfflineWindow::on_action_ngamma_triggered(bool checked)
 {
     if (checked){
-        ui->spectroMeter_LSD_waveform->setVisible(false);
-        ui->spectroMeter_LSD_spectrum->setVisible(false);
+        ui->spectroMeter_waveform_LSD->setVisible(false);
+        ui->spectroMeter_spectrum_LSD->setVisible(false);
         ui->spectroMeter_horCamera_PSD->setVisible(true);
         ui->spectroMeter_horCamera_FOM->setVisible(true);
         ui->spectroMeter_verCamera_PSD->setVisible(true);
