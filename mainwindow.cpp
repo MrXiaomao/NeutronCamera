@@ -907,7 +907,7 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
 
-        QColor colors[] = {Qt::red, Qt::darkRed};
+        QColor colors[] = {Qt::red, Qt::blue};
         QString title[] = {"水平", "垂直"};
 
         customPlot->legend->setVisible(true);
@@ -925,7 +925,7 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
 
-        QColor colors[] = {Qt::red, Qt::darkRed, Qt::green, Qt::darkGreen, Qt::blue, Qt::darkBlue};
+        QColor colors[] = {Qt::red, Qt::blue};
         QString title[] = {"水平", "垂直"};
         customPlot->legend->setVisible(true);
         for (int i=0; i<2; ++i){
@@ -942,7 +942,7 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
 
-        QColor colors[] = {Qt::red, Qt::darkRed, Qt::green, Qt::darkGreen, Qt::blue, Qt::darkBlue};
+        QColor colors[] = {Qt::red, Qt::blue};
         QString title[] = {"水平", "垂直"};
         customPlot->legend->setVisible(true);
         for (int i=0; i<2; ++i){

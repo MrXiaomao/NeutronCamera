@@ -197,15 +197,15 @@ private:
 class CaptureThread : public QThread {
     Q_OBJECT
 public:
-    explicit CaptureThread(const quint32 index, HANDLE hFile, const QString &saveFilePath, quint32 captureTimeSeconds)
-        : mIndex(index)
+    explicit CaptureThread(const quint32 cardIndex, HANDLE hFile, const QString &saveFilePath, quint32 captureTimeSeconds)
+        : mCardIndex(cardIndex)
         , mDeviceHandle(hFile)
         , mSaveFilePath(saveFilePath)
         , mCaptureTimeSeconds(captureTimeSeconds)
     {
         connect(this, &QThread::finished, this, &QThread::deleteLater);
 
-        mWriteFileThread = new WriteFileThread(index, saveFilePath);
+        mWriteFileThread = new WriteFileThread(mCardIndex, saveFilePath);
         connect(this, QOverload<QByteArray&>::of(&CaptureThread::reportCaptureData), mWriteFileThread, &WriteFileThread::replyCaptureData);
         connect(this, &CaptureThread::reportThreadExit, mWriteFileThread, &WriteFileThread::replyThreadExit);
         connect(mWriteFileThread, &WriteFileThread::reportFileWriteElapsedtime, this, &CaptureThread::reportFileWriteElapsedtime);
@@ -231,7 +231,7 @@ public:
 
         // 打开输入
         if (mDeviceHandle == INVALID_HANDLE_VALUE) {
-            emit reportCaptureFail(mIndex, GetLastError());
+            emit reportCaptureFail(mCardIndex, GetLastError());
             return;
         }
 
@@ -240,7 +240,7 @@ public:
         DWORD nNumberOfBytesToRead = 268435456;
         unsigned char* lpBuffer = allocate_buffer(nNumberOfBytesToRead, 0);
         if (lpBuffer == NULL){
-            emit reportCaptureFail(mIndex, GetLastError());
+            emit reportCaptureFail(mCardIndex, GetLastError());
             return;
         }
 
@@ -271,7 +271,7 @@ public:
                 DWORD nNumberOfBytesRead = 0;
                 if (!ReadFile(mDeviceHandle, lpBuffer, 1, &nNumberOfBytesRead, NULL)) {
                     qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
-                    emit reportCaptureFail(mIndex, GetLastError());
+                    emit reportCaptureFail(mCardIndex, GetLastError());
                     break;
                 }
                 else{
@@ -288,14 +288,14 @@ public:
 
             if (!SetFilePointerEx(mDeviceHandle, inAddress, NULL, FILE_BEGIN)) {
                 qDebug() << "Error setting file pointer, win32 error code:" << GetLastError();
-                emit reportCaptureFail(mIndex, GetLastError());
+                emit reportCaptureFail(mCardIndex, GetLastError());
                 break;
             }
 
-            qDebug() << mIndex << (mPackref-1) << "Elapsed time:" << elapsedTimer.elapsed();
+            qDebug() << mCardIndex << (mPackref-1) << "Elapsed time:" << elapsedTimer.elapsed();
             if (!ReadFile(mDeviceHandle, lpBuffer, nNumberOfBytesToRead, &nNumberOfBytesRead, NULL)) {
                 qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
-                emit reportCaptureFail(mIndex, GetLastError());
+                emit reportCaptureFail(mCardIndex, GetLastError());
                 break;
             }
             else{
@@ -305,23 +305,23 @@ public:
                 DWORD nNumberOfBytesWrite = 0;
                 if (!WriteFile(mDeviceHandle, lpBuffer, 1, &nNumberOfBytesWrite, NULL)) {
                     qDebug() << "WriteFile fail, win32 error code:" << GetLastError();
-                    emit reportCaptureFail(mIndex, GetLastError());
+                    emit reportCaptureFail(mCardIndex, GetLastError());
                     break;
                 }
                 ///////////////////////////////
 
-                qDebug() << mIndex << (mPackref-1) << "Elapsed time1:" << elapsedTimer.elapsed();
-                emit reportFileReadElapsedtime(mIndex, elapsedTimer.elapsed());
+                qDebug() << mCardIndex << (mPackref-1) << "Elapsed time1:" << elapsedTimer.elapsed();
+                emit reportFileReadElapsedtime(mCardIndex, elapsedTimer.elapsed());
                 if (nNumberOfBytesToRead != nNumberOfBytesRead){
                     qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
                 }
 
                 QByteArray data = QByteArray::fromRawData((const char *)lpBuffer, nNumberOfBytesRead);
                 emit reportCaptureData(data); //发给写文件线程
-                emit reportCaptureData(mIndex, mPackref, data);//发给数据分析
+                emit reportCaptureData(mCardIndex, mPackref, data);//发给数据分析
 
                 if (mPackref++ >= this->mCaptureRef){
-                    emit reportThreadExit(mIndex);
+                    emit reportThreadExit(mCardIndex);
                     mWriteFileThread->wait();
                     mWriteFileThread->deleteLater();
                     break;
@@ -329,13 +329,13 @@ public:
             }
 
             eventflag = (eventflag==0) ? 1 : 0;
-            qDebug() << mIndex << (mPackref-1) << "Elapsed time2:" << elapsedTimer.elapsed();
+            qDebug() << mCardIndex << (mPackref-1) << "Elapsed time2:" << elapsedTimer.elapsed();
             qint32 sleepTime = qMax((qint32)0, (qint32)(packingDuration - elapsedTimer.elapsed()));
             QThread::msleep(sleepTime);
         }
 
         //等待所有录制数据写入硬盘
-        emit reportCaptureFinished(mIndex);
+        emit reportCaptureFinished(mCardIndex);
 
         if (lpBuffer)
             _aligned_free(lpBuffer);
@@ -353,7 +353,7 @@ public:
 
 private:
     WriteFileThread* mWriteFileThread = nullptr;
-    quint32 mIndex;//设备名称
+    quint32 mCardIndex;//设备名称
     HANDLE mDeviceHandle;//设备句柄
     QString mSaveFilePath;//保存路径
     quint32 mCaptureTimeSeconds = 50;
@@ -417,8 +417,10 @@ public:
     /*初始化*/
     void initialize();
 
-    /*设置采集参数*/
+    /*设置采集参数，离线*/
     void setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex, quint32 timeLength, quint32 time1);
+    /*设置采集参数，在线线*/
+    void setCaptureParamter(quint8 horCameraIndex, quint8 verCameraIndex, quint32 time1, quint32 time2, quint32 time3);
 
     bool openHistoryFile(QString filename);
     
@@ -489,11 +491,13 @@ private:
     QMap<quint32, bool> mMapVoltage;//探测器的1#电压开关
     QMap<quint32, bool> mMapBackupPower;//探测器的2#电源开关
     QMap<quint32, bool> mMapBackupVoltage;//探测器的2#电压开关
-    QMap<quint32, bool> mMapChannel;//选通开关,true-1#,false
+    QMap<quint32, bool> mMapChannel;//选通开关,true-1#,false-2#
 
     QStringList mDevices;
     QMap<quint32, bool> mThreadRunning;
     quint8 mCameraIndex = 1;/*相机序号*/
+    quint8 mHorCameraIndex = 1;/*在线分析-水平相机序号*/
+    quint8 mVerCameraIndex = 12;/*在线分析-垂直相机序号*/
     quint32 mTimestampMs1 = 10;/*分析时刻，单位ms*/
     quint32 mTimestampMs2 = 20;/*分析时刻，单位ms*/
     quint32 mTimestampMs3 = 30;/*分析时刻，单位ms*/
