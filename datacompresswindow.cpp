@@ -296,21 +296,6 @@ DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
     ui->toolButton_start->setText(tr("开始压缩"));
     ui->toolButton_start->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
 
-    // 工作日志
-    {
-        QGraphicsScene *scene = new QGraphicsScene(this);
-        scene->setObjectName("logGraphicsScene");
-        QGraphicsTextItem *textItem = scene->addText(tr("工作日志"));
-        textItem->setObjectName("logGraphicsTextItem");
-        textItem->setPos(0,0);
-        //textItem->setRotation(-90);
-        ui->graphicsView->setFrameStyle(0);
-        ui->graphicsView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        ui->graphicsView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        ui->graphicsView->setFixedHeight(30);
-        ui->graphicsView->setScene(scene);
-    }
-
     {
         QActionGroup *themeActionGroup = new QActionGroup(this);
         ui->action_lightTheme->setActionGroup(themeActionGroup);
@@ -712,25 +697,16 @@ QStringList DataCompressWindow::loadRelatedFiles(const QString& dirPath)
         return fileList;
     }
 
-    // 仅过滤 .bin 文件，按名称排序
-    QStringList filters;
-    filters << "*.bin";
-    QFileInfoList fileinfoList = dir.entryInfoList(
-        filters,
-        QDir::Files | QDir::NoSymLinks,   // 只要文件
-        QDir::Name | QDir::IgnoreCase     // 名称排序（忽略大小写）
-    );
-
+    // 使用静态函数获取.bin文件列表
+    QFileInfoList fileinfoList = getBinFileList(dirPath);
     mfileinfoList = fileinfoList;
 
-    // 统计
-    qint64 totalSize = 0;
+    // 使用静态函数统计总大小
+    qint64 totalSize = calculateTotalSize(fileinfoList);
     int fileCount = fileinfoList.size();
-    fileList.reserve(fileCount);
-    for (const QFileInfo& fi : fileinfoList) {
-        totalSize += fi.size();
-        fileList << fi.fileName();  // 已经是排序顺序
-    }
+    
+    // 使用静态函数提取文件名列表
+    fileList = extractFileNames(fileinfoList);
 
     // ==== 填表 ====
     ui->tableWidget_file->setSortingEnabled(false);  // 填表时关闭排序避免抖动
@@ -781,15 +757,10 @@ QStringList DataCompressWindow::loadRelatedFiles(const QString& dirPath)
     ui->lineEdit_binTotal->setText(humanReadableSize(totalSize));
 
     //统计测量时长，选取光纤口1数据来统计
-    int count1data = 0;
-    for (const QFileInfo& fi : fileList) {
-        const QString name = fi.fileName();
-        if (name.startsWith("1data", Qt::CaseInsensitive))
-            ++count1data;
-    }
-
+    int count1data = countFilesByPrefix(fileList, "1data");
+    
     int time_per = ui->spinBox_oneFileTime->value(); //单个文件包对应的时间长度，单位ms
-    int measureTime = count1data * time_per;
+    int measureTime = calculateMeasureTime(count1data, time_per);
 
     ui->line_measure_startT->setText("0");
     ui->line_measure_endT->setText(QString::number(measureTime));
@@ -1245,6 +1216,67 @@ QString DataCompressWindow::humanReadableSize(qint64 bytes)
     if (bytes >= MB) return QString::asprintf("%.2f MB", bytes / MB);
     if (bytes >= KB) return QString::asprintf("%.2f KB", bytes / KB);
     return QString("%1 B").arg(bytes);
+}
+
+// 从目录获取所有.bin文件列表（按名称排序）
+QFileInfoList DataCompressWindow::getBinFileList(const QString& dirPath)
+{
+    QFileInfoList fileinfoList;
+    
+    QDir dir(dirPath);
+    if (!dir.exists()) {
+        return fileinfoList;  // 返回空列表
+    }
+
+    // 仅过滤 .bin 文件，按名称排序
+    QStringList filters;
+    filters << "*.bin";
+    fileinfoList = dir.entryInfoList(
+        filters,
+        QDir::Files | QDir::NoSymLinks,   // 只要文件
+        QDir::Name | QDir::IgnoreCase     // 名称排序（忽略大小写）
+    );
+
+    return fileinfoList;
+}
+
+// 计算文件信息列表的总大小
+qint64 DataCompressWindow::calculateTotalSize(const QFileInfoList& fileinfoList)
+{
+    qint64 totalSize = 0;
+    for (const QFileInfo& fi : fileinfoList) {
+        totalSize += fi.size();
+    }
+    return totalSize;
+}
+
+// 从文件信息列表提取文件名列表
+QStringList DataCompressWindow::extractFileNames(const QFileInfoList& fileinfoList)
+{
+    QStringList fileList;
+    fileList.reserve(fileinfoList.size());
+    for (const QFileInfo& fi : fileinfoList) {
+        fileList << fi.fileName();
+    }
+    return fileList;
+}
+
+// 统计以指定前缀开头的文件数量
+int DataCompressWindow::countFilesByPrefix(const QStringList& fileList, const QString& prefix)
+{
+    int count = 0;
+    for (const QString& fileName : fileList) {
+        if (fileName.startsWith(prefix, Qt::CaseInsensitive)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+// 计算测量时长
+int DataCompressWindow::calculateMeasureTime(int fileCount, int timePerFile)
+{
+    return fileCount * timePerFile;
 }
 
 void DataCompressWindow::on_action_analyze_triggered()

@@ -375,6 +375,11 @@ public:
         Vertical = 0x2
     };
 
+    enum CaptureTime {
+        oldCaptureTime = 50,//50ms 单个文件对应采集时间，旧版数据采集协议
+        newCaptureTime = 66,//66ms 单个文件对应采集时间，新版数据采集协议
+    };
+
     enum SpectrumType {
         PSD = 0x1,
         FOM = 0x2
@@ -413,10 +418,13 @@ public:
     void initialize();
 
     /*设置采集参数*/
-    void setCaptureParamter(quint8, quint32);
+    void setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex, quint32 timeLength, quint32 time1);
 
     bool openHistoryFile(QString filename);
-    void analyzeHistoryData(quint8 cameraIndex, quint32 time1, QByteArray&);
+    
+    void analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLength, quint32 remainTime, QString filePath);
+    
+    void analyzeHistorySpectrumData(quint8 cameraIndex, quint32 remainTime, QString filePath);
 
     bool switchPower(quint32, bool);
     bool switchVoltage(quint32, bool);
@@ -486,9 +494,12 @@ private:
     QStringList mDevices;
     QMap<quint32, bool> mThreadRunning;
     quint8 mCameraIndex = 1;/*相机序号*/
-    quint32 mTimestampMs1 = 10;/*分析时刻*/
-    quint32 mTimestampMs2 = 20;/*分析时刻*/
-    quint32 mTimestampMs3 = 30;/*分析时刻*/
+    quint32 mTimestampMs1 = 10;/*分析时刻，单位ms*/
+    quint32 mTimestampMs2 = 20;/*分析时刻，单位ms*/
+    quint32 mTimestampMs3 = 30;/*分析时刻，单位ms*/
+    quint32 mRemainTime = 0;/*剩余时间,单位ms*/
+    CaptureTime mCaptureTime = oldCaptureTime;/*采集时间，单位ms*/
+    quint32 mTimeLength = 1; /*要提取的波形时间长度，单位ms，默认1ms*/
 };
 
 #endif // PCIECOMMSDK_H
