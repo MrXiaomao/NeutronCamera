@@ -32,6 +32,13 @@ public:
                       int timePerFile,
                       int startTime,
                       int endTime);
+
+    // 单个文件总大小：256 MB（整）
+    // 文件头：128 bit = 16 字节（公共部分，跳过）
+    // 文件尾：128 bit = 16 字节（跳过）
+    // 中间全部是有效数据
+    // 每个数据点 16 bit（2 字节，无符号）
+    // 数据排列方式：ch3, ch3, ch2, ch2, ch0, ch0, ch1, ch1...（逐点交织）                      
     static bool readBin4Ch_fast(const QString& path,
         QVector<qint16>& ch0,
         QVector<qint16>& ch1,
@@ -79,19 +86,6 @@ public:
 
     // 加载出当前目录下的所有所有.bin文件，统计文件数目，及其文件总大小
     QStringList loadRelatedFiles(const QString& src);
-
-    // 单个文件总大小：256 MB（整）
-    // 文件头：128 bit = 16 字节（公共部分，跳过）
-    // 文件尾：128 bit = 16 字节（跳过）
-    // 中间全部是有效数据
-    // 每个数据点 16 bit（2 字节，无符号）
-    // 数据排列方式：ch3, ch3, ch2, ch2, ch0, ch0, ch1, ch1...（逐点交织）
-    bool readBin4Ch_fast(const QString& path,
-                         QVector<qint16>& ch0,
-                         QVector<qint16>& ch1,
-                         QVector<qint16>& ch2,
-                         QVector<qint16>& ch3,
-                         bool littleEndian = true);
 
     // 给出容量的最佳表示方法
     static QString humanReadableSize(qint64 bytes);

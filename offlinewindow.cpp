@@ -1455,7 +1455,7 @@ void OfflineWindow::on_action_waveform_triggered(bool checked)
 {
     if (checked){
         ui->spectroMeter_waveform_LSD->setVisible(true);
-        ui->spectroMeter_spectrum_LSD->setVisible(true);
+        // ui->spectroMeter_spectrum_LSD->setVisible(true);
         ui->spectroMeter_horCamera_PSD->setVisible(false);
         ui->spectroMeter_horCamera_FOM->setVisible(false);
         ui->spectroMeter_verCamera_PSD->setVisible(false);
