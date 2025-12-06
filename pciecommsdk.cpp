@@ -814,3 +814,474 @@ void PCIeCommSdk::initialize()
         mMapChannel[cardIndex] = true;
     }
 }
+/**
+ * WriteFileThread 数据写硬盘线程====================================================
+*/
+/**
+* @function name: WriteFileThread
+* @brief 构造函数
+* @param[in]    cardIndex 采集卡索引
+* @param[in]    hFile DDR内存句柄
+* @param[in]    hUser Fpga控制指令句柄
+* @param[in]    hBypass DDR内存句柄
+* @param[in]    saveFilePath 文件保存路径
+* @param[in]    captureTimeSeconds 采集时长
+* @param[out]
+* @return
+*/
+WriteFileThread::WriteFileThread(const quint32 index, const QString &saveFilePath)
+    : mIndex(index)
+    , mSaveFilePath(saveFilePath)
+{
+}
+
+/**
+* @function name:replyThreadExit
+* @brief 响应线程退出事件
+* @param[in]
+* @param[out]
+* @return
+*/
+void WriteFileThread::replyThreadExit()
+{
+    mTerminated = true;
+    mElapsedTimer.start();
+}
+
+/**
+* @function name:replyCaptureData
+* @brief 响应实时采集数据事件
+* @param[in]    waveformData 波形数据
+* @param[in]    spectrumData 能谱数据
+* @param[out]
+* @return
+*/
+void WriteFileThread::replyCaptureData(QByteArray& waveformData, QByteArray& spectrumData)
+{
+    QMutexLocker locker(&mMutexWrite);
+    spectrumData.append(waveformData);
+    spectrumData.append(spectrumData);
+}
+
+void WriteFileThread::run()
+{
+    qRegisterMetaType<QByteArray>("QByteArray&");
+
+    QThreadPool* pool = QThreadPool::globalInstance();
+    pool->setMaxThreadCount(QThread::idealThreadCount());
+
+    quint32 mPackref = 1;
+    while (!this->isInterruptionRequested())
+    {
+
+        QVector<QByteArray> tempPool;
+        {
+            QMutexLocker locker(&mMutexWrite);
+            if (mCachePool.size() > 0){
+                tempPool.swap(mCachePool);
+            }
+            else{
+                if (mTerminated && mElapsedTimer.elapsed() >= 3000)
+                    break;
+            }
+        }
+
+        while (tempPool.size() > 0){
+            //QByteArray data = tempPool.at(0);
+            // WriteFileTask *task = new WriteFileTask(mIndex, mPackref++, mSaveFilePath, data);
+            // connect(task, &WriteFileTask::reportFileWriteElapsedtime, this, &WriteFileThread::reportFileWriteElapsedtime);
+            // pool->start(task);
+            // tempPool.pop_front();
+
+            //写原始数据
+            {
+                QByteArray data = tempPool.at(0);
+                QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mIndex).arg(mPackref);
+                HANDLE hfOutput = CreateFileA(filename.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (!hfOutput) {
+                    qDebug() << "CreateFileA fail, win32 error code:" << GetLastError();
+                }
+                else{
+                    DWORD NumberOfBytesWritten = 0;
+                    if (!WriteFile(hfOutput, data.constData(), data.size(), &NumberOfBytesWritten, NULL)){
+                        qDebug() << "WriteFile fail, win32 error code:" << GetLastError();
+                    }
+                    CloseHandle(hfOutput);
+                }
+
+                tempPool.pop_front();
+            }
+
+            //写能谱数据
+            {
+                QByteArray data = tempPool.at(0);
+                QString filename = QString("%1/%2spec%3.bin").arg(mSaveFilePath).arg(mIndex).arg(mPackref);
+                HANDLE hfOutput = CreateFileA(filename.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (!hfOutput) {
+                    qDebug() << "CreateFileA fail, win32 error code:" << GetLastError();
+                }
+                else{
+                    DWORD NumberOfBytesWritten = 0;
+                    if (!WriteFile(hfOutput, data.constData(), data.size(), &NumberOfBytesWritten, NULL)){
+                        qDebug() << "WriteFile fail, win32 error code:" << GetLastError();
+                    }
+                    CloseHandle(hfOutput);
+                }
+
+                tempPool.pop_front();
+            }
+
+            mPackref++;
+        }
+
+        QThread::msleep(1);
+    }
+
+    pool->waitForDone();
+    qDebug() << "destroyWriteFileThread id:" << this->currentThreadId();
+}
+
+/**
+ * CaptureThread 采集数据线程====================================================
+*/
+
+/**
+* @function name: CaptureThread
+* @brief 构造函数
+* @param[in]    cardIndex 采集卡索引
+* @param[in]    hFile DDR内存句柄
+* @param[in]    hUser Fpga控制指令句柄
+* @param[in]    hBypass DDR内存句柄
+* @param[in]    saveFilePath 文件保存路径
+* @param[in]    captureTimeSeconds 采集时长
+* @param[out]
+* @return
+*/
+CaptureThread::CaptureThread(const quint32 cardIndex, HANDLE hFile, HANDLE hUser, HANDLE hBypass, const QString &saveFilePath, quint32 captureTimeSeconds)
+    : mCardIndex(cardIndex)
+    , mDeviceHandle(hFile)
+    , mUserHandle(hUser)
+    , mBypassHandle(hBypass)
+    , mSaveFilePath(saveFilePath)
+    , mCaptureTimeSeconds(captureTimeSeconds)
+{
+    connect(this, &QThread::finished, this, &QThread::deleteLater);
+
+    mWriteFileThread = new WriteFileThread(mCardIndex, saveFilePath);
+    connect(this, QOverload<QByteArray&,QByteArray&>::of(&CaptureThread::reportCaptureData), mWriteFileThread, &WriteFileThread::replyCaptureData);
+    connect(this, &CaptureThread::reportThreadExit, mWriteFileThread, &WriteFileThread::replyThreadExit);
+    connect(mWriteFileThread, &WriteFileThread::reportFileWriteElapsedtime, this, &CaptureThread::reportFileWriteElapsedtime);
+}
+
+void CaptureThread::run()
+{
+    qRegisterMetaType<QByteArray>("QByteArray&");
+    qRegisterMetaType<QVector<QPair<double,double>>>("QVector<QPair<double,double>>&");
+
+    // 打开输入
+    if (mDeviceHandle == INVALID_HANDLE_VALUE) {
+        emit reportCaptureFail(mCardIndex, GetLastError());
+        return;
+    }
+
+    LARGE_INTEGER inAddress;
+    inAddress.QuadPart = 0x00000000;
+    DWORD nNumberOfBytesToRead = 0x0BEBC200;//200000000
+    quint32 packingDuration = 50; // 打包时长
+    this->mCaptureRef = quint32((double)mCaptureTimeSeconds / 50.0 + 0.4);
+
+    //启动写文件线程
+    mWriteFileThread->start();
+
+    quint32 mPackref = 1; //打包次数
+    bool firstQuery = true;
+    qDebug() << "createCaptureThread id:" << this->currentThreadId();
+    while (!this->isInterruptionRequested())
+    {
+        QElapsedTimer elapsedTimer;
+        elapsedTimer.start();
+        DWORD nNumberOfBytesRead = 0;
+
+        //检查设备是否准备好
+        if (firstQuery){
+            if (prepared()){
+                firstQuery = false;
+            }
+            else{
+                QThread::usleep(1);
+                continue;
+            }
+        }
+
+        /// 查询DDR/RAM是否写满
+        if (!canRead())
+            break;
+
+        //读原始数据
+        int size = 0x0BEBC200;
+        QByteArray waveformData(size, 0);
+        if (readRawData(waveformData)){
+
+        }
+
+        //读能谱数据
+        size = 0xc800;//50*1024
+        QByteArray spectrumData(size, 0);
+        if (readSpectrumData(spectrumData)){
+
+        }
+
+        /// 清空状态
+        if (!emptyStatus())
+            break;
+
+        /// 数据读完了，把标识位恢复回去
+        if (!resetReadflag())
+            break;
+
+        emit reportCaptureData(waveformData, spectrumData); //发给写文件线程
+        //emit reportCaptureWaveformData(mCardIndex, mPackref, waveformData);//发给数据分析
+        emit reportCaptureSpectrumData(mCardIndex, mPackref, spectrumData);//发给数据分析
+
+        if (mPackref++ >= this->mCaptureRef){
+            emit reportThreadExit(mCardIndex);
+            mWriteFileThread->wait();
+            mWriteFileThread->deleteLater();
+            break;
+        }
+
+        qint32 sleepTime = qMax((qint32)0, (qint32)(packingDuration - elapsedTimer.elapsed()));
+        QThread::msleep(sleepTime);
+    }
+
+    //等待所有录制数据写入硬盘
+    emit reportCaptureFinished(mCardIndex);
+    qDebug() << "destroyCaptureThread id:" << this->currentThreadId();
+}
+
+/**
+* @function name:prepared
+* @brief 第一次查询准备
+* @param[in]
+* @param[out]
+* @return           bool
+*/
+bool CaptureThread::prepared()
+{
+    return emptyStatus();
+}
+
+/**
+* @function name:canRead
+* @brief 判断DDR和RAM数据是否填满可读
+* @param[in]
+* @param[out]
+* @return           bool
+*/
+//判断是否可读
+bool CaptureThread::canRead()
+{
+    // 2.开始测量
+    // xdma_rw.exe user write 0x20000 0x01 0xE0 0x34 0x12
+    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
+    // xdma_rw.exe user write 0x20000 0x00 0xE0 0x34 0x12
+    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
+    while (1){
+        if (this->isInterruptionRequested())
+            break;
+
+        LARGE_INTEGER inAddress;
+        inAddress.QuadPart = 0x20000;
+
+        DWORD NumberOfBytesWritten = 0;
+        QByteArray buf1 = QByteArray::fromHex("01 E0 34 12");
+        QByteArray buf2 = QByteArray::fromHex("00 D0 34 12");
+        QByteArray buf3 = QByteArray::fromHex("00 E0 34 12");
+        QByteArray buf4 = QByteArray::fromHex("00 D0 34 12");
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf1.constData(), buf1.size(), &NumberOfBytesWritten, NULL);
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf2.constData(), buf2.size(), &NumberOfBytesWritten, NULL);
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf3.constData(), buf3.size(), &NumberOfBytesWritten, NULL);
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf4.constData(), buf4.size(), &NumberOfBytesWritten, NULL);
+
+        //3.继续查询DDR和RAM状态
+        //xdma_rw.exe user read 0 -l 1
+        //若返回1，表示DDR和RAM写满了，可以进行读操作
+        DWORD nNumberOfBytesRead = 0;
+        quint8 buffer = 0;
+        inAddress.QuadPart = 0;
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+
+        if (!ReadFile(mUserHandle, &buffer, 1, &nNumberOfBytesRead, NULL)) {
+            qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
+        }
+        else{
+            if (buffer == 0x01)
+                return true;
+        }
+
+        QThread::usleep(mTimeout);
+        continue;
+    }
+
+    return false;
+}
+
+/**
+* @function name:resetReadflag
+* @brief 清空DDR和RAM满状态
+* @param[in]
+* @param[out]
+* @return           bool
+*/
+bool CaptureThread::emptyStatus()
+{
+    // 5.PC读取完成，清空DDR和RAM满状态
+    // xdma_rw.exe user write 0x20000 0x01 0xF0 0x34 0x12
+    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
+    while (1){
+        if (this->isInterruptionRequested())
+            break;
+
+        LARGE_INTEGER inAddress;
+        inAddress.QuadPart = 0x20000;
+
+        DWORD NumberOfBytesWritten = 0;
+        QByteArray buf1 = QByteArray::fromHex("01 F0 34 12");
+        QByteArray buf2 = QByteArray::fromHex("00 D0 34 12");
+
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf1.constData(), buf1.size(), &NumberOfBytesWritten, NULL);
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf2.constData(), buf2.size(), &NumberOfBytesWritten, NULL);
+
+        // 6.获取查询DDR和RAM状态
+        // xdma_rw.exe user read 0 -l 1
+        // 若返回0，则准备下一次测量
+        DWORD nNumberOfBytesRead = 0;
+        quint8 buffer = 0;
+        inAddress.QuadPart = 0;
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+
+        if (!ReadFile(mUserHandle, &buffer, 1, &nNumberOfBytesRead, NULL)) {
+            qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
+        }
+        else{
+            if (buffer == 0x00)
+                return true;
+        }
+
+        QThread::usleep(mTimeout);
+        continue;
+    }
+
+    return false;
+}
+
+/**
+* @function name:resetReadflag
+* @brief 重置可读写标识
+* @param[in]
+* @param[out]
+* @return           bool
+*/
+bool CaptureThread::resetReadflag()
+{
+    // 7.再发一次“开始测量”，用于复位
+    // xdma_rw.exe user write 0x20000 0x01 0xE0 0x34 0x12
+    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
+    // xdma_rw.exe user write 0x20000 0x00 0xE0 0x34 0x12
+    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
+
+    while(1){
+        LARGE_INTEGER inAddress;
+        inAddress.QuadPart = 0x20000;
+
+        DWORD NumberOfBytesWritten = 0;
+        QByteArray buf1 = QByteArray::fromHex("01 E0 34 12");
+        QByteArray buf2 = QByteArray::fromHex("00 D0 34 12");
+        QByteArray buf3 = QByteArray::fromHex("00 E0 34 12");
+        QByteArray buf4 = QByteArray::fromHex("00 D0 34 12");
+
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf1.constData(), buf1.size(), &NumberOfBytesWritten, NULL);
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf2.constData(), buf2.size(), &NumberOfBytesWritten, NULL);
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf3.constData(), buf3.size(), &NumberOfBytesWritten, NULL);
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+        WriteFile(mUserHandle, buf4.constData(), buf4.size(), &NumberOfBytesWritten, NULL);
+
+        // 8.继续查询DDR和RAM状态
+        // xdma_rw.exe user read 0 -l 1
+        // 若返回0，则进行下一次测量
+        DWORD nNumberOfBytesRead = 0;
+        quint8 buffer = 0;
+        inAddress.QuadPart = 0;
+        SetFilePointerEx(mUserHandle, inAddress, NULL, FILE_BEGIN);
+
+        if (!ReadFile(mUserHandle, &buffer, 1, &nNumberOfBytesRead, NULL)) {
+            qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
+        }
+        else{
+            if (buffer == 0x00)
+                return true;
+        }
+
+        QThread::usleep(mTimeout);
+        continue;
+    }
+
+    return false;
+}
+
+/**
+* @function name:readRawData
+* @brief 从DDR读波形原始数据
+* @param[in]        data
+* @param[out]       data
+* @return           void
+*/
+bool CaptureThread::readRawData(QByteArray& data)
+{
+    DWORD nNumberOfBytesToRead = 0x0BEBC200;//200000000
+    DWORD nNumberOfBytesRead = 0;
+
+    LARGE_INTEGER inAddress;
+    inAddress.QuadPart = 0;
+    SetFilePointerEx(mDeviceHandle, inAddress, NULL, FILE_BEGIN);
+
+    if (!ReadFile(mDeviceHandle, data.data(), nNumberOfBytesToRead, &nNumberOfBytesRead, NULL)) {
+        qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
+        return false;
+    }
+
+    return true;
+}
+
+/**
+* @function name:readSpectrumData
+* @brief 从RAM读能谱数据
+* @param[in]        data
+* @param[out]       data
+* @return           bool
+*/
+bool CaptureThread::readSpectrumData(QByteArray& data)
+{
+    DWORD nNumberOfBytesToRead = 0xc800;//1024
+    DWORD nNumberOfBytesRead = 0;
+
+    LARGE_INTEGER inAddress;
+    inAddress.QuadPart = 0;
+    SetFilePointerEx(mBypassHandle, inAddress, NULL, FILE_BEGIN);
+
+    if (!ReadFile(mBypassHandle, data.data(), nNumberOfBytesToRead, &nNumberOfBytesRead, NULL)) {
+        qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
+        return false;
+    }
+
+    return true;
+}
