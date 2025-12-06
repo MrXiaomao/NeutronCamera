@@ -3,6 +3,7 @@
 #include "globalsettings.h"
 #include "datacompresswindow.h"
 #include "H5Cpp.h"
+#include "n_gamma.h"
 
 OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     : QMainWindow(parent)
@@ -21,8 +22,8 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportWaveform, this, &OfflineWindow::replyWaveform);
     connect(this, &OfflineWindow::reportWaveform, this, &OfflineWindow::replyWaveform);
     connect(this, SIGNAL(reporWriteLog(const QString&,QtMsgType)), this, SLOT(replyWriteLog(const QString&,QtMsgType)));
-    connect(this, SIGNAL(reportKernelDensitySpectrumPSD(quint8,QVector<QPair<double,double>>&)), this, SLOT(replyKernelDensitySpectrumPSD(quint8,QVector<QPair<double,double>>&)));
-    connect(this, SIGNAL(reportKernelDensitySpectrumFoM(quint8,QVector<QVector<QPair<double,double>>>&)), this, SLOT(replyKernelDensitySpectrumFoM(quint8,QVector<QVector<QPair<double,double>>>&)));
+    connect(this, SIGNAL(reportCalculateDensityPSD(quint8,QVector<QPair<double,double>>&)), this, SLOT(replyCalculateDensityPSD(quint8,QVector<QPair<double,double>>&)));
+    connect(this, SIGNAL(reportPlotFoM(quint8,QVector<FOM_CurvePoint>&)), this, SLOT(replyPlotFoM(quint8,QVector<FOM_CurvePoint>&)));
     connect(this, SIGNAL(reportSpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)), this, SLOT(replySpectrum(quint8,quint8,QVector<QPair<quint16,quint16>>&)));
 
     QTimer::singleShot(0, this, [&](){
@@ -428,10 +429,10 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
     else if (customPlot == ui->spectroMeter_horCamera_FOM || customPlot == ui->spectroMeter_verCamera_FOM){
         // QSharedPointer<QCPAxisTicker> ticker(new QCPAxisTicker);
         // customPlot->yAxis->setTicker(ticker);
-        customPlot->xAxis->setRange(0, 1);
-        customPlot->yAxis->setRange(0, 250);
+        customPlot->xAxis->setRange(0, 10000);
+        customPlot->yAxis->setRange(0, 1);
 
-        QColor colors[] = {RGB(0x64,0x91,0xAF), Qt::red, Qt::black};
+        QColor colors[] = {Qt::black, Qt::blue, Qt::red};
         QString title[] = {"Original data", "Gamma", "Neutron"};
         customPlot->legend->setVisible(true);
         for (int i=0; i<3; ++i){
@@ -446,6 +447,7 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
             }
             else {
                 graph->setLineStyle(QCPGraph::lsLine);
+                graph->setSmooth(true);
                 graph->setSelectable(QCP::SelectionType::stNone);
             }
             graph->setName(title[i]);
@@ -649,6 +651,143 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
 
 void OfflineWindow::on_action_analyze_triggered()
 {
+    //n-gamma甄别模式
+    if(ui->action_ngamma->isChecked()){
+        //提取有效波形参数
+        int threshold = ui->spinBox_threshold->value();
+        int pre_points = 20;
+        int post_points = 512 - pre_points - 1;
+
+        int startT = ui->spinBox_startT->value();
+        int endT = ui->spinBox_endT->value();
+        if(startT >= endT){
+            QMessageBox::information(this, tr("提示"), tr("起始时间不能大于结束时间！"));
+            return;
+        }
+        if(startT < 0 || endT > ui->line_measure_endT->text().toInt()){
+            QMessageBox::information(this, tr("提示"), tr("起始时间不能小于0或大于测量时长！"));
+            return;
+        }
+
+        int time_per = 50;
+        if (ui->cmb_fileTime->currentText() == "50ms") {
+            time_per = 50;
+        } else if (ui->cmb_fileTime->currentText() == "66ms") {
+            time_per = 66;
+        }
+
+        //计算起始文件索引
+        int fileIndex = floor(startT / time_per) + 1;
+        //计算结束文件索引
+        int endFileIndex = floor((endT-1) / time_per) + 1;
+        //获取水平相机序号
+        quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+        quint32 deviceIndex = (cameraIndex + 3) / 4;
+        
+        emit reporWriteLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
+        emit reporWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
+        
+        // 提取该通道有效波形数据，并进行合并
+        QVector<std::array<qint16, 512>> ch_all_valid_wave;
+        for(int i = fileIndex; i <= endFileIndex; i++){
+            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
+            if(!QFileInfo::exists(filePath)){
+                QMessageBox::information(this, tr("提示"), QString("文件%1不存在！").arg(filePath));
+                emit reporWriteLog(QString("文件%1不存在！").arg(filePath),QtWarningMsg);
+                continue;
+            }
+
+            //1、读取文件，获取该通道所有波形数据
+            emit reporWriteLog(QString("读取文件%1").arg(filePath),QtInfoMsg);
+            QVector<qint16> ch0, ch1, ch2, ch3;
+            if(!DataAnalysisWorker::readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)){
+                emit reporWriteLog(QString("文件%1读取失败！").arg(filePath),QtWarningMsg);
+                continue;
+            }
+
+            //2、提取通道号的数据cameraNo
+            //根据相机序号计算出是第几块光纤卡
+            int board_index = (cameraIndex-1)/4+1;
+            int ch_channel = cameraIndex % 4;
+            if (ch_channel == 1) {
+                //3、扣基线，调整数据
+                qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch0);
+                DataCompressWindow::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
+                
+                //4、提取有效波形数据
+                QVector<std::array<qint16, 512>> wave_ch = DataCompressWindow::overThreshold(ch0, 1, threshold, pre_points, post_points);
+                ch_all_valid_wave.append(wave_ch);
+            } else if (ch_channel == 2) {
+                //3、扣基线，调整数据
+                qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch1);
+                DataCompressWindow::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
+                
+                //4、提取有效波形数据
+                QVector<std::array<qint16, 512>> wave_ch = DataCompressWindow::overThreshold(ch1, 2, threshold, pre_points, post_points);
+                ch_all_valid_wave.append(wave_ch);
+            } else if (ch_channel == 3) {
+                //3、扣基线，调整数据
+                qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch2);
+                DataCompressWindow::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
+                
+                //4、提取有效波形数据
+                QVector<std::array<qint16, 512>> wave_ch = DataCompressWindow::overThreshold(ch2, 3, threshold, pre_points, post_points);
+                ch_all_valid_wave.append(wave_ch);
+            } else if (ch_channel == 4) {
+                //3、扣基线，调整数据
+                qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch3);
+                DataCompressWindow::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
+
+                //4、提取有效波形数据
+                QVector<std::array<qint16, 512>> wave_ch = DataCompressWindow::overThreshold(ch3, 4, threshold, pre_points, post_points);
+                ch_all_valid_wave.append(wave_ch);
+            }
+        }
+        
+        n_gamma neutron;
+        //计算PSD
+        QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);
+
+        // 计算密度
+        QVector<float> den = neutron.computeDensity(data, 200);
+        
+        // 提取 Energy 和 PSD 向量用于绘图，转换为 double（setData 需要 double）
+        QVector<double> energyVec, psdVec;
+        QVector<double> denDouble;  // 将 float 转换为 double
+        energyVec.reserve(data.size());
+        psdVec.reserve(data.size());
+        denDouble.reserve(den.size());
+        for (const auto& pair : data) {
+            energyVec.append(static_cast<double>(pair.first));   // Energy: float -> double
+            psdVec.append(static_cast<double>(pair.second));     // PSD: float -> double
+        }
+        for (float d : den) {
+            denDouble.append(static_cast<double>(d));
+        }
+        
+        // 调用 PSDPlot 绘制图表
+        PSDPlot(PCIeCommSdk::CameraOrientation::Horizontal, energyVec, psdVec, denDouble);
+        
+        // 计算FoM
+        n_gamma::HistResult histCount = neutron.selectAndHist(data);
+        n_gamma::FOM FOM_data = neutron.GetFOM(histCount.psd_x, histCount.count_y);
+        
+        if(FOM_data.R1 < 0.90 || FOM_data.R2 < 0.90){
+            QMessageBox::information(this, tr("提示"), tr("FoM拟合不成功，请调整阈值或延长测量时间！"));
+            emit reporWriteLog(QString("FoM拟合不成功，请调整阈值或延长测量时间！"),QtWarningMsg);
+        }
+
+        // 存储FoM绘图数据
+        QVector<FOM_CurvePoint> curveData;
+        for (size_t i = 0; i < histCount.psd_x.size(); ++i) {
+            curveData.push_back(FOM_CurvePoint(histCount.psd_x[i], FOM_data.Y[i], FOM_data.Y_fit1[i], FOM_data.Y_fit2[i]));
+        }
+
+        // 调用 PSDPlot 绘制图表
+        emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Horizontal, curveData);
+        return;
+    }
+
     // 从 RadioButton 提取单个文件包对应的时间长度（单位ms）
     // radioButton 对应 1ms, radioButton_2 对应 10ms
     int timeLength = 1; // 默认值 1ms
@@ -745,8 +884,8 @@ void OfflineWindow::on_action_analyze_triggered()
             }
             file.close();
 
-            emit reportKernelDensitySpectrumPSD(PCIeCommSdk::CameraOrientation::Horizontal, spectrumPairs);
-            emit reportKernelDensitySpectrumPSD(PCIeCommSdk::CameraOrientation::Vertical, spectrumPairs);
+            emit reportCalculateDensityPSD(PCIeCommSdk::CameraOrientation::Horizontal, spectrumPairs);
+            emit reportCalculateDensityPSD(PCIeCommSdk::CameraOrientation::Vertical, spectrumPairs);
         }
     }
 
@@ -764,6 +903,7 @@ void OfflineWindow::on_action_analyze_triggered()
         QFile file("./FoM.csv");
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
             QTextStream stream(&file);
+            QVector<FOM_CurvePoint> curveFOM;
             while (!stream.atEnd())
             {
                 QString line = stream.readLine();
@@ -771,26 +911,19 @@ void OfflineWindow::on_action_analyze_triggered()
                 if (row.size() == 4)
                 {
                     if (row.at(0).toDouble()>=limit_x1 && row.at(0).toDouble()<=limit_x2){
-                        spectrumPair[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
-                        spectrumPair[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toDouble()));
-                        spectrumPair[2].push_back(qMakePair(row.at(0).toDouble(), row.at(3).toDouble()));
+                        curveFOM.push_back(FOM_CurvePoint(row.at(0).toDouble(), row.at(1).toDouble(), row.at(2).toDouble(), row.at(3).toDouble()));
                     }
                 }
             }
             file.close();
 
-            QVector<QVector<QPair<double ,double>>> spectrumPairs;
-            spectrumPairs.push_back(spectrumPair[0]);
-            spectrumPairs.push_back(spectrumPair[1]);
-            spectrumPairs.push_back(spectrumPair[2]);
-            emit reportKernelDensitySpectrumFoM(PCIeCommSdk::CameraOrientation::Horizontal, spectrumPairs);
-            emit reportKernelDensitySpectrumFoM(PCIeCommSdk::CameraOrientation::Vertical, spectrumPairs);
+            emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Horizontal, curveFOM);
+            // emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Vertical, curveFOM);
         }
     }
 
     //能谱
     {
-
         QVector<QPair<double,double>> spectrumPair[2];
         QFile file("./spectrum_lsd.csv");
         if (ui->action_typeLBD->isChecked())
@@ -1293,25 +1426,15 @@ void OfflineWindow::replySpectrum(quint8 timestampIndex, quint8 cameraOrientatio
     }
 }
 
-
-void OfflineWindow::replyKernelDensitySpectrumPSD(quint8 cameraOrientation, QVector<QPair<double ,double>>& pairs)
+/**
+ * @brief 对PSD数据对，进行统计，给出PSD分布密度图
+ * @param cameraOrientation 相机方向，水平或垂直
+ * @param pairs PSD数据对,每个元素是一个 QPair<double, double>，first 是 Energy，second 是 PSD
+ */
+void OfflineWindow::replyCalculateDensityPSD(quint8 cameraOrientation, QVector<QPair<double ,double>>& pairs)
 {
-    // 核密度图谱
-    QCPColorMap* colorMap = nullptr;
-    QCustomPlot* customPlot = nullptr;
-    if (PCIeCommSdk::CameraOrientation::Horizontal == cameraOrientation){
-        customPlot = ui->spectroMeter_horCamera_PSD;
-    }
-    else{
-        customPlot = ui->spectroMeter_verCamera_PSD;
-    }
-
-    colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
-    QCPColorScale *colorScale = colorMap->colorScale();
-    QCPColorGradient gradient = colorScale->gradient();
-
     QVector<double> x, y;
-    QVector<QColor> z;
+    QVector<double> z;
     for (auto pair : pairs){
         x << pair.first;
         y << pair.second;
@@ -1327,68 +1450,79 @@ void OfflineWindow::replyKernelDensitySpectrumPSD(quint8 cameraOrientation, QVec
 
     //‌网格划分和密度计算
     quint32 NLevel=200;//   %划分等级100份
-    QVector<QVector<quint32>> color_Map(NLevel+1, QVector<quint32>(NLevel+1, 0));//创建(NLevel+1)×(NLevel+1)的零矩阵，用于存储密度
+    QVector<QVector<quint32>> densityMap(NLevel+1, QVector<quint32>(NLevel+1, 0));//创建(NLevel+1)×(NLevel+1)的零矩阵，用于存储密度
     double step_x = (max_x-min_x)/(NLevel-1);//  % x轴步长
     double step_y = (max_y-min_y)/(NLevel-1);//  % y轴步长
 
     //‌第一次循环：计算密度分布‌
     //遍历所有数据点，计算每个点所在的网格坐标
     for (auto pair : pairs){
-        quint32 color_Map_x = quint32((pair.first-min_x)/step_x)+1;// - 计算x方向网格索引
-        quint32 color_Map_y = quint32((pair.second-min_y)/step_y)+1;// - 计算y方向网格索引
-        color_Map[color_Map_x][color_Map_y]++;//- 对应网格位置计数加1
+        quint32 densityMap_x = quint32((pair.first-min_x)/step_x)+1;// - 计算x方向网格索引
+        quint32 densityMap_y = quint32((pair.second-min_y)/step_y)+1;// - 计算y方向网格索引
+        densityMap[densityMap_x][densityMap_y]++;//- 对应网格位置计数加1
     }
-
+    
     //第二次循环：获取每个点的密度值‌
     //再次遍历所有数据点，根据网格索引获取对应的密度值
     for (auto pair : pairs){
-        quint32 color_Map_x = quint32((pair.first-min_x)/step_x)+1;// - 计算x方向网格索引
-        quint32 color_Map_y = quint32((pair.second-min_y)/step_y)+1;// - 计算y方向网格索引
-        z << gradient.color(color_Map[color_Map_x][color_Map_y], QCPRange(0, 100), false);
+        quint32 densityMap_x = quint32((pair.first-min_x)/step_x)+1;// - 计算x方向网格索引
+        quint32 densityMap_y = quint32((pair.second-min_y)/step_y)+1;// - 计算y方向网格索引
+        z << densityMap[densityMap_x][densityMap_y];
     }
 
-    customPlot->graph(0)->setData(x, y, z);
+    PSDPlot(cameraOrientation, x, y, z);
+}
 
-    // 网络定义为50*50吧
-    // int gridRow = pairs.size();
-    // int gridColumn = gridRow;
-    // colorMap->data()->setSize(gridColumn, gridRow);// 设置网格维度
-    // colorMap->data()->setRange(QCPRange(0, 10000), QCPRange(0., 0.6));// 设置网格数据范围
+/**
+ * @brief 绘制PSD分布密度图
+ * @param cameraOrientation 相机方向，水平或垂直
+ * @param psd_x PSD x轴数据，Energy
+ * @param psd_y PSD y轴数据, PSD值
+ * @param density PSD分布密度数据，不需要归一化
+ */
+void OfflineWindow::PSDPlot(quint8 cameraOrientation, QVector<double> psd_x, QVector<double> psd_y, QVector<double> density)
+{
+    QCPColorMap* colorMap = nullptr;
+    QCustomPlot* customPlot = nullptr;
+    if (PCIeCommSdk::CameraOrientation::Horizontal == cameraOrientation){
+        customPlot = ui->spectroMeter_horCamera_PSD;
+    }
+    else{
+        customPlot = ui->spectroMeter_verCamera_PSD;
+    }
 
-    //将随机数转换到网格坐标中来
-    // GaussianRandomGenerator generator;
-    // const int PAIR_COUNT = 100000;
-    // auto gaussianPairs = generator.generateGaussianPairs(PAIR_COUNT);
-    // // 将随机数转换到网格坐标中来
-    // QVector<QVector<quint16>> ref(gridColumn, QVector<quint16>(gridRow, 0));
-    // for (const auto& pair : pairs) {
-    //     int keyIndex, valueIndex;
-    //     colorMap->data()->coordToCell(pair.first, pair.second, &keyIndex, &valueIndex);
-    //     if (keyIndex>=0 && keyIndex<gridColumn && valueIndex>=0 && valueIndex<gridRow)
-    //         ref[keyIndex][valueIndex]++;
-    //     else{
-    //         qDebug() << "invalid data:" << pair.first << pair.second << keyIndex << valueIndex;
-    //     }
-    // }
+    colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
+    QCPColorScale *colorScale = colorMap->colorScale();
+    QCPColorGradient gradient = colorScale->gradient();
 
-    // for (int xIndex=0; xIndex<gridColumn; ++xIndex)
-    // {
-    //     for (int yIndex=0; yIndex<gridRow; ++yIndex)
-    //     {
-    //         if (pairs[xIndex][yIndex] == 0)
-    //             colorMap->data()->setAlpha(xIndex, yIndex, 0);
-    //         else
-    //             colorMap->data()->setCell(xIndex, yIndex, pairs[xIndex][yIndex]);
+    //归一化PSD分布密度图,范围0-100
+    double max_density = *std::max_element(std::begin(density), std::end(density));
+    // double min_density = *std::min_element(std::begin(density), std::end(density));
+    double min_density = 0.0;
+    double range_density = max_density - min_density;
+    QVector<double> normalized_density;
+    normalized_density.resize(density.size());
+    if (range_density > 0){
+        for (int i = 0; i < density.size(); i++){
+            normalized_density[i] = (density[i] - min_density) / range_density * 100.0;  // 归一化到 0~100
+        }
+    }
+    else{
+        normalized_density = density;
+    }
 
-    //         //qDebug() << xIndex << yIndex << pairs[xIndex][yIndex];
-    //     }
-    // }
+    QVector<QColor> z;
+    z.reserve(normalized_density.size());
+    for (int i = 0; i < normalized_density.size(); i++){
+        z << gradient.color(normalized_density[i], QCPRange(0, 100), false);
+    }
 
-    // colorMap->rescaleDataRange(true);
+    // setData 需要 double 类型的数据，第三个参数是 QColor 向量
+    customPlot->graph(0)->setData(psd_x, psd_y, z);
     customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
 }
 
-void OfflineWindow::replyKernelDensitySpectrumFoM(quint8 cameraOrientation, QVector<QVector<QPair<double ,double>>>& pairs)
+void OfflineWindow::replyPlotFoM(quint8 cameraOrientation, QVector<FOM_CurvePoint>& pairs)
 {
     // 核密度图谱
     QCustomPlot* customPlot = nullptr;
@@ -1399,17 +1533,40 @@ void OfflineWindow::replyKernelDensitySpectrumFoM(quint8 cameraOrientation, QVec
         customPlot = ui->spectroMeter_verCamera_FOM;
     }
 
-    QColor clrs[] = {QColor::fromRgb(0x87,0xBA,0xDD), Qt::red, Qt::black};
-    for (int i=0; i<=2; ++i){
+    // 绘制FoM散点曲线
+    {
         QVector<double> x, y;
         QVector<QColor> z;
-        for (auto pair : pairs[i]){
-            x << pair.first;
-            y << pair.second;
-            z << clrs[i];
+        for (auto pair : pairs){
+            x << pair.x;
+            y << pair.y1;
+            z << QColor::fromRgb(0x87,0xBA,0xDD);
         }
+        customPlot->graph(0)->setData(x, y, z);
+    }
+    
+    // 绘制拟合曲线1
+    {
+        QVector<double> x, y;
+        QVector<QColor> z;
+        for (auto pair : pairs){
+            x << pair.x;
+            y << pair.y2;
+            z << Qt::red;
+        }
+        customPlot->graph(1)->setData(x, y, z);
+    }
 
-        customPlot->graph(i)->setData(x, y, z);
+    //绘制拟合曲线2
+    {
+        QVector<double> x, y;
+        QVector<QColor> z;
+        for (auto pair : pairs){
+            x << pair.x;
+            y << pair.y3;
+            z << Qt::black;
+        }
+        customPlot->graph(2)->setData(x, y, z);
     }
 
     customPlot->xAxis->rescale(true);
@@ -1467,7 +1624,7 @@ void OfflineWindow::on_action_typeLBD_triggered(bool checked)
     }
 }
 
-
+//波形模式
 void OfflineWindow::on_action_waveform_triggered(bool checked)
 {
     if (checked){
@@ -1477,10 +1634,16 @@ void OfflineWindow::on_action_waveform_triggered(bool checked)
         ui->spectroMeter_horCamera_FOM->setVisible(false);
         ui->spectroMeter_verCamera_PSD->setVisible(false);
         ui->spectroMeter_verCamera_FOM->setVisible(false);
+
+        //显示选择时刻、波形长度按钮        
+        ui->widget_waveStartT->setVisible(true);
+        ui->widget_waveLength->setVisible(true);
+        //隐藏n-gamma甄别模式按钮
+        ui->widget_ngamma->setVisible(false);
     }
 }
 
-
+//n-gamma甄别模式
 void OfflineWindow::on_action_ngamma_triggered(bool checked)
 {
     if (checked){
@@ -1490,6 +1653,12 @@ void OfflineWindow::on_action_ngamma_triggered(bool checked)
         ui->spectroMeter_horCamera_FOM->setVisible(true);
         ui->spectroMeter_verCamera_PSD->setVisible(true);
         ui->spectroMeter_verCamera_FOM->setVisible(true);
+
+        //隐藏选择时刻、波形长度按钮
+        ui->widget_waveStartT->setVisible(false);
+        ui->widget_waveLength->setVisible(false);
+        //显示n-gamma甄别模式按钮
+        ui->widget_ngamma->setVisible(true);
     }
 }
 

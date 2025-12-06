@@ -10,6 +10,18 @@ namespace Ui {
 class OfflineWindow;
 }
 
+// 定义结构体：每个x对应多条曲线的y值
+struct FOM_CurvePoint {
+    double x;          // 公共的x坐标
+    double y1;         // 曲线1的y值
+    double y2;         // 曲线2的y值
+    double y3;         // 曲线3的y值
+    
+    // 构造函数（可选，方便使用）
+    FOM_CurvePoint(double x_ = 0, double y1_ = 0, double y2_ = 0, double y3_ = 0) 
+        : x(x_), y1(y1_), y2(y2_), y3(y3_) {}
+};
+
 class QCustomPlot;
 class OfflineWindow : public QMainWindow
 {
@@ -43,20 +55,22 @@ public:
 
     virtual void closeEvent(QCloseEvent *event) override;
     virtual bool eventFilter(QObject *watched, QEvent *event) override;
+    void PSDPlot(quint8, QVector<double> psd_x, QVector<double> psd_y, QVector<double> density);// PSD分布密度图绘制
 
 public slots:
     void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
     void replyWaveform(quint8, quint8, QVector<QPair<double,double>>&);
     void replySpectrum(quint8, quint8, QVector<QPair<double,double>>&);
-    void replyKernelDensitySpectrumPSD(quint8, QVector<QPair<double,double>>&);// 核密度图谱
-    void replyKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double,double>>>&);// FoM拟合
+    void replyCalculateDensityPSD(quint8, QVector<QPair<double,double>>&);// PSD密度分布计算
+    void replyPlotFoM(quint8, QVector<FOM_CurvePoint>&);// FoM拟合
 
 signals:
     void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
     void reportWaveform(quint8, quint8, QVector<QPair<double,double>>&);
     void reportSpectrum(quint8, quint8, QVector<QPair<double,double>>&);
-    void reportKernelDensitySpectrumPSD(quint8, QVector<QPair<double,double>>&);// 核密度图谱
-    void reportKernelDensitySpectrumFoM(quint8, QVector<QVector<QPair<double,double>>>&);// FoM拟合
+    void reportCalculateDensityPSD(quint8, QVector<QPair<double,double>>&);// 对PSD数据对，进行统计，给出PSD分布密度图
+    // void reportPSDPlot(quint8, QVector<double> psd_x, QVector<double> psd_y, QVector<double> density);// PSD分布密度图
+    void reportPlotFoM(quint8, QVector<FOM_CurvePoint>&);// FoM拟合
 
 private slots:
     void on_action_openfile_triggered();

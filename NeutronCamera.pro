@@ -15,6 +15,7 @@ SOURCES += \
     globalsettings.cpp \
     main.cpp \
     mainwindow.cpp \
+    n_gamma.cpp \
     netsettingwindow.cpp \
     offlinewindow.cpp \
     pciecommsdk.cpp \
@@ -25,6 +26,7 @@ HEADERS += \
     commhelper.h \
     datacompresswindow.h \
     detsettingwindow.h \
+    n_gamma.h \
     netsettingwindow.h \
     offlinewindow.h \
     pciecommsdk.h \
@@ -130,6 +132,7 @@ include($$PWD/../3rdParty/QGoodWindow/QGoodWindow/QGoodWindow.pri)
 include($$PWD/../3rdParty/QGoodWindow/QGoodCentralWidget/QGoodCentralWidget.pri)
 include($$PWD/../3rdParty/QGoodWindow/QGoodWindowHelper/QGoodWindowHelper.pri)
 include($$PWD/../3rdParty/hdf5/C++/hdf5Wrapper.pri)
+include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
 
 # 添加config配置
 # CONFIG += precompile_header
