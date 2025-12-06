@@ -31,6 +31,12 @@ public:
     MainWindow(bool isDarkTheme = true, QWidget *parent = nullptr);
     ~MainWindow();
 
+    enum DetectorType{
+        dtLSD,
+        dtPSD,
+        dtLBD
+    };
+
     /*
     初始化
     */
@@ -134,9 +140,11 @@ private:
     bool mIsAlarm[2] = {false, false};//0-温度 1-电压
     bool mIsMeasuring = false;
     quint8 mCurrentPageIndex = 1;
+    DetectorType mCurrentDetectorType = dtLSD; // 1-LSD 2-PSD 3-LBD
     bool mEnableAutoUpdateShotnum = false;//是否启用自动更新炮号
     bool mEnableClockSynchronization = false;//是否启用时钟同步
     bool mEnableEmergencyStop = false;//是否启用紧急停机
+    QString mCurrentSavePath;
 
     bool mIsDarkTheme = true;
     bool mThemeColorEnable = true;

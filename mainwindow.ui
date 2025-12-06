@@ -1253,7 +1253,7 @@
                  </widget>
                 </item>
                 <item row="1" column="1">
-                 <widget class="QSpinBox" name="spinBox_timeNode2">
+                 <widget class="QSpinBox" name="spinBox_time2">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                     <horstretch>0</horstretch>
@@ -1302,7 +1302,7 @@
                  </widget>
                 </item>
                 <item row="1" column="2">
-                 <widget class="QSpinBox" name="spinBox_timeNode3">
+                 <widget class="QSpinBox" name="spinBox_time3">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                     <horstretch>0</horstretch>
@@ -1324,7 +1324,7 @@
                  </widget>
                 </item>
                 <item row="1" column="0">
-                 <widget class="QSpinBox" name="spinBox_timeNode1">
+                 <widget class="QSpinBox" name="spinBox_time1">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                     <horstretch>0</horstretch>

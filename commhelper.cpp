@@ -186,6 +186,8 @@ void CommHelper::connected()
 */
 bool CommHelper::connectServer()
 {
+    return true;
+
     GlobalSettings settings(CONFIG_FILENAME);
     QString ip = settings.value("Net/ip", "192.168.1.100").toString();
     quint32 port = settings.value("Net/port", 6000).toUInt();

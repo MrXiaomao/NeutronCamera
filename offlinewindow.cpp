@@ -575,7 +575,24 @@ void OfflineWindow::on_action_openfile_triggered()
     else {
         GlobalSettings settings(dirPath+"/Settings.ini");
         mShotNum = settings.value("Global/ShotNum", "00000").toString();
-        emit reporWriteLog("炮号：" + mShotNum);
+        mCurrentDetectorType = (DetectorType)settings.value("Global/DetectType", 0).toUInt();
+
+        emit reporWriteLog("实验炮号：" + mShotNum);
+        if (mCurrentDetectorType == dtLBD){
+            emit ui->action_typeLBD->triggered(true);
+            emit reporWriteLog("探测器类型：LBD探测器");
+        }
+        else if (mCurrentDetectorType == dtLSD){
+            emit ui->action_typeLSD->triggered(true);
+            emit reporWriteLog("探测器类型：LSD探测器");
+        }
+        else if (mCurrentDetectorType == dtPSD){
+            emit ui->action_typePSD->triggered(true);
+            emit reporWriteLog("探测器类型：PSD探测器");
+        }
+        else{
+            emit reporWriteLog("探测器类型：未知");
+        }
     }
 
     //加载目录下所有文件，罗列在表格中，统计给出文件大小

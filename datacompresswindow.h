@@ -46,6 +46,13 @@ public:
         QVector<qint16>& ch3,
         bool littleEndian = true);
 
+    static bool readBin4Ch_fast(QByteArray& fileData,
+                                QVector<qint16>& ch0,
+                                QVector<qint16>& ch1,
+                                QVector<qint16>& ch2,
+                                QVector<qint16>& ch3,
+                                bool littleEndian = true);
+
     void getValidWave();
     
 public slots:

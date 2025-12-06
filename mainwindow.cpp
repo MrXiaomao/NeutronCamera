@@ -67,6 +67,9 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
     });
+    connect(&mPCIeCommSdk, SIGNAL(reportNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
+    connect(&mPCIeCommSdk, SIGNAL(reportGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
+
 
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
@@ -832,54 +835,6 @@ void MainWindow::initUi()
 }
 
 
-#include <random>
-#include <vector>
-#include <cmath>
-class GaussianRandomGenerator {
-private:
-    std::random_device rd;
-    std::mt19937 gen;
-    std::uniform_real_distribution<double> dis;
-
-public:
-    GaussianRandomGenerator() : gen(rd()), dis(0.0, 1.0) {}
-
-    // 生成单个高斯分布随机数
-    double generateGaussian(double mean = 0.0, double stddev = 1.0) {
-        double u1 = dis(gen);
-        double u2 = dis(gen);
-
-        // Box-Muller变换
-        double z0 = std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
-
-        return z0 * stddev + mean;
-    }
-
-    // 生成一对高斯分布随机数
-    QPair<double, double> generateGaussianPair(double mean = 0.0, double stddev = 1.0) {
-        double u1 = dis(gen);
-        double u2 = dis(gen);
-
-        // Box-Muller变换，同时生成两个独立的高斯随机数
-        // double z0 = std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
-        // double z1 = std::sqrt(-2.0 * std::log(u1)) * std::sin(2.0 * M_PI * u2);
-        // return qMakePair(z0 * stddev + mean, z1 * stddev + mean);
-        return qMakePair(u1, u2);
-    }
-
-    // 生成指定数量的高斯随机数对
-    QVector<QPair<double, double>> generateGaussianPairs(int count, double mean = 0.0, double stddev = 1.0) {
-        QVector<QPair<double, double>> pairs;
-        pairs.reserve(count);
-
-        for (int i = 0; i < count; ++i) {
-            pairs.push_back(generateGaussianPair(mean, stddev));
-        }
-
-        return pairs;
-    }
-};
-
 void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel)
 {
     customPlot->installEventFilter(this);
@@ -1131,7 +1086,7 @@ void MainWindow::on_action_startMeasure_triggered()
         qint32 onePacketSize = 256*1024*1024;//打包大小基数
         QString cacheDir = ui->lineEdit_savePath->text();
         QDir dir(cacheDir);
-        qint64 diskFreeSpace = getDiskFreeSpace(dir.dirName());
+        qint64 diskFreeSpace = getDiskFreeSpace(dir.absoluteFilePath(cacheDir));
         qint64 validDiskSpace = ui->spinBox_timeLength->value() / timeBase * onePacketSize;
         if (diskFreeSpace <= validDiskSpace){
             QMessageBox::information(this, tr("提示"), tr("磁盘空间不足！"));
@@ -1139,24 +1094,15 @@ void MainWindow::on_action_startMeasure_triggered()
         }
     }
 
-    QCustomPlot *spectroMeter_top = this->findChild<QCustomPlot*>("spectroMeter_top");
-    for (int j=0; j<spectroMeter_top->graphCount(); ++j)
-        spectroMeter_top->graph(j)->data()->clear();
-
-    QCustomPlot *spectroMeter_horCamera = this->findChild<QCustomPlot*>("spectroMeter_horCamera");
-    for (int j=0; j<spectroMeter_horCamera->graphCount(); ++j)
-        spectroMeter_horCamera->graph(j)->data()->clear();
-
-    QCustomPlot *spectroMeter_verCamera = this->findChild<QCustomPlot*>("spectroMeter_verCamera");
-    for (int j=0; j<spectroMeter_verCamera->graphCount(); ++j)
-        spectroMeter_verCamera->graph(j)->data()->clear();
-
-    spectroMeter_top->replot();
-    spectroMeter_horCamera->replot();
-    spectroMeter_verCamera->replot();
+    QList<QCustomPlot *> customPlots = this->findChildren<QCustomPlot*>("");
+    for (auto spectroMeter : customPlots){
+        for (int j=0; j<spectroMeter->graphCount(); ++j)
+            spectroMeter->graph(j)->data()->clear();
+        spectroMeter->replot();
+    }
 
     QDateTime now = QDateTime::currentDateTime();
-    QString fileSaveDir = QString("%1/%2/%3").arg(ui->spinBox_timeLength->value()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
+    QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
     QDir dir(fileSaveDir);
     if (!dir.exists()) {
         if (!dir.mkpath(".")){
@@ -1166,23 +1112,38 @@ void MainWindow::on_action_startMeasure_triggered()
     }
 
     qInfo().noquote() << tr("本次实验数据存储路径：") << fileSaveDir;
+    this->mCurrentSavePath = fileSaveDir;
 
     // 保存本地测量参数信息
+    if (ui->action_typeLSD->isChecked())
+        mCurrentDetectorType = dtLSD;
+    else if (ui->action_typePSD->isChecked())
+        mCurrentDetectorType = dtPSD;
+    else if (ui->action_typeLBD->isChecked())
+        mCurrentDetectorType = dtLBD;
+
     GlobalSettings settings(CONFIG_FILENAME);
     settings.setValue("Global/ShotNum", ui->lineEdit_shotNum->text());
     settings.setValue("Global/ShotNumIsAutoIncrease", ui->checkBox_autoIncrease->isChecked());
     settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
     settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
+    settings.setValue("Global/DetectType", mCurrentDetectorType);
     QFile::copy(CONFIG_FILENAME, fileSaveDir + "/Settings.ini");
 
     // 发送指令集
     mPCIeCommSdk.writeStartMeasure();
-    //mPCIeCommSdk.setCaptureParamter(ui->comboBox_channel->currentIndex()+1, ui->spinBox_timeNode1->value(), ui->spinBox_timeNode2->value(), ui->spinBox_timeNode3->value());
+    mPCIeCommSdk.setCaptureParamter(ui->comboBox_horCamera->currentIndex() + 1,
+                                    ui->comboBox_verCamera->currentIndex() + 12,
+                                    ui->spinBox_time1->value(),
+                                    ui->spinBox_time2->value(),
+                                    ui->spinBox_time3->value());
 
     mPCIeCommSdk.startAllCapture(fileSaveDir,
                              ui->spinBox_timeLength->value(),
                              ui->lineEdit_shotNum->text());
 
+    ui->action_startMeasure->setEnabled(false);
+    ui->action_stopMeasure->setEnabled(true);
 }
 
 
@@ -1194,6 +1155,9 @@ void MainWindow::on_action_stopMeasure_triggered()
     mPCIeCommSdk.stopAllCapture();
 
     mCommHelper->disconnectServer();
+
+    ui->action_startMeasure->setEnabled(true);
+    ui->action_stopMeasure->setEnabled(false);
 }
 
 
@@ -1619,8 +1583,8 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
 
         ui->label_12->hide();
         ui->label_18->hide();
-        ui->spinBox_timeNode2->hide();
-        ui->spinBox_timeNode3->hide();
+        ui->spinBox_time2->hide();
+        ui->spinBox_time3->hide();
         ui->pushButton_selChannel1->hide();
         ui->pushButton_selChannel2->hide();
 
@@ -1649,8 +1613,8 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
 
         ui->label_12->show();
         ui->label_18->show();
-        ui->spinBox_timeNode2->show();
-        ui->spinBox_timeNode3->show();
+        ui->spinBox_time2->show();
+        ui->spinBox_time3->show();
         ui->pushButton_selChannel1->show();
         ui->pushButton_selChannel2->show();
 
@@ -1679,8 +1643,8 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
 
         ui->label_12->show();
         ui->label_18->show();
-        ui->spinBox_timeNode2->show();
-        ui->spinBox_timeNode3->show();
+        ui->spinBox_time2->show();
+        ui->spinBox_time3->show();
         ui->pushButton_selChannel1->hide();
         ui->pushButton_selChannel2->hide();
 
@@ -1693,15 +1657,14 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
     }
 }
 
-
 void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<double,double>>& pairs)
 {
     //实测曲线
     QCustomPlot* customPlot = nullptr;
-    if (ui->action_typeLSD->isChecked()){
+    if (mCurrentDetectorType == dtLSD && timestampIndex == 1){
         customPlot = ui->spectroMeter_neutronSpectrum;
     }
-    else{
+    else if (mCurrentDetectorType == dtPSD){
         if (timestampIndex == 1){
             customPlot = ui->spectroMeter_time1_PSD;
         }
@@ -1712,6 +1675,8 @@ void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraOrient
             customPlot = ui->spectroMeter_time3_PSD;
         }
     }
+    else
+        return;
 
     QVector<double> keys, values;
     quint16 yMin = 1e10;
@@ -1739,15 +1704,14 @@ void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraOrient
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-
 void MainWindow::replyGammaSpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<double,double>>& pairs)
 {
     //实测曲线
     QCustomPlot* customPlot = nullptr;
-    if (ui->action_typeLSD->isChecked()){
+    if (mCurrentDetectorType == dtLSD && timestampIndex == 1){
         customPlot = ui->spectroMeter_gammaSpectrum;
     }
-    else{
+    else if (mCurrentDetectorType == dtLBD){
         if (timestampIndex == 1){
             customPlot = ui->spectroMeter_time1_LBD;
         }
@@ -1758,20 +1722,13 @@ void MainWindow::replyGammaSpectrum(quint8 timestampIndex, quint8 cameraOrientat
             customPlot = ui->spectroMeter_time3_LBD;
         }
     }
+    else
+        return;
 
     QVector<double> keys, values;
-    quint16 yMin = 1e10;
-    quint16 yMax = 0;
     for (auto pair : pairs){
         keys << pair.first ;
         values << pair.second;
-        yMin = qMin(yMin, (quint16)pair.second);
-        yMax = qMax(yMax, (quint16)pair.second);
-    }
-
-    double spaceDisc = 0;
-    if (yMax != yMin){
-        spaceDisc = (yMax - yMin) * 0.15;
     }
 
     if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
@@ -1787,6 +1744,38 @@ void MainWindow::replyGammaSpectrum(quint8 timestampIndex, quint8 cameraOrientat
 
 void MainWindow::on_pushButton_preview_clicked()
 {
+    {
+        // 发送指令集
+        mPCIeCommSdk.setCaptureParamter(ui->comboBox_horCamera->currentIndex() + 1,
+                                        ui->comboBox_verCamera->currentIndex() + 12,
+                                        ui->spinBox_time1->value(),
+                                        ui->spinBox_time2->value(),
+                                        ui->spinBox_time3->value());
+
+        quint64 mTimestampMs[] = {ui->spinBox_time1->value(),
+                                  ui->spinBox_time2->value(),
+                                  ui->spinBox_time3->value()};
+        for (int i=0; i<=2; ++i){
+            quint32 fileIndex = (float)(mTimestampMs[i] + 50-1)/ 50;
+
+            //t1-水平相机
+            {
+                //每个文件里面对应的是4个通道，根据通道号判断是第几个文件
+                quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+                quint32 deviceIndex = (cameraIndex + 3) / 4;
+                QString filePath = QString("%1/%2data%3.bin").arg(this->mCurrentSavePath).arg(deviceIndex).arg(fileIndex);
+                mPCIeCommSdk.openHistoryFile(filePath);
+            }
+
+            //t1-垂直相机
+            {
+                quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
+                quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
+                QString filePath = QString("%1/%2data%3.bin").arg(this->mCurrentSavePath).arg(deviceIndex).arg(fileIndex);
+                mPCIeCommSdk.openHistoryFile(filePath);
+            }
+        }
+    }
     // 将随机数转换到网格坐标中来
     // QVector<QVector<quint16>> ref(gridColumn, QVector<quint16>(gridRow, 0));
     // for (const auto& pair : pairs) {

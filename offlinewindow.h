@@ -19,6 +19,12 @@ public:
     explicit OfflineWindow(bool isDarkTheme = true, QWidget *parent = nullptr);
     ~OfflineWindow();
 
+    enum DetectorType{
+        dtLSD,
+        dtPSD,
+        dtLBD
+    };
+
     void initUi();
     void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
 
@@ -92,6 +98,7 @@ private:
     class QGoodWindowHelper *mainWindow = nullptr;
     PCIeCommSdk mPCIeCommSdk;
     QString mShotNum;
+    DetectorType mCurrentDetectorType;
 
     QStringList mfileList;
     void applyColorTheme();
