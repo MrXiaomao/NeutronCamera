@@ -232,34 +232,34 @@ void PCIeCommSdk::replyCaptureWaveformData(quint8 cardIndex/*PCIe卡序号*/, qu
                 QVector<qint16> waveform;
                 if (cameraNo == 0) {
                     //扣基线，调整数据
-                    qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch[0]);
+                    qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0]);
                     //根据相机序号计算出是第几块光纤卡
                     int board_index = (cameraIndex-1)/4+1;
-                    DataCompressWindow::adjustDataWithBaseline(ch[0], baseline_ch, board_index, 1);
+                    DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, board_index, 1);
                     //提取数据
                     waveform = ch[0].mid(index, point_num);
                 } else if (cameraNo == 1) {
                     //扣基线，调整数据
-                    qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch[1]);
+                    qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[1]);
                     //根据相机序号计算出是第几块光纤卡
                     int board_index = (cameraIndex-1)/4+1;
-                    DataCompressWindow::adjustDataWithBaseline(ch[1], baseline_ch, board_index, 2);
+                    DataAnalysisWorker::adjustDataWithBaseline(ch[1], baseline_ch, board_index, 2);
                     //提取数据
                     waveform = ch[1].mid(index, point_num);
                 } else if (cameraNo == 2) {
                     //扣基线，调整数据
-                    qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch[2]);
+                    qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[2]);
                     //根据相机序号计算出是第几块光纤卡
                     int board_index = (cameraIndex-1)/4+1;
-                    DataCompressWindow::adjustDataWithBaseline(ch[2], baseline_ch, board_index, 3);
+                    DataAnalysisWorker::adjustDataWithBaseline(ch[2], baseline_ch, board_index, 3);
                     //提取数据
                     waveform = ch[2].mid(index, point_num);
                 } else if (cameraNo == 3) {
                     //扣基线，调整数据
-                    qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch[3]);
+                    qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[3]);
                     //根据相机序号计算出是第几块光纤卡
                     int board_index = (cameraIndex-1)/4+1;
-                    DataCompressWindow::adjustDataWithBaseline(ch[3], baseline_ch, board_index, 4);
+                    DataAnalysisWorker::adjustDataWithBaseline(ch[3], baseline_ch, board_index, 4);
                     //提取数据
                     waveform = ch[3].mid(index, point_num);
                 }
@@ -472,34 +472,34 @@ void PCIeCommSdk::analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLen
     QVector<qint16> waveform;
     if (cameraNo == 0) {
         //扣基线，调整数据
-        qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch0);
+        qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
         //根据相机序号计算出是第几块光纤卡
         int board_index = (cameraIndex-1)/4+1;
-        DataCompressWindow::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
+        DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
         //提取数据
         waveform = ch0.mid(index, point_num);
     } else if (cameraNo == 1) {
         //扣基线，调整数据
-        qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch1);
+        qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
         //根据相机序号计算出是第几块光纤卡
         int board_index = (cameraIndex-1)/4+1;
-        DataCompressWindow::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
+        DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
         //提取数据
         waveform = ch1.mid(index, point_num);
     } else if (cameraNo == 2) {
         //扣基线，调整数据
-        qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch2);
+        qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
         //根据相机序号计算出是第几块光纤卡
         int board_index = (cameraIndex-1)/4+1;
-        DataCompressWindow::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
+        DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
         //提取数据
         waveform = ch2.mid(index, point_num);
     } else if (cameraNo == 3) {
         //扣基线，调整数据
-        qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch3);
+        qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
         //根据相机序号计算出是第几块光纤卡
         int board_index = (cameraIndex-1)/4+1;
-        DataCompressWindow::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
+        DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
         //提取数据
         waveform = ch3.mid(index, point_num);
     }
