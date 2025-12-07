@@ -9,6 +9,7 @@ PCIeCommSdk::PCIeCommSdk(QObject *parent)
     : QObject{parent}
 {
     mDevices = enumDevices();
+    qInfo() << "搜索到采集卡张数：" << mDevices.count();
 }
 
 
@@ -25,9 +26,9 @@ PCIeCommSdk::~PCIeCommSdk()
 
 QStringList PCIeCommSdk::enumDevices()
 {
-// #ifdef QT_DEBUG
-//     return QStringList() << tr("模拟设备#1") << tr("模拟设备#2") << tr("模拟设备#3") << tr("模拟设备#4");
-// #endif
+#ifdef QT_DEBUG
+    return QStringList() << tr("模拟设备#1") << tr("模拟设备#2") << tr("模拟设备#3") << tr("模拟设备#4");
+#endif
 
     const GUID guid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}};
     QStringList lstDevices;

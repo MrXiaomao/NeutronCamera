@@ -11,10 +11,41 @@ CommHelper::CommHelper(QObject *parent)
 {
     /*初始化网络*/
     initSocket();
+
+    mRequestCmdThread = new QLiteThread(this);
+    mRequestCmdThread->setObjectName("mRequestCmdThread");
+    mRequestCmdThread->setWorkThreadProc([=](){
+        while (!mRequestCmdThread->isInterruptionRequested())
+        {
+            if (mTcpClient->isOpen()){
+                //发送查询指令
+                //@01*999*GET*01*#
+                for (int i=1; i<=18; ++i){
+                    QString askCommand = QString("@%1*999*GET*01*#").arg(i, 2, 10, QLatin1Char('0'));
+                    mTcpClient->write(askCommand.toLatin1());
+                    mTcpClient->waitForBytesWritten();
+
+                    QThread::msleep(500);
+                }
+            }
+
+            QThread::msleep(1000);
+        }
+    });
+    mRequestCmdThread->start();
+    connect(this, &CommHelper::destroyed, [=]() {
+        mRequestCmdThread->exit(0);
+        mRequestCmdThread->wait(500);
+    });
 }
 
 CommHelper::~CommHelper()
 {
+    mRequestCmdThread->requestInterruption();
+    mRequestCmdThread->quit();
+    mRequestCmdThread->wait();
+    mRequestCmdThread->deleteLater();
+
     this->disconnectServer();
 }
 
@@ -186,19 +217,13 @@ void CommHelper::connected()
 */
 bool CommHelper::connectServer()
 {
-    return true;
-
     GlobalSettings settings(CONFIG_FILENAME);
     QString ip = settings.value("Net/ip", "192.168.1.100").toString();
     quint32 port = settings.value("Net/port", 6000).toUInt();
     mTcpClient->connectToHost(ip, port);
     mTcpClient->waitForConnected();
     if (mTcpClient->state() == QAbstractSocket::ConnectedState){
-        //发送查询指令
-        //@01*999*GET*01*#
-        QByteArray askCommand = "@01*999*GET*01*#";
-        mTcpClient->write(askCommand, askCommand.size());
-
+        //线程可以查询监控数据了
         return true;
     }
 

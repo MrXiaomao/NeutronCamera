@@ -11,6 +11,7 @@
 #include <QTimer>
 #include <QDateTime>
 #include <QEventLoop>
+#include "qlitethread.h"
 
 class CommHelper : public QObject
 {
@@ -46,6 +47,7 @@ public:
 private:
     QTcpSocket *mTcpClient = nullptr;
     QUdpSocket *mUdpServer = nullptr;
+    QLiteThread* mRequestCmdThread = nullptr;
 
     /*
      初始化网络

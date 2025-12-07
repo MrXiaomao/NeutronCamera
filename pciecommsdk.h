@@ -224,7 +224,7 @@ private:
     QString mSaveFilePath;//保存路径
     quint32 mCaptureTimeSeconds = 50;
     quint32 mCaptureRef = 1;
-     quint32 mTimeout = 5000;//超时微秒
+    quint32 mTimeout = 5000;//超时微秒
 };
 
 #define CAMNUMBER_DDR_PER   4   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
