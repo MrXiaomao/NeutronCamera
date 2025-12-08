@@ -711,35 +711,35 @@ void OfflineWindow::on_action_analyze_triggered()
             int ch_channel = cameraIndex % 4;
             if (ch_channel == 1) {
                 //3、扣基线，调整数据
-                qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch0);
-                DataCompressWindow::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
+                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
+                DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
                 
                 //4、提取有效波形数据
-                QVector<std::array<qint16, 512>> wave_ch = DataCompressWindow::overThreshold(ch0, 1, threshold, pre_points, post_points);
+                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
                 ch_all_valid_wave.append(wave_ch);
             } else if (ch_channel == 2) {
                 //3、扣基线，调整数据
-                qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch1);
-                DataCompressWindow::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
+                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
+                DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
                 
                 //4、提取有效波形数据
-                QVector<std::array<qint16, 512>> wave_ch = DataCompressWindow::overThreshold(ch1, 2, threshold, pre_points, post_points);
+                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
                 ch_all_valid_wave.append(wave_ch);
             } else if (ch_channel == 3) {
                 //3、扣基线，调整数据
-                qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch2);
-                DataCompressWindow::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
+                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
+                DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
                 
                 //4、提取有效波形数据
-                QVector<std::array<qint16, 512>> wave_ch = DataCompressWindow::overThreshold(ch2, 3, threshold, pre_points, post_points);
+                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
                 ch_all_valid_wave.append(wave_ch);
             } else if (ch_channel == 4) {
                 //3、扣基线，调整数据
-                qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch3);
-                DataCompressWindow::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
+                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
+                DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
 
                 //4、提取有效波形数据
-                QVector<std::array<qint16, 512>> wave_ch = DataCompressWindow::overThreshold(ch3, 4, threshold, pre_points, post_points);
+                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);
                 ch_all_valid_wave.append(wave_ch);
             }
         }

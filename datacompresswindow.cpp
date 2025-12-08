@@ -66,7 +66,7 @@ void DataAnalysisWorker::startAnalysis()
  * @brief 快速读取4通道二进制波形数据文件
  * 
  * 文件格式说明：
- * - 单个文件总大小：256 MB（整）
+ * - 单个文件总大小固定
  * - 文件头：128 bit = 16 字节（公共部分，当前跳过，headBytes=0）
  * - 文件尾：128 bit = 16 字节（当前跳过，tailBytes=0）
  * - 中间全部是有效数据
@@ -96,12 +96,9 @@ bool DataAnalysisWorker::readBin4Ch_fast(const QString& path,
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) return false;
 
-    // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
-    // 注释掉的代码显示原始格式可能有16字节的文件头和文件尾
+    // 文件头和文件尾字节数
     const qint64 headBytes = 16;
     const qint64 tailBytes = 16;
-    // const qint64 headBytes = 0;
-    // const qint64 tailBytes = 0;
 
     // 获取文件总大小，并检查是否小于头尾字节数之和（避免负数）
     const qint64 fileSize = f.size();
@@ -300,6 +297,146 @@ bool DataAnalysisWorker::readBin4Ch_fast(QByteArray& fileData,
     return true;
 }
 
+
+// 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
+qint16 DataAnalysisWorker::calculateBaseline(const QVector<qint16>& data_ch)
+{
+    if (data_ch.isEmpty()) {
+        return 0;
+    }
+
+    // 创建直方图，binwidth=1
+    // 使用QMap存储每个值的计数
+    QMap<qint16, int> histogram;
+    for (qint16 value : data_ch) {
+        histogram[value]++;
+    }
+
+    // 找到出现频率最高的值
+    int maxCount = 0;
+    qint16 baseline_ch = 0;
+    for (auto it = histogram.constBegin(); it != histogram.constEnd(); ++it) {
+        if (it.value() > maxCount) {
+            maxCount = it.value();
+            baseline_ch = it.key();
+        }
+    }
+
+    return baseline_ch;
+}
+
+
+// 根据基线调整数据：根据板卡编号和通道号对数据进行不同的调整
+// boardNum: 板卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数板卡，2,4,6为偶数板卡）
+// ch: 1-4 (通道号)
+void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16 baseline_ch, int boardNum, int ch)
+{
+    if (data_ch.isEmpty()) {
+        return;
+    }
+
+    // 当前通道中波形信号有两类，部分为负脉冲信号，部分为正脉冲信号
+    // ch1和ch2：板卡编号、通道号共同决定调整方式
+    // ch3和ch4：通道号决定调整方式，与板卡编号无关
+    
+    bool isPositive = false; //是否为正脉冲信号
+    
+    if (ch == 3) {
+        // 第3通道：data - baseline
+        isPositive = true;
+    }
+    else if (ch == 4) {
+        // 第4通道：baseline - data
+        isPositive = false;
+    }
+    else {
+        // ch1和ch2：根据板卡编号的奇偶性和通道号的组合来决定
+        // 奇数板卡(1,3,5)ch1 或 偶数板卡(2,4,6)ch2: data - baseline
+        // 其他情况: baseline - data
+        bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数板卡
+        isPositive = (isOddBoard && ch == 1) || (!isOddBoard && ch == 2);
+    }
+    
+    for (int i = 0; i < data_ch.size(); ++i) {
+        if (isPositive) {
+            data_ch[i] = data_ch[i] - baseline_ch;
+        } else {
+            data_ch[i] = baseline_ch - data_ch[i];
+        }
+    }
+}
+
+// 提取超过阈值的有效波形数据
+QVector<std::array<qint16, 512>> DataAnalysisWorker::overThreshold(const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
+{
+    QVector<std::array<qint16, 512>> wave_ch;
+    QVector<int> cross_indices;
+    constexpr int WAVEFORM_LENGTH = 512;
+
+    // 丢弃可能不完整的包（比如半个波形）
+    // 从索引21开始（因为需要检查i-20到i的均值）
+    for (int i = 20; i < data.size(); ++i) {
+        // 条件：从低于阈值跨越到高于阈值，且前21个点（i-20到i）的均值小于阈值
+        if (data[i - 1] <= threshold && data[i] > threshold) {
+            // 计算从i-20到i（包括i）的21个点的均值
+            qint64 sum = 0;
+            for (int j = i - 20; j <= i; ++j) {
+                sum += data[j];
+            }
+            double mean_value = static_cast<double>(sum) / 21.0;
+            
+            if (mean_value < threshold) {
+                cross_indices.append(i);
+            }
+        }
+    }
+
+    if (cross_indices.isEmpty()) {
+        // 注意：这是静态函数，不能直接访问 ui，所以这里保留 qDebug
+        // 如果需要日志，应该通过参数传递日志回调函数
+        qDebug() << QString("CH%1 don't have valid wave").arg(ch);
+        return wave_ch;
+    }
+
+    // 提取每个交叉点前后的波形数据，每个波形固定长度为512
+    wave_ch.reserve(cross_indices.size());  // 预分配空间
+    for (int a = 0; a < cross_indices.size(); ++a) {
+        try {
+            int cross_idx = cross_indices[a];
+            int start_idx = cross_idx - pre_points;
+            
+            // 检查边界，确保能提取完整的512点
+            if (start_idx < 0 || start_idx + WAVEFORM_LENGTH > data.size()) {
+                // 注意：这是静态函数，不能直接访问 ui
+                qDebug() << QString("skip第%1个数据：边界不足").arg(a + 1);
+                continue;
+            }
+            
+            // 创建固定大小的波形数组
+            std::array<qint16, WAVEFORM_LENGTH> segment_data;
+            
+            // 提取波形段（正好512点）
+            for (int i = 0; i < WAVEFORM_LENGTH; ++i) {
+                segment_data[i] = data[start_idx + i];
+            }
+            
+            wave_ch.append(segment_data);
+        }
+        catch (...) {
+            // 注意：这是静态函数，不能直接访问 ui
+            qDebug() << QString("skip第%1个数据").arg(a + 1);
+        }
+    }
+
+    return wave_ch;
+}
+
+/**
+ * @brief 筛选出6个光纤的有效波形（对应24通道数据）,并存储到HDF5文件
+ * 6根光纤，每根光纤4个通道，每根光纤的全采样数据分别存储为一个文件
+ * 也就是每单位时间(50ms)产生6份文件。
+ * 先进行基线扣除后再进行阈值判断
+ */
 void DataAnalysisWorker::getValidWave()
 {
     QString dataDir, outfileName;
@@ -379,27 +516,27 @@ void DataAnalysisWorker::getValidWave()
             QString fileName = QString("%1data%2.bin").arg(j).arg(fileID);
             QString filePath = QDir(dataDir).filePath(fileName);
             QVector<qint16> ch0, ch1, ch2, ch3;
-            if (!DataAnalysisWorker::readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)) {
+            if (!readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)) {
                 emit logMessage(QString("板卡%1 文件%2: 读取失败或文件不存在").arg(j).arg(fileName), QtWarningMsg);
                 continue;
             }
             processedFiles++;
 
             //扣基线，调整数据
-            qint16 baseline_ch = DataCompressWindow::calculateBaseline(ch0);
-            DataCompressWindow::adjustDataWithBaseline(ch0, baseline_ch, j, 1);
-            qint16 baseline_ch2 = DataCompressWindow::calculateBaseline(ch1);
-            DataCompressWindow::adjustDataWithBaseline(ch1, baseline_ch2, j, 2);
-            qint16 baseline_ch3 = DataCompressWindow::calculateBaseline(ch2);
-            DataCompressWindow::adjustDataWithBaseline(ch2, baseline_ch3, j, 3);
-            qint16 baseline_ch4 = DataCompressWindow::calculateBaseline(ch3);
-            DataCompressWindow::adjustDataWithBaseline(ch3, baseline_ch4, j, 4);
+            qint16 baseline_ch = calculateBaseline(ch0);
+            adjustDataWithBaseline(ch0, baseline_ch, j, 1);
+            qint16 baseline_ch2 = calculateBaseline(ch1);
+            adjustDataWithBaseline(ch1, baseline_ch2, j, 2);
+            qint16 baseline_ch3 = calculateBaseline(ch2);
+            adjustDataWithBaseline(ch2, baseline_ch3, j, 3);
+            qint16 baseline_ch4 = calculateBaseline(ch3);
+            adjustDataWithBaseline(ch3, baseline_ch4, j, 4);
 
             //提取有效波形
-            QVector<std::array<qint16, 512>> wave_ch0 = DataCompressWindow::overThreshold(ch0, 1, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch1 = DataCompressWindow::overThreshold(ch1, 2, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch2 = DataCompressWindow::overThreshold(ch2, 3, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch3 = DataCompressWindow::overThreshold(ch3, 4, threshold, pre_points, post_points);
+            QVector<std::array<qint16, 512>> wave_ch0 = overThreshold(ch0, 1, threshold, pre_points, post_points);
+            QVector<std::array<qint16, 512>> wave_ch1 = overThreshold(ch1, 2, threshold, pre_points, post_points);
+            QVector<std::array<qint16, 512>> wave_ch2 = overThreshold(ch2, 3, threshold, pre_points, post_points);
+            QVector<std::array<qint16, 512>> wave_ch3 = overThreshold(ch3, 4, threshold, pre_points, post_points);
 
             //合并有效波形
             wave_ch0_all.append(wave_ch0);
@@ -417,7 +554,7 @@ void DataAnalysisWorker::getValidWave()
 
         // 存储有效波形数据到HDF5文件
         emit logMessage(QString("正在写入板卡%1的波形数据...").arg(j), QtInfoMsg);
-        if (!DataCompressWindow::writeWaveformToHDF5(hdf5FilePath, j, wave_ch0_all, wave_ch1_all, wave_ch2_all, wave_ch3_all)) {
+        if (!writeWaveformToHDF5(hdf5FilePath, j, wave_ch0_all, wave_ch1_all, wave_ch2_all, wave_ch3_all)) {
             emit logMessage(QString("写入板卡%1的波形数据失败，请检查文件路径和权限").arg(j), QtCriticalMsg);
             emit analysisFinished(false, QString("写入板卡%1的波形数据失败").arg(j));
             return;
@@ -435,6 +572,108 @@ void DataAnalysisWorker::getValidWave()
 
     emit logMessage(QString("所有波形数据处理完成，已保存到: %1").arg(hdf5FilePath), QtInfoMsg);
     emit analysisFinished(true, "数据分析完成");
+}
+
+// 将波形数据按板卡分组写入HDF5文件
+bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardNum,
+                                              const QVector<std::array<qint16, 512>>& wave_ch0,
+                                              const QVector<std::array<qint16, 512>>& wave_ch1,
+                                              const QVector<std::array<qint16, 512>>& wave_ch2,
+                                              const QVector<std::array<qint16, 512>>& wave_ch3)
+{
+    try {
+        // 检查文件是否存在，决定打开方式
+        bool fileExists = QFileInfo::exists(filePath);
+        H5::H5File file(filePath.toStdString(),
+                       fileExists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
+
+        // 创建或打开板卡组
+        QString boardGroupName = QString("Board%1").arg(boardNum);
+
+        H5::Group boardGroup;
+        htri_t exists = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
+
+        if (exists > 0) {
+            boardGroup = file.openGroup(boardGroupName.toStdString());
+        } else {
+            boardGroup = file.createGroup(boardGroupName.toStdString());
+        }
+
+        // 辅助函数：写入单个通道的数据集
+        auto writeChannel = [&](const QString& datasetName, const QVector<std::array<qint16, 512>>& data) {
+             std::string ds = datasetName.toUtf8().constData();
+
+            if (data.isEmpty()) {
+                // 如果没有数据，创建一个空数据集
+                hsize_t dims[2] = {0, 512};
+                H5::DataSpace dataspace(2, dims);
+                H5::DataSet dataset = boardGroup.createDataSet(datasetName.toStdString(),
+                                                               H5::PredType::NATIVE_INT16,
+                                                               dataspace);
+                dataset.close();
+                return;
+            }
+
+            // 准备数据：将 QVector<std::array<qint16, 512>> 转换为连续内存
+            hsize_t dims[2] = {static_cast<hsize_t>(data.size()), 512};
+            H5::DataSpace dataspace(2, dims);
+            QVector<qint16> flatData;
+            flatData.resize(static_cast<int>(data.size() * 512));
+            int offset = 0;
+            for (const auto& wave : data) {
+                std::memcpy(flatData.data() + offset,
+                            wave.data(),
+                            sizeof(qint16) * wave.size());
+                offset += static_cast<int>(wave.size());
+            }
+
+            // 存在才删（不 open，不抛异常）
+            if (H5Lexists(boardGroup.getId(), ds.c_str(), H5P_DEFAULT) > 0) {
+                boardGroup.unlink(ds);
+            }
+
+            H5::DataSet dataset = boardGroup.createDataSet(
+                ds, H5::PredType::NATIVE_INT16, dataspace);
+
+            // 保险起见：显式 memspace/fileSpace rank 一致
+            H5::DataSpace fileSpace = dataset.getSpace();
+            H5::DataSpace memSpace(2, dims);
+
+            dataset.write(flatData.data(),
+                          H5::PredType::NATIVE_INT16,
+                          memSpace,
+                          fileSpace);
+
+            dataset.close();
+        };
+
+        // 写入4个通道的数据
+        writeChannel("wave_ch0", wave_ch0);
+        writeChannel("wave_ch1", wave_ch1);
+        writeChannel("wave_ch2", wave_ch2);
+        writeChannel("wave_ch3", wave_ch3);
+
+        boardGroup.close();
+        file.close();
+
+        return true;
+    } catch (H5::FileIException& error) {
+        // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
+        qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSetIException& error) {
+        qDebug() << "HDF5 DataSet Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSpaceIException& error) {
+        qDebug() << "HDF5 DataSpace Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::GroupIException& error) {
+        qDebug() << "HDF5 Group Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (...) {
+        qDebug() << "Unknown HDF5 Exception";
+        return false;
+    }
 }
 
 DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
@@ -934,349 +1173,6 @@ QStringList DataCompressWindow::loadRelatedFiles(const QString& dirPath)
     return fileList;
 }
 
-// 6根光纤，每根光纤4个通道，每根光纤的数据分别存储为一个文件，
-// 也就是每单位时间(50ms)产生6份文件。
-// threshold触发阈值，这个对应扣基线后的波形来进行触发阈值判断
-/**
- * @brief DataCompressWindow::getValidWave 6根光纤，每根光纤4个通道，每根光纤的数据分别存储为一个文件
- * 也就是每单位时间(50ms)产生6份文件。
- * 先进行基线扣除后再进行阈值判断
- * @param fileList 文件列表
- * @param outfileName 输出文件名
- * @param threshold 触发阈值
- */
-void DataCompressWindow::getValidWave(QStringList& fileList, QString outfileName, int threshold/* = 200*/)
-{
-    replyWriteLog(QString("开始处理波形数据，阈值: %1").arg(threshold), QtInfoMsg);
-    
-    int time_per = ui->spinBox_oneFileTime->value(); //单个文件包对应的时间长度，单位ms
-
-    // 设置触发阈值前后波形点数
-    int pre_points = 20;
-    int post_points = 512 - pre_points - 1;
-
-    // 获取数据目录路径
-    QString dataDir = ui->textBrowser_filepath->toPlainText();
-    if (dataDir.isEmpty()) {
-        replyWriteLog("数据目录路径为空", QtWarningMsg);
-        return;
-    }
-
-    //读取界面的起止时间 
-    int startFile = ui->spinBox_startT->value() / time_per + 1;
-    int endFile = ui->spinBox_endT->value() / time_per + 1;
-    
-    replyWriteLog(QString("处理时间范围: %1 ms - %2 ms (文件范围: %3 - %4)").arg(
-        ui->spinBox_startT->value()).arg(ui->spinBox_endT->value()).arg(startFile).arg(endFile), QtInfoMsg);
-
-    // 创建HDF5文件路径（在数据目录下）
-    QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
-    replyWriteLog(QString("输出文件路径: %1").arg(hdf5FilePath), QtInfoMsg);
-
-    //读取文件，提取有效波形
-    //6个光纤口，每个光纤口4个通道
-    for(int j=1; j<=6; ++j) {
-        replyWriteLog(QString("开始处理板卡%1的数据...").arg(j), QtInfoMsg);
-
-        //对每个通道的有效波形数据进行合并
-        QVector<std::array<qint16, 512>> wave_ch0_all;
-        QVector<std::array<qint16, 512>> wave_ch1_all;
-        QVector<std::array<qint16, 512>> wave_ch2_all;
-        QVector<std::array<qint16, 512>> wave_ch3_all;
-
-        int totalFiles = endFile - startFile;
-        int processedFiles = 0;
-        for (int fileID = startFile; fileID < endFile; ++fileID) {
-            QString fileName = QString("%1data%2.bin").arg(j).arg(fileID);
-            QString filePath = QDir(dataDir).filePath(fileName);
-            QVector<qint16> ch0, ch1, ch2, ch3;
-                if (!DataAnalysisWorker::readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)) {
-                replyWriteLog(QString("板卡%1 文件%2: 读取失败或文件不存在").arg(j).arg(fileName), QtWarningMsg);
-                continue;
-            }
-            processedFiles++;
-
-            //扣基线，调整数据
-            qint16 baseline_ch = calculateBaseline(ch0);
-            adjustDataWithBaseline(ch0, baseline_ch, j, 1);
-            qint16 baseline_ch2 = calculateBaseline(ch1);
-            adjustDataWithBaseline(ch1, baseline_ch2, j, 2);
-            qint16 baseline_ch3 = calculateBaseline(ch2);
-            adjustDataWithBaseline(ch2, baseline_ch3, j, 3);
-            qint16 baseline_ch4 = calculateBaseline(ch3);
-            adjustDataWithBaseline(ch3, baseline_ch4, j, 4);
-
-            //提取有效波形
-            QVector<std::array<qint16, 512>> wave_ch0 = overThreshold(ch0, 1, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch1 = overThreshold(ch1, 2, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch2 = overThreshold(ch2, 3, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch3 = overThreshold(ch3, 4, threshold, pre_points, post_points);
-
-            // 统计提取到的波形数量（静默处理，只在最后汇总）
-
-            //合并有效波形
-            wave_ch0_all.append(wave_ch0);
-            wave_ch1_all.append(wave_ch1);
-            wave_ch2_all.append(wave_ch2);
-            wave_ch3_all.append(wave_ch3);
-        }
-        
-        replyWriteLog(QString("板卡%1: 已处理 %2/%3 个文件").arg(j).arg(processedFiles).arg(totalFiles), QtInfoMsg);
-
-        // 存储有效波形数据到HDF5文件，按板卡分组
-        // 每个板卡数据共用一个数据组，即Board1, Board2, ..., Board6
-        // 每个板卡组下有4个数据集：wave_ch0, wave_ch1, wave_ch2, wave_ch3
-        // 每个数据集维度为 (N, 512)，N是波形数量，数据类型为int16
-        replyWriteLog(QString("正在写入板卡%1的波形数据...").arg(j), QtInfoMsg);
-        if (!writeWaveformToHDF5(hdf5FilePath, j, wave_ch0_all, wave_ch1_all, wave_ch2_all, wave_ch3_all)) {
-            replyWriteLog(QString("写入板卡%1的波形数据失败，请检查文件路径和权限").arg(j), QtCriticalMsg);
-        } else {
-            replyWriteLog(QString("板卡%1写入成功: 通道0=%2个波形, 通道1=%3个波形, 通道2=%4个波形, 通道3=%5个波形")
-                        .arg(j)
-                        .arg(wave_ch0_all.size())
-                        .arg(wave_ch1_all.size())
-                        .arg(wave_ch2_all.size())
-                        .arg(wave_ch3_all.size()), QtInfoMsg);
-        }
-    }
-
-    replyWriteLog(QString("所有波形数据处理完成，已保存到: %1").arg(hdf5FilePath), QtInfoMsg);
-}
-
-// 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
-qint16 DataCompressWindow::calculateBaseline(const QVector<qint16>& data_ch)
-{
-    if (data_ch.isEmpty()) {
-        return 0;
-    }
-
-    // 创建直方图，binwidth=1
-    // 使用QMap存储每个值的计数
-    QMap<qint16, int> histogram;
-    for (qint16 value : data_ch) {
-        histogram[value]++;
-    }
-
-    // 找到出现频率最高的值
-    int maxCount = 0;
-    qint16 baseline_ch = 0;
-    for (auto it = histogram.constBegin(); it != histogram.constEnd(); ++it) {
-        if (it.value() > maxCount) {
-            maxCount = it.value();
-            baseline_ch = it.key();
-        }
-    }
-
-    return baseline_ch;
-}
-
-// 根据基线调整数据：根据板卡编号和通道号对数据进行不同的调整
-// boardNum: 板卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数板卡，2,4,6为偶数板卡）
-// ch: 1-4 (通道号)
-void DataCompressWindow::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16 baseline_ch, int boardNum, int ch)
-{
-    if (data_ch.isEmpty()) {
-        return;
-    }
-
-    // 当前通道中波形信号有两类，部分为负脉冲信号，部分为正脉冲信号
-    // ch1和ch2：板卡编号、通道号共同决定调整方式
-    // ch3和ch4：通道号决定调整方式，与板卡编号无关
-    
-    bool isPositive = false; //是否为正脉冲信号
-    
-    if (ch == 3) {
-        // 第3通道：data - baseline
-        isPositive = true;
-    }
-    else if (ch == 4) {
-        // 第4通道：baseline - data
-        isPositive = false;
-    }
-    else {
-        // ch1和ch2：根据板卡编号的奇偶性和通道号的组合来决定
-        // 奇数板卡(1,3,5)ch1 或 偶数板卡(2,4,6)ch2: data - baseline
-        // 其他情况: baseline - data
-        bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数板卡
-        isPositive = (isOddBoard && ch == 1) || (!isOddBoard && ch == 2);
-    }
-    
-    for (int i = 0; i < data_ch.size(); ++i) {
-        if (isPositive) {
-            data_ch[i] = data_ch[i] - baseline_ch;
-        } else {
-            data_ch[i] = baseline_ch - data_ch[i];
-        }
-    }
-}
-
-// 提取超过阈值的有效波形数据
-QVector<std::array<qint16, 512>> DataCompressWindow::overThreshold(const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
-{
-    QVector<std::array<qint16, 512>> wave_ch;
-    QVector<int> cross_indices;
-    constexpr int WAVEFORM_LENGTH = 512;
-
-    // 丢弃可能不完整的包（比如半个波形）
-    // 从索引21开始（因为需要检查i-20到i的均值）
-    for (int i = 20; i < data.size(); ++i) {
-        // 条件：从低于阈值跨越到高于阈值，且前21个点（i-20到i）的均值小于阈值
-        if (data[i - 1] <= threshold && data[i] > threshold) {
-            // 计算从i-20到i（包括i）的21个点的均值
-            qint64 sum = 0;
-            for (int j = i - 20; j <= i; ++j) {
-                sum += data[j];
-            }
-            double mean_value = static_cast<double>(sum) / 21.0;
-            
-            if (mean_value < threshold) {
-                cross_indices.append(i);
-            }
-        }
-    }
-
-    if (cross_indices.isEmpty()) {
-        // 注意：这是静态函数，不能直接访问 ui，所以这里保留 qDebug
-        // 如果需要日志，应该通过参数传递日志回调函数
-        qDebug() << QString("CH%1 don't have valid wave").arg(ch);
-        return wave_ch;
-    }
-
-    // 提取每个交叉点前后的波形数据，每个波形固定长度为512
-    wave_ch.reserve(cross_indices.size());  // 预分配空间
-    for (int a = 0; a < cross_indices.size(); ++a) {
-        try {
-            int cross_idx = cross_indices[a];
-            int start_idx = cross_idx - pre_points;
-            
-            // 检查边界，确保能提取完整的512点
-            if (start_idx < 0 || start_idx + WAVEFORM_LENGTH > data.size()) {
-                // 注意：这是静态函数，不能直接访问 ui
-                qDebug() << QString("skip第%1个数据：边界不足").arg(a + 1);
-                continue;
-            }
-            
-            // 创建固定大小的波形数组
-            std::array<qint16, WAVEFORM_LENGTH> segment_data;
-            
-            // 提取波形段（正好512点）
-            for (int i = 0; i < WAVEFORM_LENGTH; ++i) {
-                segment_data[i] = data[start_idx + i];
-            }
-            
-            wave_ch.append(segment_data);
-        }
-        catch (...) {
-            // 注意：这是静态函数，不能直接访问 ui
-            qDebug() << QString("skip第%1个数据").arg(a + 1);
-        }
-    }
-
-    return wave_ch;
-}
-
-// 将波形数据按板卡分组写入HDF5文件
-bool DataCompressWindow::writeWaveformToHDF5(const QString& filePath, int boardNum,
-                                              const QVector<std::array<qint16, 512>>& wave_ch0,
-                                              const QVector<std::array<qint16, 512>>& wave_ch1,
-                                              const QVector<std::array<qint16, 512>>& wave_ch2,
-                                              const QVector<std::array<qint16, 512>>& wave_ch3)
-{
-    try {
-        // 检查文件是否存在，决定打开方式
-        bool fileExists = QFileInfo::exists(filePath);
-        H5::H5File file(filePath.toStdString(),
-                       fileExists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
-
-        // 创建或打开板卡组
-        QString boardGroupName = QString("Board%1").arg(boardNum);
-
-        H5::Group boardGroup;
-        htri_t exists = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
-
-        if (exists > 0) {
-            boardGroup = file.openGroup(boardGroupName.toStdString());
-        } else {
-            boardGroup = file.createGroup(boardGroupName.toStdString());
-        }
-
-        // 辅助函数：写入单个通道的数据集
-        auto writeChannel = [&](const QString& datasetName, const QVector<std::array<qint16, 512>>& data) {
-             std::string ds = datasetName.toUtf8().constData();
-
-            if (data.isEmpty()) {
-                // 如果没有数据，创建一个空数据集
-                hsize_t dims[2] = {0, 512};
-                H5::DataSpace dataspace(2, dims);
-                H5::DataSet dataset = boardGroup.createDataSet(datasetName.toStdString(),
-                                                               H5::PredType::NATIVE_INT16,
-                                                               dataspace);
-                dataset.close();
-                return;
-            }
-
-            // 准备数据：将 QVector<std::array<qint16, 512>> 转换为连续内存
-            hsize_t dims[2] = {static_cast<hsize_t>(data.size()), 512};
-            H5::DataSpace dataspace(2, dims);
-            QVector<qint16> flatData;
-            flatData.resize(static_cast<int>(data.size() * 512));
-            int offset = 0;
-            for (const auto& wave : data) {
-                std::memcpy(flatData.data() + offset,
-                            wave.data(),
-                            sizeof(qint16) * wave.size());
-                offset += static_cast<int>(wave.size());
-            }
-
-            // 存在才删（不 open，不抛异常）
-            if (H5Lexists(boardGroup.getId(), ds.c_str(), H5P_DEFAULT) > 0) {
-                boardGroup.unlink(ds);
-            }
-
-            H5::DataSet dataset = boardGroup.createDataSet(
-                ds, H5::PredType::NATIVE_INT16, dataspace);
-
-            // 保险起见：显式 memspace/fileSpace rank 一致
-            H5::DataSpace fileSpace = dataset.getSpace();
-            H5::DataSpace memSpace(2, dims);
-
-            dataset.write(flatData.data(),
-                          H5::PredType::NATIVE_INT16,
-                          memSpace,
-                          fileSpace);
-
-            dataset.close();
-        };
-
-        // 写入4个通道的数据
-        writeChannel("wave_ch0", wave_ch0);
-        writeChannel("wave_ch1", wave_ch1);
-        writeChannel("wave_ch2", wave_ch2);
-        writeChannel("wave_ch3", wave_ch3);
-
-        boardGroup.close();
-        file.close();
-
-        return true;
-    } catch (H5::FileIException& error) {
-        // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
-        qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();
-        return false;
-    } catch (H5::DataSetIException& error) {
-        qDebug() << "HDF5 DataSet Exception:" << error.getDetailMsg().c_str();
-        return false;
-    } catch (H5::DataSpaceIException& error) {
-        qDebug() << "HDF5 DataSpace Exception:" << error.getDetailMsg().c_str();
-        return false;
-    } catch (H5::GroupIException& error) {
-        qDebug() << "HDF5 Group Exception:" << error.getDetailMsg().c_str();
-        return false;
-    } catch (...) {
-        qDebug() << "Unknown HDF5 Exception";
-        return false;
-    }
-}
-
 QString DataCompressWindow::humanReadableSize(qint64 bytes)
 {
     const double KB = 1024.0;
@@ -1478,12 +1374,6 @@ void DataCompressWindow::on_action_analyze_triggered()
 void DataCompressWindow::on_action_exit_triggered()
 {
     mainWindow->close();
-}
-
-
-void DataCompressWindow::on_pushButton_export_clicked()
-{
-
 }
 
 
