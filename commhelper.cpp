@@ -138,8 +138,8 @@ void CommHelper::readyRead()
             IHA238_06 = 0.00V, 0.00mA
             IHA238_07 = 0.00V, 0.00mA
             IHA238_08 = 0.00V, 0.00mA
-            THA238_09 = 0.00V, 0.00mA
-            THA238_10 = 0.00V, 0.00mA
+            IHA238_09 = 0.00V, 0.00mA
+            IHA238_10 = 0.00V, 0.00mA
             IHA238_11 = 0.00V, 0.00mA
             IHA238_12 = 0.00V, 0.00mA
 

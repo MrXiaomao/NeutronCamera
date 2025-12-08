@@ -107,20 +107,31 @@ private:
     QByteArray mData;
 };
 
-class WriteFileThread : public QThread {
+class DataCachPoolThread : public QThread {
     Q_OBJECT
 public:
-    explicit WriteFileThread(const quint32 index, const QString &saveFilePath);
+    explicit DataCachPoolThread(const quint32 cardIndex, const QString &saveFilePath);
 
     void run() override;
 
     Q_SIGNAL void reportFileWriteElapsedtime(quint32,quint32);
+    Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,QByteArray& data);
+    Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,QByteArray& data);
 
     Q_SLOT void replyThreadExit();
     Q_SLOT void replyCaptureData(QByteArray& waveformData, QByteArray& spectrumData);
 
+    /**
+    * @function name: reverseArray
+    * @brief 对数据每16字节做个反转
+    * @param[in]        data
+    * @param[out]       data
+    * @return           void
+    */
+    QByteArray reverseArray(const QByteArray& data);
+
 private:
-    quint32 mIndex;//设备名称
+    quint32 mCardIndex;//设备名称
     QString mSaveFilePath;//保存路径
     QVector<QByteArray> mCachePool;
     bool mTerminated = false;
@@ -189,13 +200,13 @@ public:
     bool resetReadflag();
 
     /**
-    * @function name:readRawData
+    * @function name:readWaveformData
     * @brief 从DDR读波形原始数据
     * @param[in]        data
     * @param[out]       data
     * @return           void
     */
-    bool readRawData(QByteArray& data);
+    bool readWaveformData(QByteArray& data);
 
     /**
     * @function name:readSpectrumData
@@ -216,7 +227,7 @@ public:
     Q_SIGNAL void reportCaptureFinished(quint32);
 
 private:
-    WriteFileThread* mWriteFileThread = nullptr;
+    DataCachPoolThread* mDataCachPoolThread = nullptr;
     quint32 mCardIndex;//设备名称
     HANDLE mDeviceHandle;//设备句柄
     HANDLE mUserHandle;//用户句柄

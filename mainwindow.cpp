@@ -44,7 +44,6 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         ui->action_startMeasure->setEnabled(false);
         ui->action_stopMeasure->setEnabled(false);
     }
-    qInfo().noquote() << "发现数据采集卡张数：" << mPCIeCommSdk.numberOfDevices();
     connect(ui->statusbar,&QStatusBar::messageChanged,this,[&](const QString &message){
         if(message.isEmpty()) {
             ui->statusbar->showMessage(tr("准备就绪"));
@@ -80,6 +79,9 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         if(mainWindow) {
             mainWindow->fixMenuBarWidth();
         }
+    });
+    QTimer::singleShot(0, this, [=]{
+        qInfo().noquote() << "数据采集卡：" << mPCIeCommSdk.numberOfDevices() << "张";
     });
 }
 
@@ -717,7 +719,7 @@ void MainWindow::initUi()
 
         //29V电压
         quint8 rowOffset = 4;
-        for (int row=0; row<3; ++row){
+        for (int row=0; row<4; ++row){
             ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(pairs[row].first, 'f', 2));
 
             //电压设成28~30V
@@ -1752,7 +1754,7 @@ void MainWindow::on_pushButton_preview_clicked()
                                         ui->spinBox_time2->value(),
                                         ui->spinBox_time3->value());
 
-        quint64 mTimestampMs[] = {ui->spinBox_time1->value(),
+        qint32 mTimestampMs[] = {ui->spinBox_time1->value(),
                                   ui->spinBox_time2->value(),
                                   ui->spinBox_time3->value()};
         for (int i=0; i<=2; ++i){
@@ -1764,7 +1766,7 @@ void MainWindow::on_pushButton_preview_clicked()
                 quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
                 quint32 deviceIndex = (cameraIndex + 3) / 4;
                 QString filePath = QString("%1/%2data%3.bin").arg(this->mCurrentSavePath).arg(deviceIndex).arg(fileIndex);
-                mPCIeCommSdk.openHistoryFile(filePath);
+                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, mTimestampMs[i]%50, filePath);
             }
 
             //t1-垂直相机
@@ -1772,10 +1774,12 @@ void MainWindow::on_pushButton_preview_clicked()
                 quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
                 quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
                 QString filePath = QString("%1/%2data%3.bin").arg(this->mCurrentSavePath).arg(deviceIndex).arg(fileIndex);
-                mPCIeCommSdk.openHistoryFile(filePath);
+                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, mTimestampMs[i]%50, filePath);
             }
         }
     }
+    return;
+
     // 将随机数转换到网格坐标中来
     // QVector<QVector<quint16>> ref(gridColumn, QVector<quint16>(gridRow, 0));
     // for (const auto& pair : pairs) {

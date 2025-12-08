@@ -170,11 +170,11 @@ void PCIeCommSdk::replyCaptureWaveformData(quint8 cardIndex/*PCIe卡序号*/, qu
     quint8 cameraNo = 0;//当前通道序号(0开始)
     quint8 cameraIndex = 0;
     if (mHorCameraIndex >= cameraFrom && mHorCameraIndex <= cameraTo){
-        cameraNo = mHorCameraIndex - (cardIndex-1)*4;
+        cameraNo = (mHorCameraIndex - 1) % 4;
         cameraIndex = mHorCameraIndex;
     }
     else if (mVerCameraIndex >= cameraFrom && mVerCameraIndex <= cameraTo){
-        cameraNo = mVerCameraIndex - (cardIndex-1)*4;
+        cameraNo = (mVerCameraIndex - 1) % 4;
         cameraIndex = mVerCameraIndex;
     }
     else
@@ -282,13 +282,13 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
     quint8 cameraFrom = (cardIndex-1) * CAMNUMBER_DDR_PER + 1;
     quint8 cameraTo = cardIndex * CAMNUMBER_DDR_PER;
     quint8 cameraOrientation = 0;
-    quint8 currentNo = 0;//当前通道序号(0开始)
+    quint8 cameraNo = 0;//当前通道序号(0开始)
     if (mHorCameraIndex >= cameraFrom && mHorCameraIndex <= cameraTo){
-        currentNo = mHorCameraIndex - (cardIndex-1)*4;
+        cameraNo = (mHorCameraIndex - 1) % 4;
         cameraOrientation = CameraOrientation::Horizontal;
     }
     else if (mVerCameraIndex >= cameraFrom && mVerCameraIndex <= cameraTo){
-        currentNo = mVerCameraIndex - (cardIndex-1)*4;
+        cameraNo = (mVerCameraIndex - 1) % 4;
         cameraOrientation = CameraOrientation::Vertical;
     }
     else
@@ -308,7 +308,7 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
      * 保留位          0000 0000 0000
      * 包尾            FFCD
     */
-    //if (chunkHead.startsWith(QByteArray::fromHex("FFAB00D2")))
+    if (spectrumData.startsWith(QByteArray::fromHex("FFAB00D2")))
     {
         //数据包的其实时间戳/ns
         quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
@@ -326,29 +326,29 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
                 bool ok;
                 //能谱序号 高位16bi表示这是第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
                 QByteArray head = chunkHead.left(4);
-                quint32 serialNumber = qbswap(chunkHead.mid(4, 2).toHex().toUInt(&ok, 16));
+                quint32 serialNumber = chunkHead.mid(4, 2).toHex().toUInt(&ok, 16);
                 quint32 serialNumberRef = chunkHead.mid(6, 1).toInt();
-                quint16 time = qbswap(chunkHead.mid(7, 2).toHex().toUShort(&ok, 16));//测量时间
+                quint16 time = chunkHead.mid(7, 2).toHex().toUShort(&ok, 16);//测量时间
                 QByteArray reserve1 = chunkHead.mid(9, 7);
 
                 QByteArray chunkGamma = chunk.mid(16, 496);  //62*4*2
                 QByteArray chunkNeutron = chunk.mid(512, 496);
 
-                quint64 absoluteTime = qbswap(chunkTail.left(8).toHex().toUInt(&ok, 16));//绝对时间
+                quint64 absoluteTime = chunkTail.left(8).toHex().toUInt(&ok, 16);//绝对时间
                 QByteArray reserve2 = chunkTail.mid(1016, 6);
                 QByteArray tail = chunkTail.right(2);
 
                 //数据包的其实时间戳/ns
                 //quint64 timestamp = (serialNumber - 1) * 50 + serialNumberRef;
 
-                QByteArray gamma = chunkGamma.mid(currentNo*124, 124);
-                QByteArray neutron = chunkNeutron.mid(currentNo*124, 124);
+                QByteArray gamma = chunkGamma.mid(cameraNo*124, 124);
+                QByteArray neutron = chunkNeutron.mid(cameraNo*124, 124);
                 {
                     QVector<QPair<double, double>> data;
                     for (int j=0; j<gamma.size(); j+=2){
                         bool ok;
                         quint16 amplitude = gamma.mid(j, 2).toHex().toUShort(&ok, 16);
-                        data.append(qMakePair(j/2, qbswap(amplitude)));
+                        data.append(qMakePair(j/2, amplitude));
                     }
 
                     emit reportGammaSpectrum(i+1, cameraOrientation, data);
@@ -359,7 +359,7 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
                     for (int j=0; j<neutron.size(); j+=2){
                         bool ok;
                         quint16 amplitude = neutron.mid(j, 2).toHex().toUShort(&ok, 16);
-                        data.append(qMakePair(j/2, qbswap(amplitude)));
+                        data.append(qMakePair(j/2, amplitude));
                     }
 
                     emit reportNeutronSpectrum(i+1, cameraOrientation, data);
@@ -378,8 +378,13 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
  */
 void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint32 remainTime, QString filePath)
 {
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly)) return ;
+    QByteArray data = f.readAll();
+    f.close();
+
     //根据通道号计算对应采集卡的第几通道
-    // quint8 cameraNo = cameraIndex % 4 - 1;
+    quint8 cameraNo = (cameraIndex - 1) % 4;
 
     /* 能谱数据（总大小512*2B）
         * 包头           FFAB
@@ -393,7 +398,7 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint32 remainT
         * 保留位          0000 0000 0000
         * 包尾            FFCD
     */
-    /*if (data.startsWith(QByteArray::fromHex("FFAB00D2"))){
+    if (data.startsWith(QByteArray::fromHex("FFAB00D2"))){
         if (data.size() >= 1024){
             QByteArray chunk = data.left(1024);
 
@@ -440,7 +445,7 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint32 remainT
                 }
             }
         }
-    }*/
+    }
 }
 
 /**
@@ -620,7 +625,6 @@ bool PCIeCommSdk::openHistoryFile(QString filename)
     packIndex = numbers.at(1).toUInt();
     */
     analyzeHistoryWaveformData(mCameraIndex, mTimeLength, mRemainTime, filename);
-    // analyzeHistorySpectrumData(mCameraIndex, mRemainTime, filename);
     return true;
 
 }
@@ -816,10 +820,10 @@ void PCIeCommSdk::initialize()
     }
 }
 /**
- * WriteFileThread 数据写硬盘线程====================================================
+ * WriteFileThread 数据缓存/写硬盘线程====================================================
 */
 /**
-* @function name: WriteFileThread
+* @function name: DataCachPoolThread
 * @brief 构造函数
 * @param[in]    cardIndex 采集卡索引
 * @param[in]    hFile DDR内存句柄
@@ -830,8 +834,8 @@ void PCIeCommSdk::initialize()
 * @param[out]
 * @return
 */
-WriteFileThread::WriteFileThread(const quint32 index, const QString &saveFilePath)
-    : mIndex(index)
+DataCachPoolThread::DataCachPoolThread(const quint32 cardIndex, const QString &saveFilePath)
+    : mCardIndex(cardIndex)
     , mSaveFilePath(saveFilePath)
 {
 }
@@ -843,7 +847,7 @@ WriteFileThread::WriteFileThread(const quint32 index, const QString &saveFilePat
 * @param[out]
 * @return
 */
-void WriteFileThread::replyThreadExit()
+void DataCachPoolThread::replyThreadExit()
 {
     mTerminated = true;
     mElapsedTimer.start();
@@ -857,14 +861,14 @@ void WriteFileThread::replyThreadExit()
 * @param[out]
 * @return
 */
-void WriteFileThread::replyCaptureData(QByteArray& waveformData, QByteArray& spectrumData)
+void DataCachPoolThread::replyCaptureData(QByteArray& waveformData, QByteArray& spectrumData)
 {
     QMutexLocker locker(&mMutexWrite);
     spectrumData.append(waveformData);
     spectrumData.append(spectrumData);
 }
 
-void WriteFileThread::run()
+void DataCachPoolThread::run()
 {
     qRegisterMetaType<QByteArray>("QByteArray&");
 
@@ -882,6 +886,7 @@ void WriteFileThread::run()
                 tempPool.swap(mCachePool);
             }
             else{
+                //数据处理完了，超过3秒没数据过来表示已经录制完了
                 if (mTerminated && mElapsedTimer.elapsed() >= 3000)
                     break;
             }
@@ -897,7 +902,7 @@ void WriteFileThread::run()
             //写原始数据
             {
                 QByteArray data = tempPool.at(0);
-                QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mIndex).arg(mPackref);
+                QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mPackref);
                 HANDLE hfOutput = CreateFileA(filename.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
                 if (!hfOutput) {
                     qDebug() << "CreateFileA fail, win32 error code:" << GetLastError();
@@ -915,8 +920,10 @@ void WriteFileThread::run()
 
             //写能谱数据
             {
-                QByteArray data = tempPool.at(0);
-                QString filename = QString("%1/%2spec%3.bin").arg(mSaveFilePath).arg(mIndex).arg(mPackref);
+                QByteArray data = reverseArray(tempPool.at(0));
+                emit reportCaptureSpectrumData(mCardIndex, mPackref, data);
+
+                QString filename = QString("%1/%2spec%3.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mPackref);
                 HANDLE hfOutput = CreateFileA(filename.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
                 if (!hfOutput) {
                     qDebug() << "CreateFileA fail, win32 error code:" << GetLastError();
@@ -939,9 +946,20 @@ void WriteFileThread::run()
     }
 
     pool->waitForDone();
-    qDebug() << "destroyWriteFileThread id:" << this->currentThreadId();
+    qDebug() << "destroyDataCachPoolThread id:" << this->currentThreadId();
 }
 
+QByteArray DataCachPoolThread::reverseArray(const QByteArray& data)
+{
+    QByteArray result;
+    for (int i=0; i+16<=data.size(); i+=16){
+        QByteArray block = data.mid(i*16, 16);
+        std::reverse(block.begin(), block.end());
+        result.append(block);
+    }
+
+    return result;
+}
 /**
  * CaptureThread 采集数据线程====================================================
 */
@@ -968,10 +986,12 @@ CaptureThread::CaptureThread(const quint32 cardIndex, HANDLE hFile, HANDLE hUser
 {
     connect(this, &QThread::finished, this, &QThread::deleteLater);
 
-    mWriteFileThread = new WriteFileThread(mCardIndex, saveFilePath);
-    connect(this, QOverload<QByteArray&,QByteArray&>::of(&CaptureThread::reportCaptureData), mWriteFileThread, &WriteFileThread::replyCaptureData);
-    connect(this, &CaptureThread::reportThreadExit, mWriteFileThread, &WriteFileThread::replyThreadExit);
-    connect(mWriteFileThread, &WriteFileThread::reportFileWriteElapsedtime, this, &CaptureThread::reportFileWriteElapsedtime);
+    mDataCachPoolThread = new DataCachPoolThread(mCardIndex, saveFilePath);
+    connect(this, QOverload<QByteArray&,QByteArray&>::of(&CaptureThread::reportCaptureData), mDataCachPoolThread, &DataCachPoolThread::replyCaptureData);
+    connect(this, &CaptureThread::reportThreadExit, mDataCachPoolThread, &DataCachPoolThread::replyThreadExit);
+    connect(mDataCachPoolThread, &DataCachPoolThread::reportFileWriteElapsedtime, this, &CaptureThread::reportFileWriteElapsedtime);
+    connect(mDataCachPoolThread, &DataCachPoolThread::reportCaptureWaveformData, this, &CaptureThread::reportCaptureWaveformData);
+    connect(mDataCachPoolThread, &DataCachPoolThread::reportCaptureSpectrumData, this, &CaptureThread::reportCaptureSpectrumData);
 }
 
 void CaptureThread::run()
@@ -991,8 +1011,8 @@ void CaptureThread::run()
     quint32 packingDuration = 50; // 打包时长
     this->mCaptureRef = quint32((double)mCaptureTimeSeconds / 50.0 + 0.4);
 
-    //启动写文件线程
-    mWriteFileThread->start();
+    //启动数据缓存线程
+    mDataCachPoolThread->start();
 
     quint32 mPackref = 1; //打包次数
     bool firstQuery = true;
@@ -1021,7 +1041,7 @@ void CaptureThread::run()
         //读原始数据
         int size = 0x0BEBC200;
         QByteArray waveformData(size, 0);
-        if (readRawData(waveformData)){
+        if (readWaveformData(waveformData)){
 
         }
 
@@ -1040,14 +1060,12 @@ void CaptureThread::run()
         if (!resetReadflag())
             break;
 
-        emit reportCaptureData(waveformData, spectrumData); //发给写文件线程
-        //emit reportCaptureWaveformData(mCardIndex, mPackref, waveformData);//发给数据分析
-        emit reportCaptureSpectrumData(mCardIndex, mPackref, spectrumData);//发给数据分析
+        emit reportCaptureData(waveformData, spectrumData); //发给数据缓存处理线程
 
         if (mPackref++ >= this->mCaptureRef){
             emit reportThreadExit(mCardIndex);
-            mWriteFileThread->wait();
-            mWriteFileThread->deleteLater();
+            mDataCachPoolThread->wait();
+            mDataCachPoolThread->deleteLater();
             break;
         }
 
@@ -1240,13 +1258,13 @@ bool CaptureThread::resetReadflag()
 }
 
 /**
-* @function name:readRawData
+* @function name:readWaveformData
 * @brief 从DDR读波形原始数据
 * @param[in]        data
 * @param[out]       data
 * @return           void
 */
-bool CaptureThread::readRawData(QByteArray& data)
+bool CaptureThread::readWaveformData(QByteArray& data)
 {
     DWORD nNumberOfBytesToRead = 0x0BEBC200;//200000000
     DWORD nNumberOfBytesRead = 0;
