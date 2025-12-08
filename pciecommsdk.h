@@ -305,7 +305,7 @@ public:
     
     void analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLength, quint32 remainTime, QString filePath);
     
-    void analyzeHistorySpectrumData(quint8 cameraIndex, quint32 remainTime, QString filePath);
+    void analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
 
     bool switchPower(quint32, bool);
     bool switchVoltage(quint32, bool);

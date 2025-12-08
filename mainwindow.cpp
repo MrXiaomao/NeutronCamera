@@ -1766,7 +1766,7 @@ void MainWindow::on_pushButton_preview_clicked()
                 quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
                 quint32 deviceIndex = (cameraIndex + 3) / 4;
                 QString filePath = QString("%1/%2data%3.bin").arg(this->mCurrentSavePath).arg(deviceIndex).arg(fileIndex);
-                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, mTimestampMs[i]%50, filePath);
+                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, i+1, mTimestampMs[i]%50, filePath);
             }
 
             //t1-垂直相机
@@ -1774,7 +1774,7 @@ void MainWindow::on_pushButton_preview_clicked()
                 quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
                 quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
                 QString filePath = QString("%1/%2data%3.bin").arg(this->mCurrentSavePath).arg(deviceIndex).arg(fileIndex);
-                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, mTimestampMs[i]%50, filePath);
+                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, i+1, mTimestampMs[i]%50, filePath);
             }
         }
     }
