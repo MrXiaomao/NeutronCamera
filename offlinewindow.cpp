@@ -2,7 +2,6 @@
 #include "ui_offlinewindow.h"
 #include "globalsettings.h"
 #include "datacompresswindow.h"
-#include "H5Cpp.h"
 #include "n_gamma.h"
 
 OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
@@ -669,6 +668,8 @@ void OfflineWindow::on_action_analyze_triggered()
             return;
         }
 
+        qApp->setOverrideCursor(QCursor(Qt::WaitCursor));
+
         int time_per = 50;
         if (ui->cmb_fileTime->currentText() == "50ms") {
             time_per = 50;
@@ -785,6 +786,8 @@ void OfflineWindow::on_action_analyze_triggered()
 
         // 调用 PSDPlot 绘制图表
         emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Horizontal, curveData);
+
+        qApp->restoreOverrideCursor();
         return;
     }
 
@@ -1518,6 +1521,14 @@ void OfflineWindow::PSDPlot(quint8 cameraOrientation, QVector<double> psd_x, QVe
     }
 
     // setData 需要 double 类型的数据，第三个参数是 QColor 向量
+    double max_x = *std::max_element(std::begin(psd_x), std::end(psd_x));
+    double min_x = *std::min_element(std::begin(psd_x), std::end(psd_x));
+    double max_y = *std::max_element(std::begin(psd_y), std::end(psd_y));
+    double min_y = *std::min_element(std::begin(psd_y), std::end(psd_y));
+    colorMap->data()->setRange(QCPRange(min_x, max_x), QCPRange(min_y, max_y));
+    customPlot->xAxis->rescale(true);
+    customPlot->yAxis->rescale(true);
+
     customPlot->graph(0)->setData(psd_x, psd_y, z);
     customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
 }

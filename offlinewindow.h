@@ -39,6 +39,7 @@ public:
 
     void initUi();
     void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
+    void setCheckBoxHelper(QCustomPlot* customPlot);
 
     bool loadOfflineFilename(const QString&);
     void loadRelatedFiles(const QString& src);

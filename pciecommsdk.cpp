@@ -26,10 +26,6 @@ PCIeCommSdk::~PCIeCommSdk()
 
 QStringList PCIeCommSdk::enumDevices()
 {
-#ifdef QT_DEBUG
-    return QStringList() << tr("模拟设备#1") << tr("模拟设备#2") << tr("模拟设备#3") << tr("模拟设备#4");
-#endif
-
     const GUID guid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}};
     QStringList lstDevices;
     HDEVINFO device_info = SetupDiGetClassDevsA((LPGUID)&guid, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
@@ -312,9 +308,9 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
     {
         //数据包的其实时间戳/ns
         quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
-        for (quint8 i=0; i<=2; ++i){
-            quint32 packIndex = mTimestampMs[i] / 50 + 1;
-            quint32 packPos = mTimestampMs[i] % 50;
+        for (quint8 timeIndex=1; timeIndex<=3; ++timeIndex){
+            quint32 packIndex = mTimestampMs[timeIndex-1] / 50 + 1;
+            quint32 packPos = mTimestampMs[timeIndex-1] % 50;
             if (currentPackIndex == packIndex){
                 QByteArray chunk = spectrumData.mid(packPos*1024, 1024);
 
@@ -351,7 +347,7 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
                         data.append(qMakePair(j/2, amplitude));
                     }
 
-                    emit reportGammaSpectrum(i+1, cameraOrientation, data);
+                    emit reportGammaSpectrum(timeIndex, cameraOrientation, data);
                 }
 
                 {
@@ -362,7 +358,7 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
                         data.append(qMakePair(j/2, amplitude));
                     }
 
-                    emit reportNeutronSpectrum(i+1, cameraOrientation, data);
+                    emit reportNeutronSpectrum(timeIndex, cameraOrientation, data);
                 }
             }
         }
@@ -385,7 +381,15 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeInde
 
     //根据通道号计算对应采集卡的第几通道
     quint8 cameraNo = (cameraIndex - 1) % 4;
-
+    quint8 cameraOrientation = 0;
+    if (cameraIndex >= 1 && cameraIndex <= 11){
+        cameraOrientation = CameraOrientation::Horizontal;
+    }
+    else if (cameraIndex >= 12 && cameraIndex <= 18){
+        cameraOrientation = CameraOrientation::Vertical;
+    }
+    else
+        return;
     /* 能谱数据（总大小512*2B）
         * 包头           FFAB
         * 数据类型        00D2
@@ -399,8 +403,11 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeInde
         * 包尾            FFCD
     */
     if (spectrumData.startsWith(QByteArray::fromHex("FFAB00D2"))){
-        if (spectrumData.size() >= 1024){
-            QByteArray chunk = spectrumData.left(1024);
+        if (spectrumData.size() >= 1024*50){
+            quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
+            quint32 packIndex = mTimestampMs[timeIndex-1] / 50 + 1;
+            quint32 packPos = mTimestampMs[timeIndex-1] % 50;
+            QByteArray chunk = spectrumData.mid(packPos*1024, 1024);
 
             bool ok;
             //能谱序号 高位16bi表示这是第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
@@ -409,8 +416,8 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeInde
             quint32 serialNumberRef = chunk.mid(6, 1).toInt();
             quint16 time = chunk.mid(7, 2).toHex().toUShort(&ok, 16);//测量时间
             QByteArray reserve1 = chunk.mid(9, 7);
-            QByteArray gamma = chunk.mid(16, 496);  //62*4*2
-            QByteArray neutron = chunk.mid(512, 496);
+            QByteArray chunkgamma = chunk.mid(16, 496);  //62*4*2
+            QByteArray chunkneutron = chunk.mid(512, 496);
             quint64 absoluteTime = chunk.mid(1008, 8).toHex().toUInt(&ok, 16);//绝对时间
             QByteArray reserve2 = chunk.mid(1016, 6);
             QByteArray tail = chunk.right(2);
@@ -419,8 +426,8 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeInde
             //quint64 timestamp = (serialNumber - 1) * 50 + serialNumberRef;
             //if (timestamp == mTimestampMs1)
             {
-                QByteArray gamma = chunk.mid(cameraNo*124, 124);
-                QByteArray neutron = chunk.mid(cameraNo*124, 124);
+                QByteArray gamma = chunkgamma.mid(cameraNo*124, 124);
+                QByteArray neutron = chunkgamma.mid(cameraNo*124, 124);
                 {
                     QVector<QPair<double, double>> data;
                     for (int i=0; i<gamma.size(); i+=2){
@@ -863,8 +870,8 @@ void DataCachPoolThread::replyThreadExit()
 void DataCachPoolThread::replyCaptureData(QByteArray& waveformData, QByteArray& spectrumData)
 {
     QMutexLocker locker(&mMutexWrite);
-    spectrumData.append(waveformData);
-    spectrumData.append(spectrumData);
+    mCachePool.append(waveformData);
+    mCachePool.append(spectrumData);
 }
 
 void DataCachPoolThread::run()
@@ -951,7 +958,7 @@ void DataCachPoolThread::run()
 QByteArray DataCachPoolThread::reverseArray(const QByteArray& data)
 {
     QByteArray result;
-    for (int i=0; i+16<=data.size(); i+=16){
+    for (int i=0; i+16<=data.size()/16; ++i){
         QByteArray block = data.mid(i*16, 16);
         std::reverse(block.begin(), block.end());
         result.append(block);
