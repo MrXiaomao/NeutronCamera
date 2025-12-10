@@ -482,7 +482,7 @@ void DataAnalysisWorker::getValidWave()
     int totalBoards = 6;
     int processedBoards = 0;
     
-    for(int j=1; j<=6; ++j) {
+    for(int deviceIndex=1; deviceIndex<=6; ++deviceIndex) {
         {
             QMutexLocker locker(&mMutex);
             if (mCancelled) {
@@ -492,7 +492,7 @@ void DataAnalysisWorker::getValidWave()
             }
         }
 
-        emit logMessage(QString("开始处理板卡%1的数据...").arg(j), QtInfoMsg);
+        emit logMessage(QString("开始处理板卡%1的数据...").arg(deviceIndex), QtInfoMsg);
 
         //对每个通道的有效波形数据进行合并
         QVector<std::array<qint16, 512>> wave_ch0_all;
@@ -503,6 +503,42 @@ void DataAnalysisWorker::getValidWave()
         int totalFiles = endFile - startFile;
         int processedFiles = 0;
         
+#if 1
+        QThreadPool* pool = QThreadPool::globalInstance();
+        pool->setMaxThreadCount(QThread::idealThreadCount());
+        QMutex mutex;
+        for (int fileID = startFile; fileID < endFile; ++fileID) {
+            QString fileName = QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
+            QString filePath = QDir(dataDir).filePath(fileName);
+            quint32 packerStartTime;
+            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex, 0,
+                packerStartTime,
+                threshold,
+                pre_points,
+                post_points,
+                filePath,
+                [&](quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>& wave_ch){
+                    QMutexLocker locker(&mutex);
+                    if (channelIndex == 1)
+                        wave_ch0_all.append(wave_ch);
+                    else if (channelIndex == 2)
+                        wave_ch1_all.append(wave_ch);
+                    else if (channelIndex == 3)
+                        wave_ch2_all.append(wave_ch);
+                    else if (channelIndex == 4)
+                        wave_ch3_all.append(wave_ch);
+
+                    // 发送进度更新
+                    if (channelIndex == 4){
+                        int totalProgress = totalBoards * totalFiles;
+                        int currentProgress = (processedBoards * totalFiles) + processedFiles;
+                        emit progressUpdated(currentProgress, totalProgress);
+                    }
+                });
+            pool->start(task);
+        }
+        pool->waitForDone();
+#else
         for (int fileID = startFile; fileID < endFile; ++fileID) {
             {
                 QMutexLocker locker(&mMutex);
@@ -513,24 +549,24 @@ void DataAnalysisWorker::getValidWave()
                 }
             }
 
-            QString fileName = QString("%1data%2.bin").arg(j).arg(fileID);
+            QString fileName = QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
             QString filePath = QDir(dataDir).filePath(fileName);
             QVector<qint16> ch0, ch1, ch2, ch3;
             if (!readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)) {
-                emit logMessage(QString("板卡%1 文件%2: 读取失败或文件不存在").arg(j).arg(fileName), QtWarningMsg);
+                emit logMessage(QString("板卡%1 文件%2: 读取失败或文件不存在").arg(deviceIndex).arg(fileName), QtWarningMsg);
                 continue;
             }
             processedFiles++;
 
             //扣基线，调整数据
             qint16 baseline_ch = calculateBaseline(ch0);
-            adjustDataWithBaseline(ch0, baseline_ch, j, 1);
+            adjustDataWithBaseline(ch0, baseline_ch, deviceIndex, 1);
             qint16 baseline_ch2 = calculateBaseline(ch1);
-            adjustDataWithBaseline(ch1, baseline_ch2, j, 2);
+            adjustDataWithBaseline(ch1, baseline_ch2, deviceIndex, 2);
             qint16 baseline_ch3 = calculateBaseline(ch2);
-            adjustDataWithBaseline(ch2, baseline_ch3, j, 3);
+            adjustDataWithBaseline(ch2, baseline_ch3, deviceIndex, 3);
             qint16 baseline_ch4 = calculateBaseline(ch3);
-            adjustDataWithBaseline(ch3, baseline_ch4, j, 4);
+            adjustDataWithBaseline(ch3, baseline_ch4, deviceIndex, 4);
 
             //提取有效波形
             QVector<std::array<qint16, 512>> wave_ch0 = overThreshold(ch0, 1, threshold, pre_points, post_points);
@@ -549,18 +585,19 @@ void DataAnalysisWorker::getValidWave()
             int currentProgress = (processedBoards * totalFiles) + processedFiles;
             emit progressUpdated(currentProgress, totalProgress);
         }
+#endif
 
-        emit logMessage(QString("板卡%1: 已处理 %2/%3 个文件").arg(j).arg(processedFiles).arg(totalFiles), QtInfoMsg);
+        emit logMessage(QString("板卡%1: 已处理 %2/%3 个文件").arg(deviceIndex).arg(processedFiles).arg(totalFiles), QtInfoMsg);
 
         // 存储有效波形数据到HDF5文件
-        emit logMessage(QString("正在写入板卡%1的波形数据...").arg(j), QtInfoMsg);
-        if (!writeWaveformToHDF5(hdf5FilePath, j, wave_ch0_all, wave_ch1_all, wave_ch2_all, wave_ch3_all)) {
-            emit logMessage(QString("写入板卡%1的波形数据失败，请检查文件路径和权限").arg(j), QtCriticalMsg);
-            emit analysisFinished(false, QString("写入板卡%1的波形数据失败").arg(j));
+        emit logMessage(QString("正在写入板卡%1的波形数据...").arg(deviceIndex), QtInfoMsg);
+        if (!writeWaveformToHDF5(hdf5FilePath, deviceIndex, wave_ch0_all, wave_ch1_all, wave_ch2_all, wave_ch3_all)) {
+            emit logMessage(QString("写入板卡%1的波形数据失败，请检查文件路径和权限").arg(deviceIndex), QtCriticalMsg);
+            emit analysisFinished(false, QString("写入板卡%1的波形数据失败").arg(deviceIndex));
             return;
         } else {
             emit logMessage(QString("板卡%1写入成功: 通道0=%2个波形, 通道1=%3个波形, 通道2=%4个波形, 通道3=%5个波形")
-                        .arg(j)
+                        .arg(deviceIndex)
                         .arg(wave_ch0_all.size())
                         .arg(wave_ch1_all.size())
                         .arg(wave_ch2_all.size())
@@ -1115,13 +1152,14 @@ QStringList DataCompressWindow::loadRelatedFiles(const QString& dirPath)
             );
     }
 
+    QLocale locale(QLocale::English);
     for (int i = 0; i < fileCount; ++i) {
         const QFileInfo& fi = fileinfoList.at(i);
 
         auto *itemName = new QTableWidgetItem(fi.fileName());
         itemName->setFlags(itemName->flags() ^ Qt::ItemIsEditable);
 
-        auto *itemBytes = new QTableWidgetItem(QString::number(fi.size()));
+        auto *itemBytes = new QTableWidgetItem(locale.toString(fi.size()));
         itemBytes->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
         itemBytes->setFlags(itemBytes->flags() ^ Qt::ItemIsEditable);
 
@@ -1182,6 +1220,9 @@ QString DataCompressWindow::humanReadableSize(qint64 bytes)
 }
 
 // 从目录获取所有.bin文件列表（按名称排序）
+#include <QFileInfoList>
+#include <QRegularExpression>
+#include <algorithm>
 QFileInfoList DataCompressWindow::getBinFileList(const QString& dirPath)
 {
     QFileInfoList fileinfoList;
@@ -1197,10 +1238,23 @@ QFileInfoList DataCompressWindow::getBinFileList(const QString& dirPath)
     fileinfoList = dir.entryInfoList(
         filters,
         QDir::Files | QDir::NoSymLinks,   // 只要文件
-        QDir::Name | QDir::IgnoreCase     // 名称排序（忽略大小写）
+        QDir::Unsorted    // 不排序了，后面手动排序
     );
 
-    return fileinfoList;
+    // 过滤掉能谱文件
+    QFileInfoList result;
+    for (auto item : fileinfoList){
+        if (item.fileName().contains("data"))
+            result.append(item);
+    }
+
+    QCollator collator;
+    collator.setNumericMode(true);
+    auto compareFilename = [&](const QFileInfo& A, const QFileInfo& B){
+        return collator.compare(A.fileName(), B.fileName()) < 0;
+    };
+    std::sort(result.begin(), result.end(), compareFilename);
+    return result;
 }
 
 // 计算文件信息列表的总大小

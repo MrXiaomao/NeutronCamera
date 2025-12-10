@@ -618,27 +618,31 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
 {
     ui->tableWidget_file->setRowCount(0);
 
-    //对目录下的配置文件信息进行解析，里面包含了炮号、测试开始时间、测量时长、以及探测器类型
-
-    QDir dir(dirPath);
-    if (dir.exists()) {
-        dir.setFilter(QDir::Files);
-        dir.setNameFilters(QStringList() << "*.bin");
-        QStringList binFiles = dir.entryList();
-        foreach (const QString &dirPath, binFiles) {
-            // 这里应该对文件进一步解析，得到时间范围
-
-            int row = ui->tableWidget_file->rowCount();
-            ui->tableWidget_file->insertRow(row);
-            ui->tableWidget_file->setItem(row, 0, new QTableWidgetItem(QFileInfo(dirPath).fileName()));
-        }
-    }
-
     // 使用静态函数获取.bin文件列表
     QFileInfoList fileinfoList = DataCompressWindow::getBinFileList(dirPath);
+    // 过滤掉能谱文件
+    QFileInfoList result;
+    for (auto item : fileinfoList){
+        if (item.fileName().contains("data"))
+            result.append(item);
+    }
 
+    QCollator collator;
+    collator.setNumericMode(true);
+    auto compareFilename = [&](const QFileInfo& A, const QFileInfo& B){
+        return collator.compare(A.fileName(), B.fileName()) < 0;
+    };
+    std::sort(result.begin(), result.end(), compareFilename);
+
+    for (int i = 0; i < result.size(); ++i) {
+        const QFileInfo& fi = result.at(i);
+
+        int row = ui->tableWidget_file->rowCount();
+        ui->tableWidget_file->insertRow(row);
+        ui->tableWidget_file->setItem(row, 0, new QTableWidgetItem(fi.fileName()));
+    }
     // 使用静态函数提取文件名列表
-    mfileList = DataCompressWindow::extractFileNames(fileinfoList);
+    mfileList = DataCompressWindow::extractFileNames(result);
 
     //统计测量时长，选取光纤口1数据来统计
     int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "1data");
@@ -697,7 +701,9 @@ void OfflineWindow::on_action_analyze_triggered()
         //获取水平相机序号
         quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
         quint32 deviceIndex = (cameraIndex + 3) / 4;
-        
+        //根据相机序号计算出是第几块光纤卡
+        int channelIndex = (cameraIndex - 1) % 4 + 1;// 1、2、3、4
+
         emit reporWriteLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
         emit reporWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         
@@ -709,12 +715,13 @@ void OfflineWindow::on_action_analyze_triggered()
         QMutex mutex;
         for(int i = fileIndex; i <= endFileIndex; i++){
             QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
-            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(cameraIndex,
+            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex,
+                    cameraIndex, 0,
                     threshold,
                     pre_points,
                     post_points,
                     filePath,
-                    [&](QVector<std::array<qint16, 512>>& wave_ch){
+                    [&](quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>& wave_ch){
                 QMutexLocker locker(&mutex);
                 ch_all_valid_wave.append(wave_ch);
             });
@@ -738,38 +745,35 @@ void OfflineWindow::on_action_analyze_triggered()
                 continue;
             }
 
-            //2、提取通道号的数据cameraNo
-            //根据相机序号计算出是第几块光纤卡
-            int board_index = (cameraIndex-1)/4+1;
-            int ch_channel = cameraIndex % 4;
-            if (ch_channel == 1) {
+            //2、提取通道号的数据cameraNo                        
+            if (channelIndex == 1) {
                 //3、扣基线，调整数据
                 qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
-                DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
+                DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, deviceIndex, 1);
                 
                 //4、提取有效波形数据
                 QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
                 ch_all_valid_wave.append(wave_ch);
-            } else if (ch_channel == 2) {
+            } else if (channelIndex == 2) {
                 //3、扣基线，调整数据
                 qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
-                DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
+                DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, deviceIndex, 2);
                 
                 //4、提取有效波形数据
                 QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
                 ch_all_valid_wave.append(wave_ch);
-            } else if (ch_channel == 3) {
+            } else if (channelIndex == 3) {
                 //3、扣基线，调整数据
                 qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
-                DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
+                DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, deviceIndex, 3);
                 
                 //4、提取有效波形数据
                 QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
                 ch_all_valid_wave.append(wave_ch);
-            } else if (ch_channel == 4) {
+            } else if (channelIndex == 4) {
                 //3、扣基线，调整数据
                 qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
-                DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
+                DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, deviceIndex, 4);
 
                 //4、提取有效波形数据
                 QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);

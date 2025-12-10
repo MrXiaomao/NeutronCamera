@@ -10,7 +10,6 @@
 #include <array>
 
 #include "QGoodWindowHelper"
-#include "pciecommsdk.h"
 
 namespace Ui {
 class DataCompressWindow;
@@ -108,6 +107,121 @@ private:
     
     QMutex mMutex;
     bool mCancelled;
+};
+
+/**
+* @提取有效波形
+*/
+class ExtractValidWaveformTask : public QObject, public QRunnable{
+    Q_OBJECT
+public:
+    // explicit ExtractValidWaveformTask(const quint8& cameraIndex,
+    //                                   int threshold,
+    //                                   int pre_points,
+    //                                   int post_points,
+    //                                   const QString& filePath,
+    //                                   std::function<void(quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>&)> callback)
+    //     : mFilePath(filePath)
+    //     , mThreshold(threshold)
+    //     , mPre_points(pre_points)
+    //     , mPost_points(post_points)
+    //     , mCameraIndex(cameraIndex)
+    //     , mWaveformCallback(callback)
+    // {
+    //     this->setAutoDelete(true);
+    // }
+
+    explicit ExtractValidWaveformTask(const quint8& deviceIndex,
+                                      const quint8& cameraIndex,//0-表示所有通道
+                                      const quint32& packerStartTime,
+                                      int threshold,
+                                      int pre_points,
+                                      int post_points,
+                                      const QString& filePath,
+                                      std::function<void(quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>&)> callback)
+        : mDeviceIndex(deviceIndex)
+        , mCameraIndex(cameraIndex)
+        , mFilePath(filePath)
+        , mThreshold(threshold)
+        , mPre_points(pre_points)
+        , mPost_points(post_points)
+        , mPackerStartTime(packerStartTime)
+        , mWaveformCallback(callback)
+    {
+        this->setAutoDelete(true);
+    }
+
+    void run() override{
+        if(!QFileInfo::exists(mFilePath)){
+            return;
+        }
+
+        QVector<qint16> ch0, ch1, ch2, ch3;
+        if(!DataAnalysisWorker::readBin4Ch_fast(mFilePath, ch0, ch1, ch2, ch3, true)){
+            return;
+        }
+
+        QVector<std::array<qint16, 512>> mWaveform;
+        int threshold = mThreshold;
+        int pre_points = mPre_points;
+        int post_points = mPost_points;
+
+        //2、提取通道号的数据channelIndex
+        //根据相机序号计算出是第几块光纤卡
+        int channelIndex = 0;//0-表示提取所有通道波形
+        if (mCameraIndex != 0){
+            mDeviceIndex = (mCameraIndex-1) / 4 + 1;
+            channelIndex = (mCameraIndex - 1) % 4 + 1;// 1、2、3、4
+        }
+
+        quint32 packerCurrentTime = 0;
+        if (channelIndex == 1 || mCameraIndex == 0) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
+            DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, mDeviceIndex, 1);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
+            mWaveformCallback(packerCurrentTime, 1, wave_ch);
+        }
+        if (channelIndex == 2 || mCameraIndex == 0) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
+            DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, mDeviceIndex, 2);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
+            mWaveformCallback(packerCurrentTime, 2, wave_ch);
+        }
+        if (channelIndex == 3 || mCameraIndex == 0) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
+            DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, mDeviceIndex, 3);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
+            mWaveformCallback(packerCurrentTime, 3, wave_ch);
+        }
+        if (channelIndex == 4 || mCameraIndex == 0) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
+            DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, mDeviceIndex, 4);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);
+            mWaveformCallback(packerCurrentTime, 4, wave_ch);
+        }
+    }
+
+private:
+    QString mFilePath;
+    quint8 mCameraIndex;
+    quint8 mDeviceIndex;
+    quint32 mPackerStartTime;
+    int mThreshold;
+    int mPre_points;
+    int mPost_points;
+    std::function<void(quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>&)> mWaveformCallback;
 };
 
 class QCustomPlot;
