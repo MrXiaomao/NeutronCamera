@@ -43,6 +43,7 @@ public:
     void initUi();
     void restoreSettings();
     void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
+    void setCheckBoxHelper(QCustomPlot* customPlot);
     void applyColorTheme();
 
     qint64 getDiskFreeSpace(const QString& disk = "C:/");

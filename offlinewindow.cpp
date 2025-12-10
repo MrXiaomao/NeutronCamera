@@ -322,8 +322,11 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
             graph->selectionDecorator()->setPen(QPen(colors[i]));
             graph->setLineStyle(QCPGraph::lsLine);
             graph->setSelectable(QCP::SelectionType::stNone);
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
             graph->setName(title[i]);
         }
+
+        setCheckBoxHelper(customPlot);
     }
     else if (customPlot == ui->spectroMeter_waveform_LSD){
         customPlot->xAxis->setRange(0, 2048);
@@ -339,8 +342,11 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
             graph->selectionDecorator()->setPen(QPen(colors[i]));
             graph->setLineStyle(QCPGraph::lsLine);
             graph->setSelectable(QCP::SelectionType::stNone);
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
             graph->setName(title[i]);
         }
+
+        setCheckBoxHelper(customPlot);
     }
     else if (customPlot == ui->spectroMeter_spectrum_LSD){
         customPlot->xAxis->setRange(0, 2048);
@@ -356,38 +362,11 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
             graph->selectionDecorator()->setPen(QPen(colors[i]));
             graph->setLineStyle(QCPGraph::lsLine);
             graph->setSelectable(QCP::SelectionType::stNone);
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
             graph->setName(title[i]);
         }
-#if 0
-        customPlot->legend->setVisible(false);
-        //添加可选项
-        static int index = 0;
-        for (int i=0; i<2; ++i){
-            QCheckBox* checkBox = new QCheckBox(customPlot);
-            checkBox->setText(title[i]);
-            checkBox->setObjectName(tr(""));
-            QIcon actionIcon = roundPixmap(QSize(16,16), colors[i]);
-            checkBox->setIcon(actionIcon);
-            checkBox->setProperty("index", i+1);
-            checkBox->setChecked(true);
-            connect(checkBox, &QCheckBox::stateChanged, this, [=](int state){
-                int index = checkBox->property("index").toInt();
-                QCPGraph *graph = customPlot->graph(i);
-                if (graph){
-                    graph->setVisible(Qt::CheckState::Checked == state ? true : false);
-                    customPlot->replot();
-                }
-            });
-        }
-        connect(customPlot, &QCustomPlot::afterLayout, this, [=](){
-            QCustomPlot* customPlot = qobject_cast<QCustomPlot*>(sender());
-            QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
-            int i = 0;
-            for (auto checkBox : checkBoxs){
-                checkBox->move(customPlot->axisRect()->topRight().x() - 120, customPlot->axisRect()->topRight().y() + i++ * 20 + 10);
-            }
-        });
-#endif
+
+        setCheckBoxHelper(customPlot);
     }
     else if (customPlot == ui->spectroMeter_horCamera_PSD || customPlot == ui->spectroMeter_verCamera_PSD){
         QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
@@ -459,6 +438,40 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
     // 是否允许X轴自适应缩放
     connect(customPlot, SIGNAL(mousePress(QMouseEvent*)), this, SLOT(slotShowTracer(QMouseEvent*)));
     connect(customPlot, SIGNAL(mouseRelease(QMouseEvent*)), this, SLOT(slotRestorePlot(QMouseEvent*)));
+}
+
+void OfflineWindow::setCheckBoxHelper(QCustomPlot* customPlot)
+{
+    customPlot->legend->setVisible(false);
+    //添加可选项
+    static int index = 0;
+    for (int i=0; i<2; ++i){
+        QCheckBox* checkBox = new QCheckBox(customPlot);
+        checkBox->setText(customPlot->graph(i)->name());
+        checkBox->setObjectName(tr(""));
+        QIcon actionIcon = roundPixmap(QSize(16,16), customPlot->graph(i)->pen().color());
+        checkBox->setIcon(actionIcon);
+        checkBox->setProperty("index", i+1);
+        checkBox->setChecked(true);
+        connect(checkBox, &QCheckBox::stateChanged, this, [=](int state){
+            int index = checkBox->property("index").toInt();
+            QCPGraph *graph = customPlot->graph(i);
+            if (graph){
+                graph->setVisible(Qt::CheckState::Checked == state ? true : false);
+                customPlot->replot();
+            }
+        });
+    }
+    connect(customPlot, &QCustomPlot::afterLayout, this, [=](){
+        QCustomPlot* customPlot = qobject_cast<QCustomPlot*>(sender());
+        QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
+        QFontMetrics fontMetrics(customPlot->font());
+        int avg_height = fontMetrics.ascent() + fontMetrics.descent();
+        int i = 0;
+        for (auto checkBox : checkBoxs){
+            checkBox->move(customPlot->axisRect()->left() + 10, customPlot->axisRect()->topRight().y() + i++ * avg_height + 5);
+        }
+    });
 }
 
 void OfflineWindow::closeEvent(QCloseEvent *event) {
@@ -689,7 +702,28 @@ void OfflineWindow::on_action_analyze_triggered()
         emit reporWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         
         // 提取该通道有效波形数据，并进行合并
+        QElapsedTimer elapsedTimer;
+        elapsedTimer.start();
         QVector<std::array<qint16, 512>> ch_all_valid_wave;
+#if 1
+        QThreadPool* pool = QThreadPool::globalInstance();
+        pool->setMaxThreadCount(QThread::idealThreadCount());
+        QMutex mutex;
+        for(int i = fileIndex; i <= endFileIndex; i++){
+            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
+            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(cameraIndex,
+                    threshold,
+                    pre_points,
+                    post_points,
+                    filePath,
+                    [&](QVector<std::array<qint16, 512>>& wave_ch){
+                QMutexLocker locker(&mutex);
+                ch_all_valid_wave.append(wave_ch);
+            });
+            pool->start(task);
+        }
+        pool->waitForDone();
+#else
         for(int i = fileIndex; i <= endFileIndex; i++){
             QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
             if(!QFileInfo::exists(filePath)){
@@ -744,7 +778,8 @@ void OfflineWindow::on_action_analyze_triggered()
                 ch_all_valid_wave.append(wave_ch);
             }
         }
-        
+#endif
+        qDebug() << "elapsedTimer=" << elapsedTimer.elapsed();
         n_gamma neutron;
         //计算PSD
         QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);

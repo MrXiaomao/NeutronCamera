@@ -1097,7 +1097,7 @@
              </size>
             </property>
             <property name="text">
-             <string>开始分析</string>
+             <string>开始解析</string>
             </property>
             <property name="icon">
              <iconset>
@@ -1271,7 +1271,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">

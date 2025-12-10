@@ -5,6 +5,7 @@
 
 #include "QGoodWindowHelper"
 #include "pciecommsdk.h"
+#include "datacompresswindow.h"
 
 namespace Ui {
 class OfflineWindow;
@@ -119,4 +120,99 @@ private:
     void applyColorTheme();
 };
 
+#if 1
+/**
+* @提取有效波形
+*/
+#include <QMutex>
+class ExtractValidWaveformTask : public QObject, public QRunnable{
+    Q_OBJECT
+public:
+    explicit ExtractValidWaveformTask(const quint8& cameraIndex,
+                                      int threshold,
+                                      int pre_points,
+                                      int post_points,
+                                      const QString& filePath,
+                                      std::function<void(QVector<std::array<qint16, 512>>&)> callback)
+        : mFilePath(filePath)
+        , mThreshold(threshold)
+        , mPre_points(pre_points)
+        , mPost_points(post_points)
+        , mCameraIndex(cameraIndex)
+        , mWaveformCallback(callback)
+    {
+        this->setAutoDelete(true);
+        qRegisterMetaType<std::array<qint16,512>>("std::array<qint16,512>");
+        qRegisterMetaType<QVector<std::array<qint16,512>>>("QVector<std::array<qint16,512>>&");
+    }
+
+    void run() override{
+        if(!QFileInfo::exists(mFilePath)){
+            return;
+        }
+
+        QVector<qint16> ch0, ch1, ch2, ch3;
+        if(!DataAnalysisWorker::readBin4Ch_fast(mFilePath, ch0, ch1, ch2, ch3, true)){
+            return;
+        }
+
+        QVector<std::array<qint16, 512>> mWaveform;
+        int threshold = mThreshold;
+        int pre_points = mPre_points;
+        int post_points = mPost_points;
+
+        //2、提取通道号的数据cameraNo
+        //根据相机序号计算出是第几块光纤卡
+        int board_index = (mCameraIndex-1)/4+1;
+        int ch_channel = mCameraIndex % 4;
+        if (ch_channel == 1) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
+            DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
+            //emit reportWaveform(wave_ch);
+            mWaveformCallback(wave_ch);
+        } else if (ch_channel == 2) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
+            DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
+            //emit reportWaveform(wave_ch);
+            mWaveformCallback(wave_ch);
+        } else if (ch_channel == 3) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
+            DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
+            //emit reportWaveform(wave_ch);
+            mWaveformCallback(wave_ch);
+        } else if (ch_channel == 4) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
+            DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);
+            //emit reportWaveform(wave_ch);
+            mWaveformCallback(wave_ch);
+        }
+    }
+
+    Q_SIGNAL void reportWaveform(QVector<std::array<qint16, 512>>&);
+
+private:
+    QString mFilePath;
+    quint8 mCameraIndex;
+    int mThreshold;
+    int mPre_points;
+    int mPost_points;
+    std::function<void(QVector<std::array<qint16, 512>>&)> mWaveformCallback;
+};
+#endif
 #endif // OFFLINEWINDOW_H

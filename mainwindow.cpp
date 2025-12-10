@@ -875,8 +875,11 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->selectionDecorator()->setPen(QPen(colors[i]));
             graph->setLineStyle(QCPGraph::lsLine);
             graph->setSelectable(QCP::SelectionType::stNone);
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
             graph->setName(title[i]);
         }
+
+        setCheckBoxHelper(customPlot);
     }
     else if (customPlot == ui->spectroMeter_neutronSpectrum){
         customPlot->xAxis->setRange(0, 2048);
@@ -892,8 +895,11 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->selectionDecorator()->setPen(QPen(colors[i]));
             graph->setLineStyle(QCPGraph::lsLine);
             graph->setSelectable(QCP::SelectionType::stNone);
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
             graph->setName(title[i]);
         }
+
+        setCheckBoxHelper(customPlot);
     }
     else if (customPlot == ui->spectroMeter_gammaSpectrum){
         customPlot->xAxis->setRange(0, 2048);
@@ -909,8 +915,11 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->selectionDecorator()->setPen(QPen(colors[i]));
             graph->setLineStyle(QCPGraph::lsLine);
             graph->setSelectable(QCP::SelectionType::stNone);
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
             graph->setName(title[i]);
         }
+
+        setCheckBoxHelper(customPlot);
     }
 
     customPlot->replot();
@@ -920,6 +929,41 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
     // 是否允许X轴自适应缩放
     connect(customPlot, SIGNAL(mousePress(QMouseEvent*)), this, SLOT(slotShowTracer(QMouseEvent*)));
     connect(customPlot, SIGNAL(mouseRelease(QMouseEvent*)), this, SLOT(slotRestorePlot(QMouseEvent*)));
+}
+
+void MainWindow::setCheckBoxHelper(QCustomPlot* customPlot)
+{
+    customPlot->legend->setVisible(false);
+
+    //添加可选项
+    static int index = 0;
+    for (int i=0; i<2; ++i){
+        QCheckBox* checkBox = new QCheckBox(customPlot);
+        checkBox->setText(customPlot->graph(i)->name());
+        checkBox->setObjectName(tr(""));
+        QIcon actionIcon = roundPixmap(QSize(16,16), customPlot->graph(i)->pen().color());
+        checkBox->setIcon(actionIcon);
+        checkBox->setProperty("index", i+1);
+        checkBox->setChecked(true);
+        connect(checkBox, &QCheckBox::stateChanged, this, [=](int state){
+            int index = checkBox->property("index").toInt();
+            QCPGraph *graph = customPlot->graph(i);
+            if (graph){
+                graph->setVisible(Qt::CheckState::Checked == state ? true : false);
+                customPlot->replot();
+            }
+        });
+    }
+    connect(customPlot, &QCustomPlot::afterLayout, this, [=](){
+        QCustomPlot* customPlot = qobject_cast<QCustomPlot*>(sender());
+        QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
+        QFontMetrics fontMetrics(customPlot->font());
+        int avg_height = fontMetrics.ascent() + fontMetrics.descent();
+        int i = 0;
+        for (auto checkBox : checkBoxs){
+            checkBox->move(customPlot->axisRect()->left() + 10, customPlot->axisRect()->topRight().y() + i++ * avg_height + 5);
+        }
+    });
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
