@@ -761,7 +761,6 @@ void DataCompressWindow::closeEvent(QCloseEvent *event) {
 
 void DataCompressWindow::replyWriteLog(const QString &msg, QtMsgType msgType/* = QtDebugMsg*/)
 {
-#if 0
     // 创建一个 QTextCursor
     QTextCursor cursor = ui->textEdit_log->textCursor();
     // 将光标移动到文本末尾
@@ -785,9 +784,6 @@ void DataCompressWindow::replyWriteLog(const QString &msg, QtMsgType msgType/* =
 
     // 确保 QTextEdit 显示了光标的新位置
     ui->textEdit_log->setTextCursor(cursor);
-#else
-    ui->textEdit_log->append(QString("%1 %2").arg(QDateTime::currentDateTime().toString("[yyyy-MM-dd hh:mm:ss.zzz]"), msg));
-#endif
 
     //限制行数
     QTextDocument *document = ui->textEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件

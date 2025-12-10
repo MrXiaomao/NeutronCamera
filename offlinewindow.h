@@ -124,7 +124,6 @@ private:
 /**
 * @提取有效波形
 */
-#include <QMutex>
 class ExtractValidWaveformTask : public QObject, public QRunnable{
     Q_OBJECT
 public:
@@ -142,8 +141,6 @@ public:
         , mWaveformCallback(callback)
     {
         this->setAutoDelete(true);
-        qRegisterMetaType<std::array<qint16,512>>("std::array<qint16,512>");
-        qRegisterMetaType<QVector<std::array<qint16,512>>>("QVector<std::array<qint16,512>>&");
     }
 
     void run() override{
@@ -172,7 +169,6 @@ public:
 
             //4、提取有效波形数据
             QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
-            //emit reportWaveform(wave_ch);
             mWaveformCallback(wave_ch);
         } else if (ch_channel == 2) {
             //3、扣基线，调整数据
@@ -181,7 +177,6 @@ public:
 
             //4、提取有效波形数据
             QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
-            //emit reportWaveform(wave_ch);
             mWaveformCallback(wave_ch);
         } else if (ch_channel == 3) {
             //3、扣基线，调整数据
@@ -190,7 +185,6 @@ public:
 
             //4、提取有效波形数据
             QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
-            //emit reportWaveform(wave_ch);
             mWaveformCallback(wave_ch);
         } else if (ch_channel == 4) {
             //3、扣基线，调整数据
@@ -199,12 +193,9 @@ public:
 
             //4、提取有效波形数据
             QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);
-            //emit reportWaveform(wave_ch);
             mWaveformCallback(wave_ch);
         }
     }
-
-    Q_SIGNAL void reportWaveform(QVector<std::array<qint16, 512>>&);
 
 private:
     QString mFilePath;

@@ -702,8 +702,6 @@ void OfflineWindow::on_action_analyze_triggered()
         emit reporWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         
         // 提取该通道有效波形数据，并进行合并
-        QElapsedTimer elapsedTimer;
-        elapsedTimer.start();
         QVector<std::array<qint16, 512>> ch_all_valid_wave;
 #if 1
         QThreadPool* pool = QThreadPool::globalInstance();
@@ -779,7 +777,7 @@ void OfflineWindow::on_action_analyze_triggered()
             }
         }
 #endif
-        qDebug() << "elapsedTimer=" << elapsedTimer.elapsed();
+
         n_gamma neutron;
         //计算PSD
         QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);

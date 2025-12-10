@@ -81,7 +81,10 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         }
     });
     QTimer::singleShot(0, this, [=]{
-        qInfo().noquote() << "数据采集卡：" << mPCIeCommSdk.numberOfDevices() << "张";
+        if (0 == mPCIeCommSdk.numberOfDevices())
+            qCritical().noquote() << "数据采集卡：" << mPCIeCommSdk.numberOfDevices() << "张";
+        else
+            qInfo().noquote() << "数据采集卡：" << mPCIeCommSdk.numberOfDevices() << "张";
     });
 }
 
@@ -1038,7 +1041,6 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event){
 
 void MainWindow::replyWriteLog(const QString &msg, QtMsgType msgType)
 {
-#if 0
     // 创建一个 QTextCursor
     QTextCursor cursor = ui->textEdit_log->textCursor();
     // 将光标移动到文本末尾
@@ -1062,9 +1064,6 @@ void MainWindow::replyWriteLog(const QString &msg, QtMsgType msgType)
 
     // 确保 QTextEdit 显示了光标的新位置
     ui->textEdit_log->setTextCursor(cursor);
-#else
-    ui->textEdit_log->append(QString("%1 %2").arg(QDateTime::currentDateTime().toString("[yyyy-MM-dd hh:mm:ss.zzz]"), msg));
-#endif
 
     //限制行数
     QTextDocument *document = ui->textEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件
@@ -1289,6 +1288,14 @@ void MainWindow::applyColorTheme()
                 DarkStyle darkStyle;
                 darkStyle.polish(palette);
             }
+
+            // 创建一个 QTextCursor
+            QTextCursor cursor = ui->textEdit_log->textCursor();
+            QTextDocument *document = cursor.document();
+            QString html = document->toHtml();
+            qDebug() << html;
+            html = html.replace("color:#000000", "color:#ffffff");
+            document->setHtml(html);
         }
         else
         {
@@ -1302,6 +1309,12 @@ void MainWindow::applyColorTheme()
                 LightStyle lightStyle;
                 lightStyle.polish(palette);
             }
+
+            QTextCursor cursor = ui->textEdit_log->textCursor();
+            QTextDocument *document = cursor.document();
+            QString html = document->toHtml();
+            html = html.replace("color:#ffffff", "color:#000000");
+            document->setHtml(html);
         }
         //日志窗体
         QString styleSheet = mIsDarkTheme ?
