@@ -12,9 +12,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #endif
-#include "xdma_public.h"
 
-#define ENABLE_MAPPING 1
 #include <QFile>
 #include <QElapsedTimer>
 #include <QThread>
@@ -23,6 +21,7 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QThreadPool>
+
 class WriteFileTask : public QObject, public QRunnable{
     Q_OBJECT
 public:
@@ -359,14 +358,28 @@ public:
 
     void writeCommand(QByteArray& data);
 
+#ifdef _WIN32
+    static bool writeData(HANDLE hFile, quint64 offset, QByteArray& data);
+    static bool readData(HANDLE hFile, quint64 offset, QByteArray& data);
+#else
+    static bool writeData(int fd, quint64 offset, QByteArray& data);
+    static bool readData(int fd, quint64 offset, QByteArray& data);
+#endif
+
 signals:
 
 
 private:
     QMap<quint32, CaptureThread*> mMapCaptureThread;
+#ifdef _WIN32
     QMap<quint32, HANDLE> mMapDevice;//访问数据设备句柄
     QMap<quint32, HANDLE> mMapUser;//设备用户句柄
     QMap<quint32, HANDLE> mMapBypass;//设备控制句柄
+#else
+    QMap<quint32, int> mMapDevice;//访问数据设备句柄
+    QMap<quint32, int> mMapUser;//设备用户句柄
+    QMap<quint32, int> mMapBypass;//设备控制句柄
+#endif
     QMap<quint32, bool> mMapPower;//探测器的1#电源开关
     QMap<quint32, bool> mMapVoltage;//探测器的1#电压开关
     QMap<quint32, bool> mMapBackupPower;//探测器的2#电源开关

@@ -504,15 +504,18 @@ void DataAnalysisWorker::getValidWave()
         int processedFiles = 0;
         
 #if 1
+        emit logMessage(QString("正在提取板卡%1的波形数据...").arg(deviceIndex), QtInfoMsg);
+
         QThreadPool* pool = QThreadPool::globalInstance();
         pool->setMaxThreadCount(QThread::idealThreadCount());
         QMutex mutex;
         for (int fileID = startFile; fileID < endFile; ++fileID) {
             QString fileName = QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
             QString filePath = QDir(dataDir).filePath(fileName);
-            quint32 packerStartTime;
-            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex, 0,
-                packerStartTime,
+            quint32 packerStartTime = (fileID - 1) * 50;//文件序号，每个文件50ms
+            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex,
+                0,/*相机编号*/
+                packerStartTime,/*波形数据起始时间*/
                 threshold,
                 pre_points,
                 post_points,

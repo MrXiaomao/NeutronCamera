@@ -715,8 +715,10 @@ void OfflineWindow::on_action_analyze_triggered()
         QMutex mutex;
         for(int i = fileIndex; i <= endFileIndex; i++){
             QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
+            quint32 packerStartTime = (fileIndex - 1) * 50;//文件序号，每个文件50ms
             ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex,
-                    cameraIndex, 0,
+                    cameraIndex,
+                    packerStartTime,
                     threshold,
                     pre_points,
                     post_points,
