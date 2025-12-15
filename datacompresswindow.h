@@ -233,9 +233,6 @@ public:
     explicit DataCompressWindow(bool isDarkTheme = true, QWidget *parent = nullptr);
     ~DataCompressWindow();
 
-    bool loadOfflineFilename(const QString&);
-    void startAnalyze();
-
     // 加载出当前目录下的所有所有.bin文件，统计文件数目，及其文件总大小
     QStringList loadRelatedFiles(const QString& src);
 

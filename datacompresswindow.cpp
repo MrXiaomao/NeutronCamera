@@ -840,17 +840,7 @@ void DataCompressWindow::replyWriteLog(const QString &msg, QtMsgType msgType/* =
     }
 }
 
-bool DataCompressWindow::loadOfflineFilename(const QString& filename)
-{
-    ui->textBrowser_filepath->setText(filename);
-    return true;
-}
-
-void DataCompressWindow::startAnalyze()
-{
-
-}
-
+// 测试连接数据库
 void DataCompressWindow::on_pushButton_test_clicked()
 {
     //连接数据库
@@ -875,7 +865,7 @@ void DataCompressWindow::on_pushButton_test_clicked()
 
 // 读取波形数据，这里是有效波形
 // 读取 wave_CH1.h5 中的数据集 data（行 = 脉冲数, 列 = 采样点数）
-// 返回 QVector<QVector<float>>，尺寸为 [numPulses x numSamples] = [35679 x 512]
+// 返回 QVector<QVector<float>>，尺寸为 [numPulses x numSamples] = [N x 512]
 QVector<QVector<qint16>> DataCompressWindow::readWave(const std::string &fileName,
                                                  const std::string &dsetName)
 {
