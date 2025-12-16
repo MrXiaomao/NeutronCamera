@@ -3,6 +3,7 @@
 #include "globalsettings.h"
 #include "datacompresswindow.h"
 #include "n_gamma.h"
+#include "qprogressindicator.h"
 #include <QElapsedTimer>
 
 OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
@@ -51,6 +52,8 @@ OfflineWindow::~OfflineWindow()
 
 void OfflineWindow::initUi()
 {
+    mProgressIndicator = new QProgressIndicator(this);
+
     ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
     ui->toolButton_start->setDefaultAction(ui->action_analyze);
 
@@ -690,6 +693,8 @@ void OfflineWindow::on_action_analyze_triggered()
         //根据相机序号计算出是第几块光纤卡
         int channelIndex = (cameraIndex - 1) % 4 + 1;// 1、2、3、4
 
+        mProgressIndicator->startAnimation();
+
         emit reporWriteLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
         emit reporWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         emit reporWriteLog(QString("需要处理的文件数量：%1 (从文件%2到%3)").arg(endFileIndex - fileIndex + 1).arg(fileIndex).arg(endFileIndex),QtInfoMsg);
@@ -701,7 +706,7 @@ void OfflineWindow::on_action_analyze_triggered()
         int processedFileCount = 0;
 
         QVector<std::array<qint16, 512>> ch_all_valid_wave;
-#if 1
+
         // === 读盘-计算流水线：尽量让磁盘持续顺序读 ===
         QThreadPool* pool = QThreadPool::globalInstance();
         // 计算线程池：建议 2~4 起步（单盘更稳；NVMe 可再加）
@@ -814,7 +819,8 @@ void OfflineWindow::on_action_analyze_triggered()
         {
             QMutexLocker lk(&pendingMutex);
             while (pendingTasks.load(std::memory_order_acquire) > 0) {
-                pendingCond.wait(&pendingMutex, 200);
+                pendingCond.wait(&pendingMutex, 20);
+                qApp->processEvents();
             }
         }
         // pool->waitForDone();                  // ✅ 所有消费者任务都结束
@@ -822,110 +828,7 @@ void OfflineWindow::on_action_analyze_triggered()
 
         // 统计
         processedFileCount = doneFiles.load(std::memory_order_relaxed);
-#else     
-        for(int i = fileIndex; i <= endFileIndex; i++){
-            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
-            if(!QFileInfo::exists(filePath)){
-                QMessageBox::information(this, tr("提示"), QString("文件%1不存在！").arg(filePath));
-                emit reporWriteLog(QString("文件%1不存在！").arg(filePath),QtWarningMsg);
-                continue;
-            }
 
-            QElapsedTimer singleFileTimer;
-            singleFileTimer.start();
-            
-            //1、读取文件，获取该通道所有波形数据
-            emit reporWriteLog(QString("读取文件%1 (%2/%3)").arg(filePath).arg(i - fileIndex + 1).arg(endFileIndex - fileIndex + 1),QtInfoMsg);
-            QElapsedTimer readTimer;
-            readTimer.start();
-            QVector<qint16> ch0, ch1, ch2, ch3;
-            if(!DataAnalysisWorker::readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)){
-                emit reporWriteLog(QString("文件%1读取失败！").arg(filePath),QtWarningMsg);
-                continue;
-            }
-            qint64 readTime = readTimer.elapsed();
-            totalFileReadTime += readTime;
-            emit reporWriteLog(QString("  文件读取耗时：%1 ms").arg(readTime),QtInfoMsg);
-
-            //2、提取通道号的数据cameraNo
-            //根据相机序号计算出是第几块光纤卡
-            int board_index = (cameraIndex-1)/4+1;
-            int ch_channel = cameraIndex % 4;
-            
-            QElapsedTimer baselineTimer;
-            QElapsedTimer waveExtractTimer;
-            
-            if (ch_channel == 1) {
-                //3、扣基线，调整数据
-                baselineTimer.start();
-                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
-                DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
-                qint64 baselineTime = baselineTimer.elapsed();
-                totalBaselineTime += baselineTime;
-                emit reporWriteLog(QString("  基线计算和调整耗时：%1 ms").arg(baselineTime),QtInfoMsg);
-                
-                //4、提取有效波形数据
-                waveExtractTimer.start();
-                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
-                qint64 waveExtractTime = waveExtractTimer.elapsed();
-                totalWaveExtractTime += waveExtractTime;
-                emit reporWriteLog(QString("  有效波形提取耗时：%1 ms，提取到 %2 个有效波形").arg(waveExtractTime).arg(wave_ch.size()),QtInfoMsg);
-                ch_all_valid_wave.append(wave_ch);
-            } else if (channelIndex == 2) {
-                //3、扣基线，调整数据
-                baselineTimer.start();
-                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
-                DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
-                qint64 baselineTime = baselineTimer.elapsed();
-                totalBaselineTime += baselineTime;
-                emit reporWriteLog(QString("  基线计算和调整耗时：%1 ms").arg(baselineTime),QtInfoMsg);
-                
-                //4、提取有效波形数据
-                waveExtractTimer.start();
-                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
-                qint64 waveExtractTime = waveExtractTimer.elapsed();
-                totalWaveExtractTime += waveExtractTime;
-                emit reporWriteLog(QString("  有效波形提取耗时：%1 ms，提取到 %2 个有效波形").arg(waveExtractTime).arg(wave_ch.size()),QtInfoMsg);
-                ch_all_valid_wave.append(wave_ch);
-            } else if (channelIndex == 3) {
-                //3、扣基线，调整数据
-                baselineTimer.start();
-                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
-                DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
-                qint64 baselineTime = baselineTimer.elapsed();
-                totalBaselineTime += baselineTime;
-                emit reporWriteLog(QString("  基线计算和调整耗时：%1 ms").arg(baselineTime),QtInfoMsg);
-                
-                //4、提取有效波形数据
-                waveExtractTimer.start();
-                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
-                qint64 waveExtractTime = waveExtractTimer.elapsed();
-                totalWaveExtractTime += waveExtractTime;
-                emit reporWriteLog(QString("  有效波形提取耗时：%1 ms，提取到 %2 个有效波形").arg(waveExtractTime).arg(wave_ch.size()),QtInfoMsg);
-                ch_all_valid_wave.append(wave_ch);
-            } else if (channelIndex == 4) {
-                //3、扣基线，调整数据
-                baselineTimer.start();
-                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
-                DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, board_index, 4);
-                qint64 baselineTime = baselineTimer.elapsed();
-                totalBaselineTime += baselineTime;
-                emit reporWriteLog(QString("  基线计算和调整耗时：%1 ms").arg(baselineTime),QtInfoMsg);
-
-                //4、提取有效波形数据
-                waveExtractTimer.start();
-                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);
-                qint64 waveExtractTime = waveExtractTimer.elapsed();
-                totalWaveExtractTime += waveExtractTime;
-                emit reporWriteLog(QString("  有效波形提取耗时：%1 ms，提取到 %2 个有效波形").arg(waveExtractTime).arg(wave_ch.size()),QtInfoMsg);
-                ch_all_valid_wave.append(wave_ch);
-            }
-            
-            qint64 singleFileTime = singleFileTimer.elapsed();
-            processedFileCount++;
-            emit reporWriteLog(QString("  文件%1总耗时：%2 ms").arg(i).arg(singleFileTime),QtInfoMsg);
-        }
-#endif
         emit reporWriteLog(QString("=== 文件处理阶段统计 ==="),QtInfoMsg);
         emit reporWriteLog(QString("处理文件总数：%1").arg(processedFileCount),QtInfoMsg);
         emit reporWriteLog(QString("  文件读取总耗时：%1 ms (%2 秒)")
@@ -1058,61 +961,63 @@ void OfflineWindow::on_action_analyze_triggered()
         );
 
         const auto otherTime = totalTime - totalFileReadTime - psdTime - densityTime - fomTotalTime;
-        emit reporWriteLog(QString("  其他（转换、绘图等）：%1 ms (%2%)")
+        emit reporWriteLog(QString("  其它（转换、绘图等）：%1 ms (%2%)")
                 .arg(otherTime)
                 .arg(totalTime > 0 ? (100.0 * otherTime / totalTime) : 0.0, 0, 'f', 1),
             QtInfoMsg
         );
-        return;
-    }
 
-    // 从 RadioButton 提取单个文件包对应的时间长度（单位ms）
-    // radioButton 对应 1ms, radioButton_2 对应 10ms
-    int timeLength = 1; // 默认值 1ms
-    if (ui->radioButton_2->isChecked()) {
-        timeLength = 10; // radioButton_2 选中时使用 10ms
-    } else if (ui->radioButton->isChecked()) {
-        timeLength = 1; // radioButton 选中时使用 1ms
+        mProgressIndicator->stopAnimation();
     }
-    
-    // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
-    int time_per = 50;
-    PCIeCommSdk::CaptureTime captureTime = PCIeCommSdk::oldCaptureTime;
-    if (ui->cmb_fileTime->currentText() == "50ms") {
-        captureTime = PCIeCommSdk::newCaptureTime;
-        time_per = 50;
-    } else if (ui->cmb_fileTime->currentText() == "66ms") {
-        captureTime = PCIeCommSdk::oldCaptureTime;
-        time_per = 66;
-    }
-    
-    //由于每个文件的能谱时长是固定的，所有这里需要根据时刻计算出对应的是第几个文件
-    qint32 time1 =ui->spinBox_time1->value();
-    quint32 fileIndex = (float)(ui->spinBox_time1->value() + time_per-1)/ time_per;
-
-    //t1-水平相机
-    {
-        //每个文件里面对应的是4个通道，根据通道号判断是第几个文件
-        quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
-        quint32 deviceIndex = (cameraIndex + 3) / 4;
-        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
-
-        mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
-        if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
-        {
-            QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+    else{
+        // 从 RadioButton 提取单个文件包对应的时间长度（单位ms）
+        // radioButton 对应 1ms, radioButton_2 对应 10ms
+        int timeLength = 1; // 默认值 1ms
+        if (ui->radioButton_2->isChecked()) {
+            timeLength = 10; // radioButton_2 选中时使用 10ms
+        } else if (ui->radioButton->isChecked()) {
+            timeLength = 1; // radioButton 选中时使用 1ms
         }
-    }
 
-    //t1-垂直相机
-    {
-        quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
-        quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
-        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
-        mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
-        if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
+        // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
+        int time_per = 50;
+        PCIeCommSdk::CaptureTime captureTime = PCIeCommSdk::oldCaptureTime;
+        if (ui->cmb_fileTime->currentText() == "50ms") {
+            captureTime = PCIeCommSdk::newCaptureTime;
+            time_per = 50;
+        } else if (ui->cmb_fileTime->currentText() == "66ms") {
+            captureTime = PCIeCommSdk::oldCaptureTime;
+            time_per = 66;
+        }
+
+        //由于每个文件的能谱时长是固定的，所有这里需要根据时刻计算出对应的是第几个文件
+        qint32 time1 =ui->spinBox_time1->value();
+        quint32 fileIndex = (float)(ui->spinBox_time1->value() + time_per-1)/ time_per;
+
+        //t1-水平相机
         {
-            QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+            //每个文件里面对应的是4个通道，根据通道号判断是第几个文件
+            quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+            quint32 deviceIndex = (cameraIndex + 3) / 4;
+            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
+
+            mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
+            if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
+            {
+                QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+            }
+        }
+
+        //t1-垂直相机
+        {
+            quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
+            quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
+            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
+            mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
+            if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
+            {
+                QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+            }
         }
     }
 }
@@ -1355,31 +1260,12 @@ void OfflineWindow::applyColorTheme()
                 lightStyle.polish(palette);
             }
         }
-        //日志窗体
-        // QString styleSheet = mIsDarkTheme ?
-        //                          QString("background-color:rgb(%1,%2,%3);color:white;")
-        //                              .arg(palette.color(QPalette::Window).red())
-        //                              .arg(palette.color(QPalette::Window).green())
-        //                              .arg(palette.color(QPalette::Window).blue())
-        //                                   : QString("background-color:white;color:black;");
-        // ui->logWidget->setStyleSheet(styleSheet);
-
-        //更新样式表
-        // QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
-        // int i = 0;
-        // for (auto checkBox : checkBoxs){
-        //     checkBox->setStyleSheet(styleSheet);
-        // }
-
-        // QGraphicsScene *scene = this->findChild<QGraphicsScene*>("logGraphicsScene");
-        // QGraphicsTextItem *textItem = (QGraphicsTextItem*)scene->items()[0];
-        // textItem->setHtml(mIsDarkTheme ? QString("<font color='white'>工作日志</font>") : QString("<font color='black'>工作日志</font>"));
 
         // 窗体背景色
-        customPlot->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Window) : Qt::white));
+        customPlot->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
         // 四边安装轴并显示
         customPlot->axisRect()->setupFullAxesBox();
-        customPlot->axisRect()->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Window) : Qt::white));
+        customPlot->axisRect()->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
         // 坐标轴线颜色
         customPlot->xAxis->setBasePen(QPen(palette.color(QPalette::WindowText)));
         customPlot->xAxis2->setBasePen(QPen(palette.color(QPalette::WindowText)));
