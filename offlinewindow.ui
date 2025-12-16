@@ -1283,7 +1283,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>22</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -1554,7 +1554,10 @@
      <normaloff>:/resource/image/waveform.png</normaloff>:/resource/image/waveform.png</iconset>
    </property>
    <property name="text">
-    <string>波形图</string>
+    <string>波形预览</string>
+   </property>
+   <property name="toolTip">
+    <string>波形预览</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
@@ -1569,7 +1572,10 @@
      <normaloff>:/resource/image/scatter.png</normaloff>:/resource/image/scatter.png</iconset>
    </property>
    <property name="text">
-    <string>n-γ甄别图</string>
+    <string>n-γ甄别</string>
+   </property>
+   <property name="toolTip">
+    <string>n-γ甄别数据处理</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

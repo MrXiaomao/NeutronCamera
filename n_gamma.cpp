@@ -86,7 +86,7 @@ QVector<std::array<qint16, 512>> n_gamma::readWave(const std::string &fileName,
 
 /**
  * @brief n_gamma::computePSD 筛选符合要求的波形，并且计算波形PSD值
- * @param wave_CH1 输入的波形, wave_CH1[pulseIndex][sampleIndex]：numPulses x 512
+ * @param wave_CH1 输入的波形, 这个波形是经过过阈触发筛选后的波形，wave_CH1[pulseIndex][sampleIndex]：numPulses x 512
  * @return data[i] = (标定后能量, PSD 值)，每个元素是一个 QPair<float, float>，first 是能量，second 是 PSD 值
  */
 QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16, 512>> &wave_CH1)
@@ -94,7 +94,6 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
     if (wave_CH1.isEmpty())
         return {};
 
-    // const int numPulses  = wave_CH1.size();       // ~35679
     const int numSamples = 512;    // 固定为 512
 
     using Pulse = std::array<qint16, 512>;
