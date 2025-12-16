@@ -1,4 +1,4 @@
-#ifndef OFFLINEWINDOW_H
+﻿#ifndef OFFLINEWINDOW_H
 #define OFFLINEWINDOW_H
 
 #include <QMainWindow>
@@ -24,6 +24,7 @@ struct FOM_CurvePoint {
 };
 
 class QCustomPlot;
+class QProgressIndicator;
 class OfflineWindow : public QMainWindow
 {
     Q_OBJECT
@@ -106,6 +107,7 @@ private slots:
     // 验证时间范围输入
     void validateTime1Range();
 
+    void startAnalysis(int,int, int, int, int);
 private:
     Ui::OfflineWindow *ui;
     bool mIsDarkTheme = true;
@@ -116,6 +118,7 @@ private:
     QString mShotNum;
     DetectorType mCurrentDetectorType;
 
+    QProgressIndicator *mProgressIndicator = nullptr;
     QStringList mfileList;
     void applyColorTheme();
 };

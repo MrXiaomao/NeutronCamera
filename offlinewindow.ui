@@ -1053,12 +1053,6 @@
        </item>
        <item>
         <widget class="QWidget" name="widget_6" native="true">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>23</height>
-          </size>
-         </property>
          <layout class="QHBoxLayout" name="horizontalLayout_7">
           <property name="leftMargin">
            <number>5</number>
@@ -1067,7 +1061,7 @@
            <number>0</number>
           </property>
           <property name="rightMargin">
-           <number>0</number>
+           <number>9</number>
           </property>
           <property name="bottomMargin">
            <number>0</number>
@@ -1089,12 +1083,6 @@
            <widget class="QToolButton" name="toolButton_start">
             <property name="enabled">
              <bool>true</bool>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>100</width>
-              <height>23</height>
-             </size>
             </property>
             <property name="text">
              <string>开始解析</string>
@@ -1135,28 +1123,52 @@
            </layout>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_9">
-            <item>
-             <spacer name="horizontalSpacer">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QPushButton" name="pushButton_export">
-              <property name="text">
-               <string>导出</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QWidget" name="" native="true">
+            <layout class="QHBoxLayout" name="horizontalLayout_9">
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item>
+              <spacer name="horizontalSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButton_export">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="text">
+                <string>导出</string>
+               </property>
+               <property name="icon">
+                <iconset resource="../3rdParty/resource/resource.qrc">
+                 <normaloff>:/daochu.png</normaloff>:/daochu.png</iconset>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
           </item>
          </layout>
         </widget>

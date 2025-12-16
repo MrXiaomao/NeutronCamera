@@ -1,4 +1,4 @@
-#include "datacompresswindow.h"
+﻿#include "datacompresswindow.h"
 #include "ui_datacompresswindow.h"
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QDir>
 #include "globalsettings.h"
+#include "qprogressindicator.h"
 
 #include <array>
 #include <QVector>
@@ -725,7 +726,9 @@ DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
     , mAnalysisWorker(nullptr)
 {
     ui->setupUi(this);
+    applyColorTheme();
 
+    mProgressIndicator = new QProgressIndicator(this);
     ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
     ui->tableWidget_file->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
@@ -746,17 +749,6 @@ DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
 
     connect(this, SIGNAL(reporWriteLog(const QString&,QtMsgType)), this, SLOT(replyWriteLog(const QString&,QtMsgType)));
 
-    QTimer::singleShot(0, this, [&](){
-        qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
-        QGoodWindow::setAppCustomTheme(mIsDarkTheme,this->mThemeColor); // Must be >96
-    });
-
-    QTimer::singleShot(0, this, [&](){
-        if(mainWindow) {
-            mainWindow->fixMenuBarWidth();
-        }
-    });
-
     // 连接时间范围验证信号
     connect(ui->spinBox_startT, &QSpinBox::editingFinished, this, &DataCompressWindow::validateTimeRange);
     connect(ui->spinBox_endT, &QSpinBox::editingFinished, this, &DataCompressWindow::validateTimeRange);
@@ -770,6 +762,17 @@ DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
             ui->spinBox_endT->setMaximum(maxTime);
             // 验证当前值
             validateTimeRange();
+        }
+    });
+
+    QTimer::singleShot(0, this, [&](){
+        qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
+        QGoodWindow::setAppCustomTheme(mIsDarkTheme,this->mThemeColor); // Must be >96
+    });
+
+    QTimer::singleShot(0, this, [&](){
+        if(mainWindow) {
+            mainWindow->fixMenuBarWidth();
         }
     });
 }
@@ -1001,6 +1004,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
     ui->progressBar_2->setValue(0);
     ui->progressBar_2->setMaximum(wave_CH1.size());
 
+    mProgressIndicator->startAnimation();
     // 保存到数据库
     {
         QString sql = "INSERT INTO Spectrum (shotNum, timestamp,";
@@ -1082,8 +1086,9 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
         db.close();
         QMessageBox::information(nullptr, QStringLiteral("提示"), QStringLiteral("数据上传完成！"));
         ui->pushButton_startUpload->setEnabled(true);
-        return;
     }
+
+    mProgressIndicator->stopAnimation();
 }
 
 void DataCompressWindow::on_action_choseDir_triggered()
@@ -1306,9 +1311,6 @@ void DataCompressWindow::on_action_analyze_triggered()
         QMessageBox::information(this, "提示", "数据分析正在进行中，请等待完成。");
         return;
     }
-
-    replyWriteLog("========================================", QtInfoMsg);
-    replyWriteLog("开始数据压缩分析", QtInfoMsg);
     
     // 获取数据目录路径
     QString dataDir = ui->textBrowser_filepath->toPlainText();
@@ -1317,8 +1319,6 @@ void DataCompressWindow::on_action_analyze_triggered()
         QMessageBox::warning(this, "警告", "数据目录路径为空！");
         return;
     }
-    
-    replyWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
 
     //解析文件，提取有效波形数据
     int th = ui->spinBox_threshold->value();
@@ -1335,6 +1335,12 @@ void DataCompressWindow::on_action_analyze_triggered()
     if (!outfileName.endsWith(".h5", Qt::CaseSensitive)) {
         outfileName += ".h5";
     }
+
+    replyWriteLog("========================================", QtInfoMsg);
+    replyWriteLog("开始数据压缩分析", QtInfoMsg);
+    replyWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
+
+    mProgressIndicator->startAnimation();
 
     // 创建HDF5文件路径（在数据目录下） 
     QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
@@ -1449,6 +1455,7 @@ void DataCompressWindow::on_action_darkTheme_triggered()
     if(mThemeColorEnable) QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
     GlobalSettings settings;
     settings.setValue("Global/Startup/darkTheme","true");
+    applyColorTheme();
 }
 
 
@@ -1467,6 +1474,29 @@ void DataCompressWindow::on_action_colorTheme_triggered()
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
     }
     settings.setValue("Global/Startup/themeColorEnable",mThemeColorEnable);
+    applyColorTheme();
+}
+
+void DataCompressWindow::applyColorTheme()
+{
+    if (mIsDarkTheme)
+    {
+        // 创建一个 QTextCursor
+        QTextCursor cursor = ui->textEdit_log->textCursor();
+        QTextDocument *document = cursor.document();
+        QString html = document->toHtml();
+        qDebug() << html;
+        html = html.replace("color:#000000", "color:#ffffff");
+        document->setHtml(html);
+    }
+    else
+    {
+        QTextCursor cursor = ui->textEdit_log->textCursor();
+        QTextDocument *document = cursor.document();
+        QString html = document->toHtml();
+        html = html.replace("color:#ffffff", "color:#000000");
+        document->setHtml(html);
+    }
 }
 
 // 验证时间范围输入
@@ -1578,6 +1608,8 @@ void DataCompressWindow::onAnalysisFinished(bool success, const QString& message
         mAnalysisThread->deleteLater();
         mAnalysisThread = nullptr;
     }
+
+    mProgressIndicator->stopAnimation();
 }
 
 void DataCompressWindow::onAnalysisError(const QString& error)

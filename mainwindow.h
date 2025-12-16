@@ -6,7 +6,7 @@
 #include "detsettingwindow.h"
 #include "netsettingwindow.h"
 #include "QGoodWindowHelper"
-#include "CommHelper.h"
+#include "commhelper.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {

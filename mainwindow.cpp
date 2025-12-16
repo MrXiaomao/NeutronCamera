@@ -1293,7 +1293,6 @@ void MainWindow::applyColorTheme()
             QTextCursor cursor = ui->textEdit_log->textCursor();
             QTextDocument *document = cursor.document();
             QString html = document->toHtml();
-            qDebug() << html;
             html = html.replace("color:#000000", "color:#ffffff");
             document->setHtml(html);
         }

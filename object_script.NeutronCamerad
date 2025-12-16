@@ -13,6 +13,7 @@ temp/obj/netsettingwindow.o
 temp/obj/offlinewindow.o
 temp/obj/pciecommsdk.o
 temp/obj/qgaugepanel.o
+temp/obj/qprogressindicator.o
 temp/obj/switchbutton.o
 temp/obj/appender.o
 temp/obj/appenderskeleton.o
@@ -145,6 +146,7 @@ temp/obj/moc_qgaugepanel.o
 temp/obj/moc_qlitethread.o
 temp/obj/moc_globalsettings.o
 temp/obj/moc_mainwindow.o
+temp/obj/moc_qprogressindicator.o
 temp/obj/moc_switchbutton.o
 temp/obj/moc_qcustomplot.o
 temp/obj/moc_lightstyle.o

@@ -1,4 +1,4 @@
-QT       += core gui sql
+QT       += core gui sql network concurrent
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -20,6 +20,7 @@ SOURCES += \
     offlinewindow.cpp \
     pciecommsdk.cpp \
     qgaugepanel.cpp \
+    qprogressindicator.cpp \
     switchbutton.cpp
 
 HEADERS += \
@@ -34,6 +35,7 @@ HEADERS += \
     qlitethread.h \
     globalsettings.h \
     mainwindow.h \
+    qprogressindicator.h \
     switchbutton.h
 
 FORMS += \
@@ -106,14 +108,20 @@ DEFINES += APP_VERSION="\\\"V1.0.1\\\""
 DEFINES +=_WIN32_WINNT=0x0601
 
 windows {
+    message("当前环境是Windows系统")
+
     # MinGW
     *-g++* {
         QMAKE_CXXFLAGS += -Wall -Wextra -Wpedantic
         #QMAKE_CXXFLAGS += -finput-charset=UTF-8
         #QMAKE_CXXFLAGS += -fexec-charset=UTF-8
         #QMAKE_CXXFLAGS += -fwide-exec-charset=UTF-16
-        #设置wchar_t类型数据的编码格式。不同主机值可能不同，编译器运行时根据主机情况会自动识别出最符合
-        #主机的方案作为默认值，这个参数是不需要动的。UTF-16 UTF-16BE UTF-16LE UTF-32LE UTF-32BE
+
+        # 设置源代码编码为UTF-8
+        QMAKE_CFLAGS += -finput-charset=UTF-8
+        QMAKE_CXXFLAGS += -finput-charset=UTF-8
+        # 设置输出字符串编码为UTF-8
+        QMAKE_LFLAGS += -fexec-charset=UTF-8
     }
     # MSVC
     *-msvc* {
@@ -123,11 +131,19 @@ windows {
     }
 }
 #QMAKE_MANIFEST += $$PWD/manifest.xml
+unix:!macx:{
+    message("当前环境是Linux系统")
+
+    # 设置源代码编码为UTF-8
+    QMAKE_CFLAGS += -finput-charset=UTF-8
+    QMAKE_CXXFLAGS += -finput-charset=UTF-8
+    # 设置输出字符串编码为UTF-8
+    QMAKE_LFLAGS += -fexec-charset=UTF-8
+}
 
 include($$PWD/../3rdParty/log4qt/Include/log4qt.pri)
 include($$PWD/../3rdParty/resource/resource.pri)
-include($$PWD/../3rdParty/QCustomplot/QCustomplot.pri)
-#include($$PWD/../3rdParty/QFontIcon/QFontIcon.pri)
+include($$PWD/../3rdParty/QCustomPlot/QCustomPlot.pri)
 include($$PWD/../3rdParty/QGoodWindow/QGoodWindow/QGoodWindow.pri)
 include($$PWD/../3rdParty/QGoodWindow/QGoodCentralWidget/QGoodCentralWidget.pri)
 include($$PWD/../3rdParty/QGoodWindow/QGoodWindowHelper/QGoodWindowHelper.pri)
@@ -140,5 +156,3 @@ include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
 # PRECOMPILED_HEADER += stable.h
 
 win32: LIBS += -lsetupapi
-
-DISTFILES +=

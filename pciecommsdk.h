@@ -1,4 +1,4 @@
-#ifndef PCIECOMMSDK_H
+﻿#ifndef PCIECOMMSDK_H
 #define PCIECOMMSDK_H
 
 #include <QObject>
@@ -9,8 +9,12 @@
 #include <windows.h>
 #include <setupapi.h>
 #else
+#include <unistd.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/mman.h>
+typedef int HANDLE;
 #endif
 
 #include <QFile>
@@ -39,62 +43,16 @@ public:
         elapsedTimer.start();
         QDateTime now = QDateTime::currentDateTime();
         QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mIndex).arg(mPackref++);
-
-        HANDLE hfOutput = CreateFileA(filename.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (!hfOutput) {
-            qDebug() << "CreateFileA fail, win32 error code:" << GetLastError();
+        QFile file(filename);
+        if (!file.open(QIODevice::WriteOnly)) {
+            qDebug() << "Cannot open file for writing";
         }
         else{
-            DWORD NumberOfBytesWritten = 0;
-            if (!WriteFile(hfOutput, mData.constData(), mData.size(), &NumberOfBytesWritten, NULL)){
-                qDebug() << "WriteFile fail, win32 error code:" << GetLastError();
-            }
-            CloseHandle(hfOutput);
-
-            emit reportFileWriteElapsedtime(mIndex,elapsedTimer.elapsed());
+            file.write(mData);
+            file.close();
         }
-    }
 
-    Q_SIGNAL void reportFileWriteElapsedtime(quint32,quint32);
-
-private:
-    quint32 mIndex;
-    quint32 mPackref;
-    QString mSaveFilePath;
-    QByteArray mData;
-};
-
-class ReadFileTask : public QObject, public QRunnable{
-    Q_OBJECT
-public:
-    explicit ReadFileTask(quint32 index, quint32 packref, const QString& saveFilePath, QByteArray& data)
-        : mIndex(index)
-        , mPackref(packref)
-        , mSaveFilePath(saveFilePath)
-        , mData(data)
-    {
-        this->setAutoDelete(true);
-    }
-
-    void run() override{
-        QElapsedTimer elapsedTimer;
-        elapsedTimer.start();
-        QDateTime now = QDateTime::currentDateTime();
-        QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mIndex).arg(mPackref++);
-
-        HANDLE hfOutput = CreateFileA(filename.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (!hfOutput) {
-            qDebug() << "CreateFileA fail, win32 error code:" << GetLastError();
-        }
-        else{
-            DWORD NumberOfBytesWritten = 0;
-            if (!WriteFile(hfOutput, mData.constData(), mData.size(), &NumberOfBytesWritten, NULL)){
-                qDebug() << "WriteFile fail, win32 error code:" << GetLastError();
-            }
-            CloseHandle(hfOutput);
-
-            emit reportFileWriteElapsedtime(mIndex,elapsedTimer.elapsed());
-        }
+        emit reportFileWriteElapsedtime(mIndex,elapsedTimer.elapsed());
     }
 
     Q_SIGNAL void reportFileWriteElapsedtime(quint32,quint32);
@@ -358,28 +316,17 @@ public:
 
     void writeCommand(QByteArray& data);
 
-#ifdef _WIN32
-    static bool writeData(HANDLE hFile, quint64 offset, QByteArray& data);
-    static bool readData(HANDLE hFile, quint64 offset, QByteArray& data);
-#else
-    static bool writeData(int fd, quint64 offset, QByteArray& data);
-    static bool readData(int fd, quint64 offset, QByteArray& data);
-#endif
+    static bool writeData(HANDLE fd, quint64 offset, QByteArray& data);
+    static bool readData(HANDLE fd, quint64 offset, QByteArray& data);
 
 signals:
 
 
 private:
     QMap<quint32, CaptureThread*> mMapCaptureThread;
-#ifdef _WIN32
     QMap<quint32, HANDLE> mMapDevice;//访问数据设备句柄
     QMap<quint32, HANDLE> mMapUser;//设备用户句柄
     QMap<quint32, HANDLE> mMapBypass;//设备控制句柄
-#else
-    QMap<quint32, int> mMapDevice;//访问数据设备句柄
-    QMap<quint32, int> mMapUser;//设备用户句柄
-    QMap<quint32, int> mMapBypass;//设备控制句柄
-#endif
     QMap<quint32, bool> mMapPower;//探测器的1#电源开关
     QMap<quint32, bool> mMapVoltage;//探测器的1#电压开关
     QMap<quint32, bool> mMapBackupPower;//探测器的2#电源开关

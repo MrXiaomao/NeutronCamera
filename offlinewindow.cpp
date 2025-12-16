@@ -1,8 +1,9 @@
-#include "offlinewindow.h"
+﻿#include "offlinewindow.h"
 #include "ui_offlinewindow.h"
 #include "globalsettings.h"
 #include "datacompresswindow.h"
 #include "n_gamma.h"
+#include "qprogressindicator.h"
 
 OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     : QMainWindow(parent)
@@ -13,10 +14,10 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     ui->setupUi(this);
 
     initUi();
+    applyColorTheme();
 
-    //QStringList args = QCoreApplication::arguments();
-    //this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
-    this->applyColorTheme();
+    QStringList args = QCoreApplication::arguments();
+    this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
 
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportWaveform, this, &OfflineWindow::replyWaveform);
     connect(this, &OfflineWindow::reportWaveform, this, &OfflineWindow::replyWaveform);
@@ -59,6 +60,8 @@ OfflineWindow::~OfflineWindow()
 
 void OfflineWindow::initUi()
 {
+    mProgressIndicator = new QProgressIndicator(this);
+
     ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
     ui->toolButton_start->setDefaultAction(ui->action_analyze);
 
@@ -521,7 +524,6 @@ bool OfflineWindow::eventFilter(QObject *watched, QEvent *event){
 
 void OfflineWindow::replyWriteLog(const QString &msg, QtMsgType msgType/* = QtDebugMsg*/)
 {
-#if 0
     // 创建一个 QTextCursor
     QTextCursor cursor = ui->textEdit_log->textCursor();
     // 将光标移动到文本末尾
@@ -545,9 +547,6 @@ void OfflineWindow::replyWriteLog(const QString &msg, QtMsgType msgType/* = QtDe
 
     // 确保 QTextEdit 显示了光标的新位置
     ui->textEdit_log->setTextCursor(cursor);
-#else
-    ui->textEdit_log->append(QString("%1 %2").arg(QDateTime::currentDateTime().toString("[yyyy-MM-dd hh:mm:ss.zzz]"), msg));
-#endif
 
     //限制行数
     QTextDocument *document = ui->textEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件
@@ -665,6 +664,7 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
     // validateTime1Range();
 }
 
+#include <QtConcurrent>
 void OfflineWindow::on_action_analyze_triggered()
 {
     //n-gamma甄别模式
@@ -707,291 +707,308 @@ void OfflineWindow::on_action_analyze_triggered()
         emit reporWriteLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
         emit reporWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         
-        // 提取该通道有效波形数据，并进行合并
-        QVector<std::array<qint16, 512>> ch_all_valid_wave;
+        mProgressIndicator->startAnimation();
+
+        //从默认的线程池QThreadPool中获得的单独线程中运行function
+        QtConcurrent::run(this, &OfflineWindow::startAnalysis, fileIndex, endFileIndex, cameraIndex, deviceIndex, threshold); // 在后台线程中处理数据，不阻塞主线程。    
+    }
+    else{
+        // 从 RadioButton 提取单个文件包对应的时间长度（单位ms）
+        // radioButton 对应 1ms, radioButton_2 对应 10ms
+        int timeLength = 1; // 默认值 1ms
+        if (ui->radioButton_2->isChecked()) {
+            timeLength = 10; // radioButton_2 选中时使用 10ms
+        } else if (ui->radioButton->isChecked()) {
+            timeLength = 1; // radioButton 选中时使用 1ms
+        }
+
+        // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
+        int time_per = 50;
+        PCIeCommSdk::CaptureTime captureTime = PCIeCommSdk::oldCaptureTime;
+        if (ui->cmb_fileTime->currentText() == "50ms") {
+            captureTime = PCIeCommSdk::newCaptureTime;
+            time_per = 50;
+        } else if (ui->cmb_fileTime->currentText() == "66ms") {
+            captureTime = PCIeCommSdk::oldCaptureTime;
+            time_per = 66;
+        }
+
+        //由于每个文件的能谱时长是固定的，所有这里需要根据时刻计算出对应的是第几个文件
+        qint32 time1 =ui->spinBox_time1->value();
+        quint32 fileIndex = (float)(ui->spinBox_time1->value() + time_per-1)/ time_per;
+
+        //t1-水平相机
+        {
+            //每个文件里面对应的是4个通道，根据通道号判断是第几个文件
+            quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+            quint32 deviceIndex = (cameraIndex + 3) / 4;
+            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
+
+            mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
+            if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
+            {
+                QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+            }
+        }
+
+        //t1-垂直相机
+        {
+            quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
+            quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
+            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
+            mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
+            if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
+            {
+                QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
+            }
+        }
+    }
+}
+
+void OfflineWindow::startAnalysis(int fileIndex,
+                                  int endFileIndex,
+                                  int cameraIndex,
+                                  int deviceIndex,
+                                  int threshold)
+{
+    int pre_points = 20;
+    int post_points = 512 - pre_points - 1;
+
+    // 提取该通道有效波形数据，并进行合并
+    QVector<std::array<qint16, 512>> ch_all_valid_wave;
 #if 1
-        QThreadPool* pool = QThreadPool::globalInstance();
-        pool->setMaxThreadCount(QThread::idealThreadCount());
-        QMutex mutex;
-        for(int i = fileIndex; i <= endFileIndex; i++){
-            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
-            quint32 packerStartTime = (fileIndex - 1) * 50;//文件序号，每个文件50ms
-            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex,
-                    cameraIndex,
-                    packerStartTime,
-                    threshold,
-                    pre_points,
-                    post_points,
-                    filePath,
-                    [&](quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>& wave_ch){
-                QMutexLocker locker(&mutex);
-                ch_all_valid_wave.append(wave_ch);
-            });
-            pool->start(task);
-        }
-        pool->waitForDone();
+    QThreadPool* pool = new QThreadPool(this);//QThreadPool::globalInstance();
+    pool->setMaxThreadCount(QThread::idealThreadCount());
+    QMutex mutex;
+    for(int i = fileIndex; i <= endFileIndex; i++){
+        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
+        quint32 packerStartTime = (fileIndex - 1) * 50;//文件序号，每个文件50ms
+        ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex,
+                cameraIndex,
+                packerStartTime,
+                threshold,
+                pre_points,
+                post_points,
+                filePath,
+                [&](quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>& wave_ch){
+            QMutexLocker locker(&mutex);
+            ch_all_valid_wave.append(wave_ch);
+        });
+        pool->start(task);
+    }
+    pool->waitForDone();
+    pool->deleteLater();
 #else
-        for(int i = fileIndex; i <= endFileIndex; i++){
-            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
-            if(!QFileInfo::exists(filePath)){
-                QMessageBox::information(this, tr("提示"), QString("文件%1不存在！").arg(filePath));
-                emit reporWriteLog(QString("文件%1不存在！").arg(filePath),QtWarningMsg);
-                continue;
-            }
-
-            //1、读取文件，获取该通道所有波形数据
-            emit reporWriteLog(QString("读取文件%1").arg(filePath),QtInfoMsg);
-            QVector<qint16> ch0, ch1, ch2, ch3;
-            if(!DataAnalysisWorker::readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)){
-                emit reporWriteLog(QString("文件%1读取失败！").arg(filePath),QtWarningMsg);
-                continue;
-            }
-
-            //2、提取通道号的数据cameraNo                        
-            if (channelIndex == 1) {
-                //3、扣基线，调整数据
-                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
-                DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, deviceIndex, 1);
-                
-                //4、提取有效波形数据
-                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
-                ch_all_valid_wave.append(wave_ch);
-            } else if (channelIndex == 2) {
-                //3、扣基线，调整数据
-                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
-                DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, deviceIndex, 2);
-                
-                //4、提取有效波形数据
-                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
-                ch_all_valid_wave.append(wave_ch);
-            } else if (channelIndex == 3) {
-                //3、扣基线，调整数据
-                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
-                DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, deviceIndex, 3);
-                
-                //4、提取有效波形数据
-                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
-                ch_all_valid_wave.append(wave_ch);
-            } else if (channelIndex == 4) {
-                //3、扣基线，调整数据
-                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
-                DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, deviceIndex, 4);
-
-                //4、提取有效波形数据
-                QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);
-                ch_all_valid_wave.append(wave_ch);
-            }
+    for(int i = fileIndex; i <= endFileIndex; i++){
+        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
+        if(!QFileInfo::exists(filePath)){
+            QMessageBox::information(this, tr("提示"), QString("文件%1不存在！").arg(filePath));
+            emit reporWriteLog(QString("文件%1不存在！").arg(filePath),QtWarningMsg);
+            continue;
         }
+
+        //1、读取文件，获取该通道所有波形数据
+        emit reporWriteLog(QString("读取文件%1").arg(filePath),QtInfoMsg);
+        QVector<qint16> ch0, ch1, ch2, ch3;
+        if(!DataAnalysisWorker::readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)){
+            emit reporWriteLog(QString("文件%1读取失败！").arg(filePath),QtWarningMsg);
+            continue;
+        }
+
+        //2、提取通道号的数据cameraNo
+        if (channelIndex == 1) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
+            DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, deviceIndex, 1);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
+            ch_all_valid_wave.append(wave_ch);
+        } else if (channelIndex == 2) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
+            DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, deviceIndex, 2);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
+            ch_all_valid_wave.append(wave_ch);
+        } else if (channelIndex == 3) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
+            DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, deviceIndex, 3);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
+            ch_all_valid_wave.append(wave_ch);
+        } else if (channelIndex == 4) {
+            //3、扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
+            DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, deviceIndex, 4);
+
+            //4、提取有效波形数据
+            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);
+            ch_all_valid_wave.append(wave_ch);
+        }
+    }
 #endif
 
-        n_gamma neutron;
-        //计算PSD
-        QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);
+    n_gamma neutron;
+    //计算PSD
+    QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);
 
-        // 计算密度
-        QVector<float> den = neutron.computeDensity(data, 200);
-        
-        // 提取 Energy 和 PSD 向量用于绘图，转换为 double（setData 需要 double）
-        QVector<double> energyVec, psdVec;
-        QVector<double> denDouble;  // 将 float 转换为 double
-        energyVec.reserve(data.size());
-        psdVec.reserve(data.size());
-        denDouble.reserve(den.size());
-        for (const auto& pair : data) {
-            energyVec.append(static_cast<double>(pair.first));   // Energy: float -> double
-            psdVec.append(static_cast<double>(pair.second));     // PSD: float -> double
-        }
-        for (float d : den) {
-            denDouble.append(static_cast<double>(d));
-        }
-        
-        // 调用 PSDPlot 绘制图表
-        PSDPlot(PCIeCommSdk::CameraOrientation::Horizontal, energyVec, psdVec, denDouble);
-        
-        // 计算FoM
-        n_gamma::HistResult histCount = neutron.selectAndHist(data);
-        n_gamma::FOM FOM_data = neutron.GetFOM(histCount.psd_x, histCount.count_y);
-        
-        if(FOM_data.R1 < 0.90 || FOM_data.R2 < 0.90){
-            QMessageBox::information(this, tr("提示"), tr("FoM拟合不成功，请调整阈值或延长测量时间！"));
-            emit reporWriteLog(QString("FoM拟合不成功，请调整阈值或延长测量时间！"),QtWarningMsg);
-        }
+    // 计算密度
+    QVector<float> den = neutron.computeDensity(data, 200);
 
-        // 存储FoM绘图数据
-        QVector<FOM_CurvePoint> curveData;
-        for (size_t i = 0; i < histCount.psd_x.size(); ++i) {
-            curveData.push_back(FOM_CurvePoint(histCount.psd_x[i], FOM_data.Y[i], FOM_data.Y_fit1[i], FOM_data.Y_fit2[i]));
-        }
-
-        // 调用 PSDPlot 绘制图表
-        emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Horizontal, curveData);
-
-        qApp->restoreOverrideCursor();
-        return;
+    // 提取 Energy 和 PSD 向量用于绘图，转换为 double（setData 需要 double）
+    QVector<double> energyVec, psdVec;
+    QVector<double> denDouble;  // 将 float 转换为 double
+    energyVec.reserve(data.size());
+    psdVec.reserve(data.size());
+    denDouble.reserve(den.size());
+    for (const auto& pair : data) {
+        energyVec.append(static_cast<double>(pair.first));   // Energy: float -> double
+        psdVec.append(static_cast<double>(pair.second));     // PSD: float -> double
+    }
+    for (float d : den) {
+        denDouble.append(static_cast<double>(d));
     }
 
-    // 从 RadioButton 提取单个文件包对应的时间长度（单位ms）
-    // radioButton 对应 1ms, radioButton_2 对应 10ms
-    int timeLength = 1; // 默认值 1ms
-    if (ui->radioButton_2->isChecked()) {
-        timeLength = 10; // radioButton_2 选中时使用 10ms
-    } else if (ui->radioButton->isChecked()) {
-        timeLength = 1; // radioButton 选中时使用 1ms
-    }
-    
-    // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
-    int time_per = 50;
-    PCIeCommSdk::CaptureTime captureTime = PCIeCommSdk::oldCaptureTime;
-    if (ui->cmb_fileTime->currentText() == "50ms") {
-        captureTime = PCIeCommSdk::newCaptureTime;
-        time_per = 50;
-    } else if (ui->cmb_fileTime->currentText() == "66ms") {
-        captureTime = PCIeCommSdk::oldCaptureTime;
-        time_per = 66;
-    }
-    
-    //由于每个文件的能谱时长是固定的，所有这里需要根据时刻计算出对应的是第几个文件
-    qint32 time1 =ui->spinBox_time1->value();
-    quint32 fileIndex = (float)(ui->spinBox_time1->value() + time_per-1)/ time_per;
+    // 调用 PSDPlot 绘制图表
+    PSDPlot(PCIeCommSdk::CameraOrientation::Horizontal, energyVec, psdVec, denDouble);
 
-    //t1-水平相机
-    {
-        //每个文件里面对应的是4个通道，根据通道号判断是第几个文件
-        quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
-        quint32 deviceIndex = (cameraIndex + 3) / 4;
-        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
+    // 计算FoM
+    n_gamma::HistResult histCount = neutron.selectAndHist(data);
+    n_gamma::FOM FOM_data = neutron.GetFOM(histCount.psd_x, histCount.count_y);
 
-        mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
-        if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
-        {
-            QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
-        }
+    if(FOM_data.R1 < 0.90 || FOM_data.R2 < 0.90){
+        QMessageBox::information(this, tr("提示"), tr("FoM拟合不成功，请调整阈值或延长测量时间！"));
+        emit reporWriteLog(QString("FoM拟合不成功，请调整阈值或延长测量时间！"),QtWarningMsg);
     }
 
-    //t1-垂直相机
-    {
-        quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
-        quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
-        QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(fileIndex);
-        mPCIeCommSdk.setCaptureParamter(captureTime, cameraIndex, timeLength, time1);
-        if (QFileInfo::exists(filePath) && !mPCIeCommSdk.openHistoryFile(filePath))
-        {
-            QMessageBox::information(this, tr("提示"), tr("文件格式错误，加载失败！"));
-        }
+    // 存储FoM绘图数据
+    QVector<FOM_CurvePoint> curveData;
+    for (size_t i = 0; i < histCount.psd_x.size(); ++i) {
+        curveData.push_back(FOM_CurvePoint(histCount.psd_x[i], FOM_data.Y[i], FOM_data.Y_fit1[i], FOM_data.Y_fit2[i]));
     }
-    return;
+
+    // 调用 PSDPlot 绘制图表
+    emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Horizontal, curveData);
+
+    qApp->restoreOverrideCursor();
+
+    mProgressIndicator->stopAnimation();
 
     //波形
-    {
-        QVector<QPair<double ,double>> waveformPairs[2];// = generateArray(50, 50, 0, 25, 1000, 35);
-        QFile file("./waveform_lsd.csv");
-        if (ui->action_typeLBD->isChecked())
-            file.setFileName("./waveform_lbd.csv");
-        else if (ui->action_typePSD->isChecked())
-            file.setFileName("./waveform_psd.csv");
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
-            QTextStream stream(&file);
-            stream.readLine();//过滤掉标题头
-            while (!stream.atEnd())
-            {
-                QString line = stream.readLine();
-                QStringList row = line.split(',', Qt::SkipEmptyParts);
-                if (row.size() >= 3)
-                {
-                    waveformPairs[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
-                    waveformPairs[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toDouble()));
-                }
-            }
-            file.close();
+    // {
+    //     QVector<QPair<double ,double>> waveformPairs[2];// = generateArray(50, 50, 0, 25, 1000, 35);
+    //     QFile file("./waveform_lsd.csv");
+    //     if (ui->action_typeLBD->isChecked())
+    //         file.setFileName("./waveform_lbd.csv");
+    //     else if (ui->action_typePSD->isChecked())
+    //         file.setFileName("./waveform_psd.csv");
+    //     if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
+    //         QTextStream stream(&file);
+    //         stream.readLine();//过滤掉标题头
+    //         while (!stream.atEnd())
+    //         {
+    //             QString line = stream.readLine();
+    //             QStringList row = line.split(',', Qt::SkipEmptyParts);
+    //             if (row.size() >= 3)
+    //             {
+    //                 waveformPairs[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
+    //                 waveformPairs[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toDouble()));
+    //             }
+    //         }
+    //         file.close();
 
-            emit reportWaveform(1, ui->comboBox_horCamera->currentIndex()+1, waveformPairs[0]);
-            emit reportWaveform(1, ui->comboBox_verCamera->currentIndex()+12, waveformPairs[1]);
-        }
-    }
+    //         emit reportWaveform(1, ui->comboBox_horCamera->currentIndex()+1, waveformPairs[0]);
+    //         emit reportWaveform(1, ui->comboBox_verCamera->currentIndex()+12, waveformPairs[1]);
+    //     }
+    // }
 
-    //PSD
-    {
-        QVector<QPair<double ,double>> spectrumPairs;// = generateArray(50, 50, 0, 25, 1000, 35);
-        QFile file("./PSD.csv");
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
-            QTextStream stream(&file);
-            while (!stream.atEnd())
-            {
-                QString line = stream.readLine();
-                QStringList row = line.split(',', Qt::SkipEmptyParts);
-                if (row.size() == 2)
-                {
-                    spectrumPairs.push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
-                }
-            }
-            file.close();
+    // //PSD
+    // {
+    //     QVector<QPair<double ,double>> spectrumPairs;// = generateArray(50, 50, 0, 25, 1000, 35);
+    //     QFile file("./PSD.csv");
+    //     if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
+    //         QTextStream stream(&file);
+    //         while (!stream.atEnd())
+    //         {
+    //             QString line = stream.readLine();
+    //             QStringList row = line.split(',', Qt::SkipEmptyParts);
+    //             if (row.size() == 2)
+    //             {
+    //                 spectrumPairs.push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
+    //             }
+    //         }
+    //         file.close();
 
-            emit reportCalculateDensityPSD(PCIeCommSdk::CameraOrientation::Horizontal, spectrumPairs);
-            emit reportCalculateDensityPSD(PCIeCommSdk::CameraOrientation::Vertical, spectrumPairs);
-        }
-    }
+    //         emit reportCalculateDensityPSD(PCIeCommSdk::CameraOrientation::Horizontal, spectrumPairs);
+    //         emit reportCalculateDensityPSD(PCIeCommSdk::CameraOrientation::Vertical, spectrumPairs);
+    //     }
+    // }
 
-    //FoM
-    if (1){
-        /*限制数据显示范围*/
-        double f1_b1 = 0.5085;
-        double f1_c1 = 0.0033;
-        double f2_b1 = 0.5270;
-        double f2_c1 = 0.0050;
-        double limit_x1 = f1_b1-8*f1_c1/1.414;
-        double limit_x2 = f2_b1+8*f2_c1/1.414;
+    // //FoM
+    // if (1){
+    //     /*限制数据显示范围*/
+    //     double f1_b1 = 0.5085;
+    //     double f1_c1 = 0.0033;
+    //     double f2_b1 = 0.5270;
+    //     double f2_c1 = 0.0050;
+    //     double limit_x1 = f1_b1-8*f1_c1/1.414;
+    //     double limit_x2 = f2_b1+8*f2_c1/1.414;
 
-        QVector<QPair<double ,double>> spectrumPair[3];
-        QFile file("./FoM.csv");
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
-            QTextStream stream(&file);
-            QVector<FOM_CurvePoint> curveFOM;
-            while (!stream.atEnd())
-            {
-                QString line = stream.readLine();
-                QStringList row = line.split(',', Qt::SkipEmptyParts);
-                if (row.size() == 4)
-                {
-                    if (row.at(0).toDouble()>=limit_x1 && row.at(0).toDouble()<=limit_x2){
-                        curveFOM.push_back(FOM_CurvePoint(row.at(0).toDouble(), row.at(1).toDouble(), row.at(2).toDouble(), row.at(3).toDouble()));
-                    }
-                }
-            }
-            file.close();
+    //     QVector<QPair<double ,double>> spectrumPair[3];
+    //     QFile file("./FoM.csv");
+    //     if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
+    //         QTextStream stream(&file);
+    //         QVector<FOM_CurvePoint> curveFOM;
+    //         while (!stream.atEnd())
+    //         {
+    //             QString line = stream.readLine();
+    //             QStringList row = line.split(',', Qt::SkipEmptyParts);
+    //             if (row.size() == 4)
+    //             {
+    //                 if (row.at(0).toDouble()>=limit_x1 && row.at(0).toDouble()<=limit_x2){
+    //                     curveFOM.push_back(FOM_CurvePoint(row.at(0).toDouble(), row.at(1).toDouble(), row.at(2).toDouble(), row.at(3).toDouble()));
+    //                 }
+    //             }
+    //         }
+    //         file.close();
 
-            emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Horizontal, curveFOM);
-            // emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Vertical, curveFOM);
-        }
-    }
+    //         emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Horizontal, curveFOM);
+    //         // emit reportPlotFoM(PCIeCommSdk::CameraOrientation::Vertical, curveFOM);
+    //     }
+    // }
 
-    //能谱
-    {
-        QVector<QPair<double,double>> spectrumPair[2];
-        QFile file("./spectrum_lsd.csv");
-        if (ui->action_typeLBD->isChecked())
-            file.setFileName("./spectrum_lbd_r.csv");
-        else if (ui->action_typePSD->isChecked())
-            file.setFileName("./spectrum_psd_n.csv");
+    // //能谱
+    // {
+    //     QVector<QPair<double,double>> spectrumPair[2];
+    //     QFile file("./spectrum_lsd.csv");
+    //     if (ui->action_typeLBD->isChecked())
+    //         file.setFileName("./spectrum_lbd_r.csv");
+    //     else if (ui->action_typePSD->isChecked())
+    //         file.setFileName("./spectrum_psd_n.csv");
 
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
-            QTextStream stream(&file);
-            stream.readLine();//过滤掉标题头
-            while (!stream.atEnd())
-            {
-                QString line = stream.readLine();
-                QStringList row = line.split(',', Qt::SkipEmptyParts);
-                if (row.size() >= 3)
-                {
-                    spectrumPair[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
-                    spectrumPair[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toDouble()));
-                }
-            }
-            file.close();
+    //     if (file.open(QIODevice::ReadOnly | QIODevice::Text)){
+    //         QTextStream stream(&file);
+    //         stream.readLine();//过滤掉标题头
+    //         while (!stream.atEnd())
+    //         {
+    //             QString line = stream.readLine();
+    //             QStringList row = line.split(',', Qt::SkipEmptyParts);
+    //             if (row.size() >= 3)
+    //             {
+    //                 spectrumPair[0].push_back(qMakePair(row.at(0).toDouble(), row.at(1).toDouble()));
+    //                 spectrumPair[1].push_back(qMakePair(row.at(0).toDouble(), row.at(2).toDouble()));
+    //             }
+    //         }
+    //         file.close();
 
-            emit reportSpectrum(1, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
-            emit reportSpectrum(1, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[1]);
-        }
-    }
+    //         emit reportSpectrum(1, PCIeCommSdk::CameraOrientation::Horizontal, spectrumPair[0]);
+    //         emit reportSpectrum(1, PCIeCommSdk::CameraOrientation::Vertical, spectrumPair[1]);
+    //     }
+    // }
 }
 
 
@@ -1218,6 +1235,13 @@ void OfflineWindow::applyColorTheme()
                 DarkStyle darkStyle;
                 darkStyle.polish(palette);
             }
+
+            // 创建一个 QTextCursor
+            QTextCursor cursor = ui->textEdit_log->textCursor();
+            QTextDocument *document = cursor.document();
+            QString html = document->toHtml();
+            html = html.replace("color:#000000", "color:#ffffff");
+            document->setHtml(html);
         }
         else
         {
@@ -1231,32 +1255,38 @@ void OfflineWindow::applyColorTheme()
                 LightStyle lightStyle;
                 lightStyle.polish(palette);
             }
+
+            QTextCursor cursor = ui->textEdit_log->textCursor();
+            QTextDocument *document = cursor.document();
+            QString html = document->toHtml();
+            html = html.replace("color:#ffffff", "color:#000000");
+            document->setHtml(html);
         }
         //日志窗体
-        // QString styleSheet = mIsDarkTheme ?
-        //                          QString("background-color:rgb(%1,%2,%3);color:white;")
-        //                              .arg(palette.color(QPalette::Window).red())
-        //                              .arg(palette.color(QPalette::Window).green())
-        //                              .arg(palette.color(QPalette::Window).blue())
-        //                                   : QString("background-color:white;color:black;");
+        QString styleSheet = mIsDarkTheme ?
+                                 QString("background-color:rgb(%1,%2,%3);color:white;")
+                                     .arg(palette.color(QPalette::Dark).red())
+                                     .arg(palette.color(QPalette::Dark).green())
+                                     .arg(palette.color(QPalette::Dark).blue())
+                                          : QString("background-color:white;color:black;");
         // ui->logWidget->setStyleSheet(styleSheet);
 
         //更新样式表
-        // QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
-        // int i = 0;
-        // for (auto checkBox : checkBoxs){
-        //     checkBox->setStyleSheet(styleSheet);
-        // }
+        QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
+        int i = 0;
+        for (auto checkBox : checkBoxs){
+            checkBox->setStyleSheet(styleSheet);
+        }
 
         // QGraphicsScene *scene = this->findChild<QGraphicsScene*>("logGraphicsScene");
         // QGraphicsTextItem *textItem = (QGraphicsTextItem*)scene->items()[0];
         // textItem->setHtml(mIsDarkTheme ? QString("<font color='white'>工作日志</font>") : QString("<font color='black'>工作日志</font>"));
 
         // 窗体背景色
-        customPlot->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Window) : Qt::white));
+        customPlot->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
         // 四边安装轴并显示
         customPlot->axisRect()->setupFullAxesBox();
-        customPlot->axisRect()->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Window) : Qt::white));
+        customPlot->axisRect()->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
         // 坐标轴线颜色
         customPlot->xAxis->setBasePen(QPen(palette.color(QPalette::WindowText)));
         customPlot->xAxis2->setBasePen(QPen(palette.color(QPalette::WindowText)));

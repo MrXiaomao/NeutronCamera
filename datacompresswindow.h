@@ -1,4 +1,4 @@
-#ifndef DATACOMPRESSWINDOW_H
+﻿#ifndef DATACOMPRESSWINDOW_H
 #define DATACOMPRESSWINDOW_H
 
 #include <QMainWindow>
@@ -224,7 +224,7 @@ private:
     std::function<void(quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>&)> mWaveformCallback;
 };
 
-class QCustomPlot;
+class QProgressIndicator;
 class DataCompressWindow : public QMainWindow
 {
     Q_OBJECT
@@ -306,6 +306,9 @@ private:
     // 工作线程相关
     QThread* mAnalysisThread;
     DataAnalysisWorker* mAnalysisWorker;
+
+    QProgressIndicator *mProgressIndicator = nullptr;
+    void applyColorTheme();
 };
 
 #endif // DATACOMPRESSWINDOW_H

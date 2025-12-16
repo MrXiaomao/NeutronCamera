@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
         mMainWindow = new OfflineWindow(isDarkTheme, &w);
     }
     else if (args.contains("-c") && args.contains("compress")){
-        QApplication::setApplicationName("中子相机数据压缩与上传");
+        QApplication::setApplicationName(QObject::tr("中子相机数据压缩与上传"));
         mMainWindow = new DataCompressWindow(isDarkTheme, &w);
     }
     else
@@ -187,11 +187,6 @@ int main(int argc, char *argv[])
     w.show();
 
     int ret = a.exec();
-
-#ifdef ENABLE_MATLAB
-    UnfolddingAlgorithm_GravelTerminate();
-    mclTerminateApplication();
-#endif //ENABLE_MATLAB
 
     //运行运行到这里，此时主窗体析构函数还没触发，所以shutdownRootLogger需要在主窗体销毁以后再做处理
     QObject::connect(&w, &QObject::destroyed, []{

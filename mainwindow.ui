@@ -369,7 +369,7 @@
           <item>
            <widget class="QLabel" name="label_2">
             <property name="text">
-             <string>总开关：</string>
+             <string>总闸：</string>
             </property>
            </widget>
           </item>
@@ -444,7 +444,7 @@
           <item>
            <widget class="QLabel" name="label_3">
             <property name="text">
-             <string>总开关：</string>
+             <string>总闸：</string>
             </property>
            </widget>
           </item>
@@ -1140,7 +1140,7 @@
                  <number>0</number>
                 </property>
                 <property name="rightMargin">
-                 <number>0</number>
+                 <number>9</number>
                 </property>
                 <property name="bottomMargin">
                  <number>0</number>
@@ -1261,7 +1261,7 @@
                    </sizepolicy>
                   </property>
                   <property name="minimum">
-                   <number>0</number>
+                   <number>1</number>
                   </property>
                   <property name="maximum">
                    <number>10000</number>
@@ -1310,7 +1310,7 @@
                    </sizepolicy>
                   </property>
                   <property name="minimum">
-                   <number>0</number>
+                   <number>1</number>
                   </property>
                   <property name="maximum">
                    <number>10000</number>
@@ -1332,7 +1332,7 @@
                    </sizepolicy>
                   </property>
                   <property name="minimum">
-                   <number>0</number>
+                   <number>1</number>
                   </property>
                   <property name="maximum">
                    <number>10000</number>
@@ -1348,6 +1348,9 @@
                 <item row="3" column="0" colspan="3">
                  <widget class="QWidget" name="widget_2" native="true">
                   <layout class="QGridLayout" name="gridLayout">
+                   <property name="rightMargin">
+                    <number>0</number>
+                   </property>
                    <item row="0" column="0">
                     <widget class="QLabel" name="label_7">
                      <property name="sizePolicy">
@@ -1488,7 +1491,7 @@
                  <number>0</number>
                 </property>
                 <property name="rightMargin">
-                 <number>0</number>
+                 <number>9</number>
                 </property>
                 <property name="bottomMargin">
                  <number>0</number>

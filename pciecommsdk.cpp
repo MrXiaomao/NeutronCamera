@@ -1,24 +1,33 @@
-#include "pciecommsdk.h"
+﻿#include "pciecommsdk.h"
 #include <math.h>
-#include <strsafe.h>
 #include <QDateTime>
 #include <QDir>
 #include <QDebug>
 #include "datacompresswindow.h"
 #ifdef _WIN32
-#include "xdma_public.h"
+#define	XDMA_FILE_USER		"\\user"
+#define	XDMA_FILE_CONTROL	"\\control"
+#define XDMA_FILE_BYPASS	"\\bypass"
+#define	XDMA_FILE_H2C_0		"\\h2c_0"
+#define	XDMA_FILE_H2C_1		"\\h2c_1"
+#define	XDMA_FILE_H2C_2		"\\h2c_2"
+#define	XDMA_FILE_H2C_3		"\\h2c_3"
+#define	XDMA_FILE_C2H_0		"\\c2h_0"
+#define	XDMA_FILE_C2H_1		"\\c2h_1"
+#define	XDMA_FILE_C2H_2		"\\c2h_2"
+#define	XDMA_FILE_C2H_3		"\\c2h_3"
 #else
-#define	XDMA_FILE_USER		"user"
-#define	XDMA_FILE_CONTROL	"control"
-#define XDMA_FILE_BYPASS	"bypass"
-#define	XDMA_FILE_H2C_0		"h2c_0"
-#define	XDMA_FILE_H2C_1		"h2c_1"
-#define	XDMA_FILE_H2C_2		"h2c_2"
-#define	XDMA_FILE_H2C_3		"h2c_3"
-#define	XDMA_FILE_C2H_0		c2h_0"
-#define	XDMA_FILE_C2H_1		c2h_1"
-#define	XDMA_FILE_C2H_2		c2h_2"
-#define	XDMA_FILE_C2H_3		"c2h_3"
+#define	XDMA_FILE_USER		"_user"
+#define	XDMA_FILE_CONTROL	"_control"
+#define XDMA_FILE_BYPASS	"_bypass"
+#define	XDMA_FILE_H2C_0		"_h2c_0"
+#define	XDMA_FILE_H2C_1		"_h2c_1"
+#define	XDMA_FILE_H2C_2		"_h2c_2"
+#define	XDMA_FILE_H2C_3		"_h2c_3"
+#define	XDMA_FILE_C2H_0		"_c2h_0"
+#define	XDMA_FILE_C2H_1		"_c2h_1"
+#define	XDMA_FILE_C2H_2		"_c2h_2"
+#define	XDMA_FILE_C2H_3		"_c2h_3"
 #endif
 
 PCIeCommSdk::PCIeCommSdk(QObject *parent)
@@ -100,7 +109,9 @@ quint32 PCIeCommSdk::numberOfDevices()
     return mDevices.count();
 }
 
+#ifdef _WIN32
 #include <processtopologyapi.h> //SetThreadGroupAffinity
+#endif
 void PCIeCommSdk::startCapture(quint32 cardIndex, QString fileSavePath, quint32 captureTimeSeconds, QString shotNum/*炮号*/)
 {
     if (cardIndex > (quint32)mDevices.count()) {
@@ -134,7 +145,9 @@ void PCIeCommSdk::startCapture(quint32 cardIndex, QString fileSavePath, quint32 
     connect(captureThread, QOverload<quint8,quint32,QByteArray&>::of(&CaptureThread::reportCaptureSpectrumData), this, &PCIeCommSdk::replyCaptureSpectrumData);
 
     // 设置线程亲和性(小于64核)
+#ifdef _WIN32
     SetThreadAffinityMask(captureThread->currentThreadId(), cardIndex << 2);
+#endif
     // 设置线程亲和性(大于64核)
     // 处理器组亲和性结构
     // GROUP_AFFINITY group_affinity;
@@ -338,7 +351,7 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
         quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
         for (quint8 timeIndex=1; timeIndex<=3; ++timeIndex){
             quint32 packIndex = mTimestampMs[timeIndex-1] / 50 + 1;
-            quint32 packPos = mTimestampMs[timeIndex-1] % 50;
+            quint32 packPos = mTimestampMs[timeIndex-1] % 50 - 1;
             if (currentPackIndex == packIndex){
                 QByteArray chunk = spectrumData.mid(packPos*1024, 1024);
 
@@ -434,11 +447,11 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeInde
         if (spectrumData.size() >= 1024*50){
             quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
             quint32 packIndex = mTimestampMs[timeIndex-1] / 50 + 1;
-            quint32 packPos = mTimestampMs[timeIndex-1] % 50;
+            quint32 packPos = mTimestampMs[timeIndex-1] % 50 - 1;
             QByteArray chunk = spectrumData.mid(packPos*1024, 1024);
 
             bool ok;
-            //能谱序号 高位16bi表示这是第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
+            //能谱序号 高位16bi表示这是 第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
             QByteArray head = chunk.left(4);
             quint32 serialNumber = chunk.mid(4, 2).toHex().toUInt(&ok, 16);
             quint32 serialNumberRef = chunk.mid(6, 1).toInt();
@@ -781,108 +794,102 @@ void PCIeCommSdk::writeCommand(QByteArray& data)
     }
 }
 
-#ifdef _WIN32
-bool PCIeCommSdk::writeData(HANDLE hFile, quint64 offset, QByteArray& data)
+
+bool PCIeCommSdk::writeData(HANDLE fd, quint64 offset, QByteArray& data)
 {
+#ifdef _WIN32
     LARGE_INTEGER address;
     address.QuadPart = offset;
-    if (INVALID_SET_FILE_POINTER == SetFilePointerEx(hFile, address, NULL, FILE_BEGIN)) {
+    if (INVALID_SET_FILE_POINTER == SetFilePointerEx(fd, address, NULL, FILE_BEGIN)) {
         fprintf(stderr, "Error setting file pointer, win32 error code: %ld\n", GetLastError());
         return false;
     }
 
     DWORD dwNumberOfBytesWritten;
-    if (!WriteFile(hFile, data.constData(), data.size(), &dwNumberOfBytesWritten, NULL)) {
+    if (!WriteFile(fd, data.constData(), data.size(), &dwNumberOfBytesWritten, NULL)) {
         fprintf(stderr, "WriteFile failed with Win32 error code: %d\n", GetLastError());
         return false;
     }
 
+#else
+    void *map;
+    off_t pgsz, target_aligned;
+    off_t target = 0x20000;
+    pgsz = sysconf(_SC_PAGESIZE);
+    offset = target & (pgsz - 1);
+    target_aligned = target & (~(pgsz - 1));
+    map = mmap(NULL, 0, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
+               target_aligned);
+    if (map == MAP_FAILED){
+        return false;
+    }
+
+    //map += offset;
+    memcpy(map, data.constData(), data.size());
+    if (munmap(map, data.size()) == -1){
+        // 记录错误日志
+        perror("munmap failed");
+        return false;
+    }
+
+    //map -= offset;
+    if (munmap(map, offset + 4) == -1){
+        printf("Memory 0x%lx mapped failed: %s.\n",
+               target, strerror(errno));
+        return false;
+    }
+#endif //_WIN32
+
     return true;
 }
 
-bool PCIeCommSdk::readData(HANDLE hFile, quint64 offset, QByteArray& data)
+bool PCIeCommSdk::readData(HANDLE fd, quint64 offset, QByteArray& data)
 {
+#ifdef _WIN32
     LARGE_INTEGER address;
     address.QuadPart = offset;
-    if (INVALID_SET_FILE_POINTER == SetFilePointerEx(hFile, address, NULL, FILE_BEGIN)) {
+    if (INVALID_SET_FILE_POINTER == SetFilePointerEx(fd, address, NULL, FILE_BEGIN)) {
         fprintf(stderr, "Error setting file pointer, win32 error code: %ld\n", GetLastError());
         return false;
     }
 
     DWORD nNumberOfBytesRead = 0;
-    if (!ReadFile(hFile, data.data(), data.size(), &nNumberOfBytesRead, NULL)) {
+    if (!ReadFile(fd, data.data(), data.size(), &nNumberOfBytesRead, NULL)) {
         qDebug() << "ReadFile fail, win32 error code:" << GetLastError();
         return false;
     }
 
-    return true;
-}
-
 #else
-bool PCIeCommSdk::writeData(int fd, quint64 offset, QByteArray& data)
-{
     void *map;
-    off_t pgsz, target_aligned, offset;
+    off_t pgsz, target_aligned;
     off_t target = 0x20000;
     pgsz = sysconf(_SC_PAGESIZE);
-    offset = target & (pgsz - 1);
+    //offset = target & (pgsz - 1);
     target_aligned = target & (~(pgsz - 1));
-    map = mmap(NULL, offset + 4, PROT_READ | PROT_WRITE, MAP_SHARED, mMapUser[index],
+    map = mmap(NULL, 0, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
                target_aligned);
     if (map == MAP_FAILED){
         return false;
     }
 
-    map += offset;
-    std::memcpy(map, data.constData(), data.size());
+    //map += offset;
+    memcpy(data.data(), map, data.size());
     if (munmap(map, data.size()) == -1){
         // 记录错误日志
         perror("munmap failed");
         return false;
     }
 
-    map -= offset;
+    //map -= offset;
     if (munmap(map, offset + 4) == -1){
         printf("Memory 0x%lx mapped failed: %s.\n",
                target, strerror(errno));
         return false;
     }
+#endif //_WIN32
 
     return true;
 }
-
-bool PCIeCommSdk::readData(int fd, quint64 offset, QByteArray& data)
-{
-    void *map;
-    off_t pgsz, target_aligned, offset;
-    off_t target = 0x20000;
-    pgsz = sysconf(_SC_PAGESIZE);
-    offset = target & (pgsz - 1);
-    target_aligned = target & (~(pgsz - 1));
-    map = mmap(NULL, offset + 4, PROT_READ | PROT_WRITE, MAP_SHARED, mMapUser[index],
-               target_aligned);
-    if (map == MAP_FAILED){
-        return false;
-    }
-
-    map += offset;
-    std::memcpy(data.data(), map, data.size());
-    if (munmap(map, data.size()) == -1){
-        // 记录错误日志
-        perror("munmap failed");
-        return false;
-    }
-
-    map -= offset;
-    if (munmap(map, offset + 4) == -1){
-        printf("Memory 0x%lx mapped failed: %s.\n",
-               target, strerror(errno));
-        return false;
-    }
-
-    return true;
-}
-#endif
 
 void PCIeCommSdk::initialize()
 {
@@ -891,58 +898,56 @@ void PCIeCommSdk::initialize()
     for (int cardIndex = 1; cardIndex <= numberOfDevices(); ++cardIndex){
         QString devicePath = mDevices.at(cardIndex - 1) + XDMA_FILE_C2H_0;
 #ifdef _WIN32
-        HANDLE hfInput = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (hfInput == INVALID_HANDLE_VALUE) {
+        //FILE_FLAG_SEQUENTIAL_SCAN
+        //FILE_FLAG_NO_BUFFERING
+        HANDLE fd = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING, NULL);
+        if (fd == INVALID_HANDLE_VALUE) {
+            emit reportCaptureFail(cardIndex, GetLastError());
 #else
-        int hfInput = open("devicePath.toStdString().c_str(), O_RDWR);
+        int fd = open(devicePath.toStdString().c_str(), O_RDWR);
         //int fd_usr = open("/dev/xdma0_user",O_RDWR);
         if (hfInput < 0) {
 #endif
-            emit reportCaptureFail(cardIndex, GetLastError());
             continue;
         }
         else{
-            mMapDevice[cardIndex] = hfInput;
+            mMapDevice[cardIndex] = fd;
 
             devicePath = mDevices.at(cardIndex - 1) + XDMA_FILE_USER;
 #ifdef _WIN32
-            hfInput = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (hfInput == INVALID_HANDLE_VALUE) {
+            fd = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (fd == INVALID_HANDLE_VALUE) {
                 CloseHandle(mMapDevice[cardIndex]);
 #else
-            int hfInput = open("devicePath.toStdString().c_str(), O_RDWR);
+            fd = open(devicePath.toStdString().c_str(), O_RDWR);
             if (hfInput < 0) {
                 close(mMapDevice[cardIndex]);
 #endif
-                mMapDevice.remove(cardIndex);
-                emit reportCaptureFail(cardIndex, GetLastError());
+                mMapDevice.remove(cardIndex);                
                 continue;
             }
             else{
-                mMapUser[cardIndex] = hfInput;
-                emit reportCaptureFail(cardIndex, GetLastError());
+                mMapUser[cardIndex] = fd;
             }
 
             devicePath = mDevices.at(cardIndex - 1) + XDMA_FILE_BYPASS;
 #ifdef _WIN32
-            hfInput = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (hfInput == INVALID_HANDLE_VALUE) {
+            fd = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+            if (fd == INVALID_HANDLE_VALUE) {
                 CloseHandle(mMapDevice[cardIndex]);
                 CloseHandle(mMapUser[cardIndex]);
 #else
-            int hfInput = open("devicePath.toStdString().c_str(), O_RDWR);
+            fd = open(devicePath.toStdString().c_str(), O_RDWR);
             if (hfInput < 0) {
                 close(mMapDevice[cardIndex]);
                 close(mMapUser[cardIndex]);
 #endif
                 mMapDevice.remove(cardIndex);
                 mMapUser.remove(cardIndex);
-                emit reportCaptureFail(cardIndex, GetLastError());
                 continue;
             }
             else{
-                mMapBypass[cardIndex] = hfInput;
-                emit reportCaptureFail(cardIndex, GetLastError());
+                mMapBypass[cardIndex] = fd;
             }
         }
     }
@@ -1305,7 +1310,6 @@ bool CaptureThread::resetReadflag()
     // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
 
     while(1){
-        DWORD NumberOfBytesWritten = 0;
         QByteArray buf1 = QByteArray::fromHex("01 E0 34 12");
         QByteArray buf2 = QByteArray::fromHex("00 D0 34 12");
         QByteArray buf3 = QByteArray::fromHex("00 E0 34 12");
