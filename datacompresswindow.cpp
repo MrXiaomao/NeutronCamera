@@ -305,24 +305,32 @@ qint16 DataAnalysisWorker::calculateBaseline(const QVector<qint16>& data_ch)
         return 0;
     }
 
-    // 创建直方图，binwidth=1
-    // 使用QMap存储每个值的计数
-    QMap<qint16, int> histogram;
-    for (qint16 value : data_ch) {
-        histogram[value]++;
+    // 每个线程一份，避免多线程争用；每次调用清零即可
+    thread_local std::array<int, 65536> hist;
+
+    // 清零（65536 个 int，成本可接受；比 QMap 快很多）
+    std::fill(hist.begin(), hist.end(), 0);
+
+    // qint16 映射到 [0,65535]
+    // 将 value 转成 uint16_t 后直接作为索引（等价于 +32768 的映射）
+    for (qint16 v : data_ch) {
+        const uint16_t idx = static_cast<uint16_t>(v);
+        ++hist[idx];
     }
 
-    // 找到出现频率最高的值
-    int maxCount = 0;
-    qint16 baseline_ch = 0;
-    for (auto it = histogram.constBegin(); it != histogram.constEnd(); ++it) {
-        if (it.value() > maxCount) {
-            maxCount = it.value();
-            baseline_ch = it.key();
+    // 找最大计数
+    int maxCount = -1;
+    uint16_t bestIdx = 0;
+    for (uint32_t i = 0; i < hist.size(); ++i) {
+        const int c = hist[i];
+        if (c > maxCount) {
+            maxCount = c;
+            bestIdx = static_cast<uint16_t>(i);
         }
     }
 
-    return baseline_ch;
+    // bestIdx 还原成 qint16（位级别 reinterpret 等价）
+    return static_cast<qint16>(bestIdx);
 }
 
 
@@ -375,12 +383,12 @@ QVector<std::array<qint16, 512>> DataAnalysisWorker::overThreshold(const QVector
 
     // 丢弃可能不完整的包（比如半个波形）
     // 从索引21开始（因为需要检查i-20到i的均值）
-    for (int i = 20; i < data.size(); ++i) {
+    for (int i = pre_points; i < data.size(); ++i) {
         // 条件：从低于阈值跨越到高于阈值，且前21个点（i-20到i）的均值小于阈值
         if (data[i - 1] <= threshold && data[i] > threshold) {
             // 计算从i-20到i（包括i）的21个点的均值
             qint64 sum = 0;
-            for (int j = i - 20; j <= i; ++j) {
+            for (int j = i - pre_points; j <= i; ++j) {
                 sum += data[j];
             }
             double mean_value = static_cast<double>(sum) / 21.0;
@@ -504,43 +512,143 @@ void DataAnalysisWorker::getValidWave()
         int processedFiles = 0;
         
 #if 1
-        emit logMessage(QString("正在提取板卡%1的波形数据...").arg(deviceIndex), QtInfoMsg);
+        emit logMessage(QString("正在提取板卡%1的波形数据（读盘-计算流水线）...").arg(deviceIndex), QtInfoMsg);
+
+        // 读盘线程：顺序读文件，尽量让磁盘持续满载
+        // 队列容量建议 2~4（每个文件约256MB，容量越大占用内存越多）
+        const int queueCapacity = 3;
+        BoundedFileQueue queue(queueCapacity);
 
         QThreadPool* pool = QThreadPool::globalInstance();
-        pool->setMaxThreadCount(QThread::idealThreadCount());
-        QMutex mutex;
-        for (int fileID = startFile; fileID < endFile; ++fileID) {
-            QString fileName = QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
-            QString filePath = QDir(dataDir).filePath(fileName);
-            quint32 packerStartTime = (fileID - 1) * 50;//文件序号，每个文件50ms
-            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex,
-                0,/*相机编号*/
-                packerStartTime,/*波形数据起始时间*/
+        pool->setMaxThreadCount(qMax(1, QThread::idealThreadCount()));
+
+        QMutex mergeMutex;
+        std::atomic<int> processedFilesAtomic{0};
+
+        // 用于等待所有解析任务结束（不影响读盘线程）
+        std::atomic<int> pendingTasks{0};
+        QMutex pendingMutex;
+        QWaitCondition pendingCond;
+
+        // 生产者：读文件 -> push 到队列
+        std::atomic_bool producerDone{false};
+        std::thread producer([&]() {
+            for (int fileID = startFile; fileID < endFile; ++fileID) {
+                {
+                    QMutexLocker locker(&mMutex);
+                    if (mCancelled) break;
+                }
+
+                const QString fileName = QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
+                const QString filePath = QDir(dataDir).filePath(fileName);
+
+                QFile f(filePath);
+                if (!f.open(QIODevice::ReadOnly)) {
+                    emit logMessage(QString("板卡%1 文件%2: 打开失败").arg(deviceIndex).arg(fileName), QtWarningMsg);
+                    continue;
+                }
+                // 大文件：增大缓冲，减少 read 系统调用次数
+                // f.setReadBufferSize(16 * 1024 * 1024);
+
+                const qint64 size = f.size();
+                if (size <= 0) {
+                    emit logMessage(QString("板卡%1 文件%2: 文件大小异常").arg(deviceIndex).arg(fileName), QtWarningMsg);
+                    continue;
+                }
+
+                QByteArray buf = f.readAll();;
+                if (buf.isEmpty()) {
+                    emit logMessage(QString("板卡%1 文件%2: 读取不完整 (%3/%4)")
+                                    .arg(deviceIndex).arg(fileName), QtWarningMsg);
+                    continue;
+                }
+
+                FileJob job;
+                job.filePath = filePath;
+                job.deviceIndex = static_cast<quint8>(deviceIndex);
+                job.packerStartTime = static_cast<quint32>((fileID - 1) * timePerFile);
+                job.data = std::move(buf);
+
+                queue.push(std::move(job));
+            }
+
+            producerDone = true;
+            queue.stop();
+        });
+
+        // 消费者：从队列取出 buffer，丢到线程池做解交织+基线+阈值提取
+        FileJob job;
+        while (queue.pop(job)) {
+            {
+                QMutexLocker locker(&mMutex);
+                if (mCancelled) break;
+            }
+
+            pendingTasks.fetch_add(1, std::memory_order_relaxed);
+
+            auto onFinished = [&]() {
+                const int left = pendingTasks.fetch_sub(1, std::memory_order_acq_rel) - 1;
+                if (left == 0) {
+                    QMutexLocker lk(&pendingMutex);
+                    pendingCond.wakeAll();
+                }
+            };
+
+            auto cb = [&](quint32 /*packerCurrentTime*/, quint8 channelIndex, QVector<std::array<qint16, 512>>& wave_ch) {
+                QMutexLocker locker(&mergeMutex);
+                if (channelIndex == 1)
+                    wave_ch0_all.append(wave_ch);
+                else if (channelIndex == 2)
+                    wave_ch1_all.append(wave_ch);
+                else if (channelIndex == 3)
+                    wave_ch2_all.append(wave_ch);
+                else if (channelIndex == 4)
+                    wave_ch3_all.append(wave_ch);
+            };
+
+            // 注意：这里 cameraIndex=0 表示 4个通道都处理一次（对应本板卡）
+            auto *task = new ExtractValidWaveformFromBufferTask(
+                std::move(job),
+                0,
                 threshold,
                 pre_points,
                 post_points,
-                filePath,
-                [&](quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>& wave_ch){
-                    QMutexLocker locker(&mutex);
-                    if (channelIndex == 1)
-                        wave_ch0_all.append(wave_ch);
-                    else if (channelIndex == 2)
-                        wave_ch1_all.append(wave_ch);
-                    else if (channelIndex == 3)
-                        wave_ch2_all.append(wave_ch);
-                    else if (channelIndex == 4)
-                        wave_ch3_all.append(wave_ch);
+                cb,
+                [&, onFinished]() {
+                    // 以“文件”为粒度更新进度（而不是以通道为粒度）
+                    const int pf = processedFilesAtomic.fetch_add(1, std::memory_order_relaxed) + 1;
 
-                    // 发送进度更新
-                    if (channelIndex == 4){
-                        int totalProgress = totalBoards * totalFiles;
-                        int currentProgress = (processedBoards * totalFiles) + processedFiles;
-                        emit progressUpdated(currentProgress, totalProgress);
-                    }
+                    const int totalProgress = totalBoards * totalFiles;
+                    const int currentProgress = (processedBoards * totalFiles) + pf;
+                    emit progressUpdated(currentProgress, totalProgress);
+
+                    onFinished();
                 });
+
             pool->start(task);
         }
-        pool->waitForDone();
+
+        if (producer.joinable()) producer.join();
+
+        // 等待线程池任务全部结束（仅等待本次提交的任务）
+        {
+            QMutexLocker lk(&pendingMutex);
+            while (pendingTasks.load(std::memory_order_acquire) > 0) {
+                pendingCond.wait(&pendingMutex, 200);
+                {
+                    QMutexLocker locker(&mMutex);
+                    if (mCancelled) break;
+                }
+            }
+        }
+
+        processedFiles = processedFilesAtomic.load(std::memory_order_relaxed);
+
+        if (mCancelled) {
+            emit logMessage("分析已取消", QtWarningMsg);
+            emit analysisFinished(false, "分析已取消");
+            return;
+        }
 #else
         for (int fileID = startFile; fileID < endFile; ++fileID) {
             {
@@ -1216,6 +1324,8 @@ QString DataCompressWindow::humanReadableSize(qint64 bytes)
 #include <QFileInfoList>
 #include <QRegularExpression>
 #include <algorithm>
+#include <atomic>
+#include <thread>
 QFileInfoList DataCompressWindow::getBinFileList(const QString& dirPath)
 {
     QFileInfoList fileinfoList;

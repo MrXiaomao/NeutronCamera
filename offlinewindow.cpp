@@ -27,8 +27,7 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     // 绘图信号与槽连接
     connect(this, SIGNAL(reportPSDPlot(quint8,const QVector<double>&, const QVector<double>&, const QVector<double>&)), this,
         SLOT(replyPSDPlot(quint8,const QVector<double>&,const QVector<double>&,const QVector<double>&)));
-    connect(this, SIGNAL(reportFoMPlot(quint8,const QVector<FOM_CurvePoint>&)), this, 
-        SLOT(replyFoMPlot(quint8,const QVector<FOM_CurvePoint>&)));
+    connect(this, &OfflineWindow::reportFoMPlot, this, &OfflineWindow::replyFoMPlot);
     connect(this, SIGNAL(reportSpectrum(quint8, quint8, const QVector<QPair<quint16,quint16>>&)), this, 
         SLOT(replySpectrum(quint8, quint8, const QVector<QPair<quint16,quint16>>&)));
 
@@ -696,8 +695,6 @@ void OfflineWindow::on_action_analyze_triggered()
         emit reporWriteLog(QString("需要处理的文件数量：%1 (从文件%2到%3)").arg(endFileIndex - fileIndex + 1).arg(fileIndex).arg(endFileIndex),QtInfoMsg);
         
         // 提取该通道有效波形数据，并进行合并
-        QElapsedTimer fileProcessTimer;
-        fileProcessTimer.start();
         qint64 totalFileReadTime = 0;
         qint64 totalBaselineTime = 0;
         qint64 totalWaveExtractTime = 0;
@@ -705,26 +702,126 @@ void OfflineWindow::on_action_analyze_triggered()
 
         QVector<std::array<qint16, 512>> ch_all_valid_wave;
 #if 1
+        // === 读盘-计算流水线：尽量让磁盘持续顺序读 ===
         QThreadPool* pool = QThreadPool::globalInstance();
-        pool->setMaxThreadCount(QThread::idealThreadCount());
-        QMutex mutex;
-        for(int i = fileIndex; i <= endFileIndex; i++){
-            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
-            quint32 packerStartTime = (fileIndex - 1) * 50;//文件序号，每个文件50ms
-            ExtractValidWaveformTask *task = new ExtractValidWaveformTask(deviceIndex,
-                    cameraIndex,
-                    packerStartTime,
-                    threshold,
-                    pre_points,
-                    post_points,
-                    filePath,
-                    [&](quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>& wave_ch){
-                QMutexLocker locker(&mutex);
+        // 计算线程池：建议 2~4 起步（单盘更稳；NVMe 可再加）
+        int maxTh = int(QThread::idealThreadCount() * 0.5*0.8); //使用80%物理核CPU资源，因为一般计算机都是超线程，所以乘以0.5
+        pool->setMaxThreadCount(maxTh);
+
+        // 队列容量：2~4（每个文件256MB）
+        const int queueCapacity = 1;
+        BoundedFileQueue queue(queueCapacity);
+
+        QMutex mergeMutex;
+        std::atomic<int> doneFiles{0};
+
+        // 用于等待所有任务完成
+        std::atomic<int> pendingTasks{0};
+        QMutex pendingMutex;
+        QWaitCondition pendingCond;
+
+        // 生产者：单线程顺序读文件（把磁盘拉满）
+        std::thread producer([&]() {
+            for (int i = fileIndex; i <= endFileIndex; ++i) {
+                const QString filePath =
+                    QString("%1/%2data%3.bin")
+                        .arg(ui->textBrowser_filepath->toPlainText())
+                        .arg(deviceIndex)
+                        .arg(i);
+
+                QFile f(filePath);
+                if (!f.open(QIODevice::ReadOnly)) {
+                    emit reporWriteLog(QString("文件打开失败：%1").arg(filePath), QtWarningMsg);
+                    continue;
+                }
+
+                const qint64 size = f.size();
+                if (size <= 0) {
+                    emit reporWriteLog(QString("文件大小异常：%1").arg(filePath), QtWarningMsg);
+                    continue;
+                }
+
+                QElapsedTimer readTimer;
+                readTimer.start();
+                QByteArray buf = f.readAll();
+                const qint64 readMs = readTimer.elapsed();
+                totalFileReadTime += readMs;
+
+                if (buf.isEmpty()) {
+                    emit reporWriteLog(QString("文件读取不完整：%1 ")
+                                        .arg(filePath),
+                                    QtWarningMsg);
+                    continue;
+                }
+
+                FileJob job;
+                job.filePath = filePath;
+                job.deviceIndex = static_cast<quint8>(deviceIndex);
+
+                // ✅ 修复 packerStartTime：必须随 i 变化
+                job.packerStartTime = static_cast<quint32>((i - 1) * time_per);
+
+                job.data = std::move(buf);
+
+                queue.push(std::move(job));
+            }
+
+            queue.stop();
+        });
+
+        // 消费者：从队列取内存数据，丢给线程池做“解交织+基线+阈值提取”
+        // 只处理 cameraIndex 对应的单通道（ExtractValidWaveformFromBufferTask 已支持）
+        QElapsedTimer consumerWall;
+        consumerWall.start();                 // ✅ 消费者阶段开始（墙钟）
+
+        FileJob job;
+        while (queue.pop(job)) {
+            pendingTasks.fetch_add(1, std::memory_order_relaxed);
+
+            auto onFinished = [&]() {
+                const int left = pendingTasks.fetch_sub(1, std::memory_order_acq_rel) - 1;
+                if (left == 0) {
+                    QMutexLocker lk(&pendingMutex);
+                    pendingCond.wakeAll();
+                }
+            };
+
+            auto cb = [&](quint32 /*packerCurrentTime*/,
+                        quint8 /*channelIdx*/,
+                        QVector<std::array<qint16, 512>>& wave_ch) {
+                QMutexLocker locker(&mergeMutex);
                 ch_all_valid_wave.append(wave_ch);
-            });
+            };
+
+            auto* task = new ExtractValidWaveformFromBufferTask(
+                std::move(job),
+                static_cast<quint8>(cameraIndex), // ✅ 单相机（单通道）
+                threshold,
+                pre_points,
+                post_points,
+                cb,
+                [&]() {
+                    doneFiles.fetch_add(1, std::memory_order_relaxed);
+                    onFinished();
+                });
+
             pool->start(task);
         }
-        pool->waitForDone();
+
+        if (producer.joinable()) producer.join();
+
+        // 等待所有任务完成
+        {
+            QMutexLocker lk(&pendingMutex);
+            while (pendingTasks.load(std::memory_order_acquire) > 0) {
+                pendingCond.wait(&pendingMutex, 200);
+            }
+        }
+        // pool->waitForDone();                  // ✅ 所有消费者任务都结束
+        qint64 consumerTotalMs = consumerWall.elapsed();   // ✅ 消费者阶段总耗时（系统时间）
+
+        // 统计
+        processedFileCount = doneFiles.load(std::memory_order_relaxed);
 #else     
         for(int i = fileIndex; i <= endFileIndex; i++){
             QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(deviceIndex).arg(i);
@@ -829,33 +926,23 @@ void OfflineWindow::on_action_analyze_triggered()
             emit reporWriteLog(QString("  文件%1总耗时：%2 ms").arg(i).arg(singleFileTime),QtInfoMsg);
         }
 #endif
-        qint64 fileProcessTime = fileProcessTimer.elapsed();
         emit reporWriteLog(QString("=== 文件处理阶段统计 ==="),QtInfoMsg);
         emit reporWriteLog(QString("处理文件总数：%1").arg(processedFileCount),QtInfoMsg);
-        emit reporWriteLog(QString("文件处理总耗时：%1 ms (%2 秒)")
-                    .arg(fileProcessTime)
-                    .arg(fileProcessTime / 1000.0, 0, 'f', 2),
-                QtInfoMsg
-        );
-
-        emit reporWriteLog(QString("  文件读取总耗时：%1 ms (%2 秒，占比 %3%%)")
+        emit reporWriteLog(QString("  文件读取总耗时：%1 ms (%2 秒)")
                 .arg(totalFileReadTime)
-                .arg(totalFileReadTime / 1000.0, 0, 'f', 2)
-                .arg(fileProcessTime > 0 ? (100.0 * totalFileReadTime / fileProcessTime) : 0.0, 0, 'f', 1),
+                .arg(totalFileReadTime / 1000.0, 0, 'f', 2),
             QtInfoMsg
         );
 
-        emit reporWriteLog(QString("  基线计算总耗时：%1 ms (%2 秒，占比 %3%%)")
-                .arg(totalBaselineTime)
-                .arg(totalBaselineTime / 1000.0, 0, 'f', 2)
-                .arg(fileProcessTime > 0 ? (100.0 * totalBaselineTime / fileProcessTime) : 0.0, 0, 'f', 1),
+        emit reporWriteLog(QString("  基线计算、波形提取总耗时：%1 ms (%2 秒)")
+                .arg(consumerTotalMs)
+                .arg(consumerTotalMs / 1000.0, 0, 'f', 2),
             QtInfoMsg
         );
 
-        emit reporWriteLog(QString("  波形提取总耗时：%1 ms (%2 秒，占比 %3%%)")
+        emit reporWriteLog(QString("  波形提取总耗时：%1 ms (%2 秒，占比 %3%)")
                 .arg(totalWaveExtractTime)
-                .arg(totalWaveExtractTime / 1000.0, 0, 'f', 2)
-                .arg(fileProcessTime > 0 ? (100.0 * totalWaveExtractTime / fileProcessTime) : 0.0, 0, 'f', 1),
+                .arg(totalWaveExtractTime / 1000.0, 0, 'f', 2),
             QtInfoMsg
         );
         emit reporWriteLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()),QtInfoMsg);
@@ -918,9 +1005,17 @@ void OfflineWindow::on_action_analyze_triggered()
         emit reporWriteLog(QString("  FoM拟合计算耗时：%1 ms").arg(fomCalcTime),QtInfoMsg);
         emit reporWriteLog(QString("FoM计算总耗时：%1 ms (%2 秒)").arg(fomTotalTime).arg(fomTotalTime / 1000.0, 0, 'f', 2),QtInfoMsg);
         
+        QPair<double,double> xLim;
         if(FOM_data.R1 < 0.90 || FOM_data.R2 < 0.90){
             QMessageBox::information(this, tr("提示"), tr("FoM拟合不成功，请调整阈值或延长测量时间！"));
             emit reporWriteLog(QString("FoM拟合不成功，请调整阈值或延长测量时间！"),QtWarningMsg);
+            xLim.first  = histCount.psd_x[0];
+            xLim.second = histCount.psd_x.back();
+        }
+        else{
+            //拟合成功，取出绘图范围
+            xLim.first  = FOM_data.xlim[0];
+            xLim.second = FOM_data.xlim[1];
         }
 
         // 存储FoM绘图数据
@@ -932,7 +1027,7 @@ void OfflineWindow::on_action_analyze_triggered()
         }
 
         // 绘制FoM图表
-        emit reportFoMPlot(PCIeCommSdk::CameraOrientation::Horizontal, curveData);
+        emit reportFoMPlot(PCIeCommSdk::CameraOrientation::Horizontal, xLim, curveData);
         qApp->restoreOverrideCursor();
         qint64 fomPlotTime = fomPlotTimer.elapsed();
         emit reporWriteLog(QString("FoM图表绘制耗时：%1 ms").arg(fomPlotTime),QtInfoMsg);
@@ -940,27 +1035,30 @@ void OfflineWindow::on_action_analyze_triggered()
         qint64 totalTime = totalTimer.elapsed();
         emit reporWriteLog(QString("=== n-gamma甄别模式总耗时统计 ==="),QtInfoMsg);
         emit reporWriteLog(QString("总耗时：%1 ms (%2 秒)").arg(totalTime).arg(totalTime / 1000.0, 0, 'f', 2),QtInfoMsg);
-        emit reporWriteLog(QString("  文件处理阶段：%1 ms (%2%%)").arg(fileProcessTime).arg(totalTime > 0 ? (100.0 * fileProcessTime / totalTime) : 0.0, 0, 'f', 2),QtInfoMsg);
-        emit reporWriteLog(QString("  PSD计算阶段：%1 ms (%2%%)")
+        emit reporWriteLog(QString("  文件处理阶段：%1 ms (%2%)")
+                           .arg(totalFileReadTime)
+                           .arg(totalTime > 0 ? (100.0 * totalFileReadTime / totalTime) : 0.0, 0, 'f', 2),
+                           QtInfoMsg);
+        emit reporWriteLog(QString("  PSD计算阶段：%1 ms (%2%)")
                     .arg(psdTime)
                     .arg(totalTime > 0 ? (100.0 * psdTime / totalTime) : 0.0, 0, 'f', 2),
                 QtInfoMsg
         );
 
-        emit reporWriteLog(QString("  密度计算阶段：%1 ms (%2%%)")
+        emit reporWriteLog(QString("  密度计算阶段：%1 ms (%2%)")
                 .arg(densityTime)
                 .arg(totalTime > 0 ? (100.0 * densityTime / totalTime) : 0.0, 0, 'f', 1),
             QtInfoMsg
         );
 
-        emit reporWriteLog(QString("  FoM计算阶段：%1 ms (%2%%)")
+        emit reporWriteLog(QString("  FoM计算阶段：%1 ms (%2%)")
                 .arg(fomTotalTime)
                 .arg(totalTime > 0 ? (100.0 * fomTotalTime / totalTime) : 0.0, 0, 'f', 1),
             QtInfoMsg
         );
 
-        const auto otherTime = totalTime - fileProcessTime - psdTime - densityTime - fomTotalTime;
-        emit reporWriteLog(QString("  其他（转换、绘图等）：%1 ms (%2%%)")
+        const auto otherTime = totalTime - totalFileReadTime - psdTime - densityTime - fomTotalTime;
+        emit reporWriteLog(QString("  其他（转换、绘图等）：%1 ms (%2%)")
                 .arg(otherTime)
                 .arg(totalTime > 0 ? (100.0 * otherTime / totalTime) : 0.0, 0, 'f', 1),
             QtInfoMsg
@@ -1022,7 +1120,7 @@ void OfflineWindow::on_action_analyze_triggered()
     // 绘图测试部分
     //波形
     {
-        QVector<QPair<double ,double>> waveformPairs[2];// = generateArray(50, 50, 0, 25, 1000, 35);
+        QVector<QPair<double ,double>> waveformPairs[2];
         QFile file("./waveform_lsd.csv");
         if (ui->action_typeLBD->isChecked())
             file.setFileName("./waveform_lbd.csv");
@@ -1097,8 +1195,8 @@ void OfflineWindow::on_action_analyze_triggered()
                 }
             }
             file.close();
-
-            emit reportFoMPlot(PCIeCommSdk::CameraOrientation::Horizontal, curveFOM);
+            QPair<double,double> xlim = {limit_x1, limit_x2};
+            emit reportFoMPlot(PCIeCommSdk::CameraOrientation::Horizontal, xlim, curveFOM);
         }
     }
 
@@ -1710,7 +1808,7 @@ void OfflineWindow::replyPSDPlot(quint8 cameraOrientation, const QVector<double>
     customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
 }
 
-void OfflineWindow::replyFoMPlot(quint8 cameraOrientation, const QVector<FOM_CurvePoint>& pairs)
+void OfflineWindow::replyFoMPlot(quint8 cameraOrientation, QPair<double,double> xlim, const QVector<FOM_CurvePoint>& pairs)
 {
     // 核密度图谱
     QCustomPlot* customPlot = nullptr;
@@ -1757,7 +1855,8 @@ void OfflineWindow::replyFoMPlot(quint8 cameraOrientation, const QVector<FOM_Cur
         customPlot->graph(2)->setData(x, y, z);
     }
 
-    customPlot->xAxis->rescale(true);
+    customPlot->xAxis->setRange(xlim.first, xlim.second);
+    // customPlot->xAxis->rescale(true);
     customPlot->yAxis->rescale(true);
     customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
 }

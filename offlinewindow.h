@@ -57,8 +57,8 @@ public slots:
     void replyCalculateDensityPSD(quint8, QVector<QPair<double,double>>&);// PSD密度分布计算
 
     void replySpectrum(quint8, quint8, const QVector<QPair<double,double>>&);
-    void replyFoMPlot(quint8, const QVector<FOM_CurvePoint>&);// FoM拟合
     void replyPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图绘制
+    void replyFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&);// FoM图绘制
 
 signals:
     void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
@@ -67,7 +67,7 @@ signals:
 
     void reportSpectrum(quint8, quint8, const QVector<QPair<double,double>>&);
     void reportPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图
-    void reportFoMPlot(quint8, const QVector<FOM_CurvePoint>&);// FoM拟合
+    void reportFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&);// FoM拟合
 
 private slots:
     void on_action_openfile_triggered();

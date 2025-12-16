@@ -10,6 +10,12 @@
 #include <array>
 
 #include "QGoodWindowHelper"
+#include <QQueue>
+#include <QWaitCondition>
+#include <QThreadPool>
+#include <functional>
+#include <atomic>
+#include <thread>
 
 namespace Ui {
 class DataCompressWindow;
@@ -109,121 +115,140 @@ private:
     bool mCancelled;
 };
 
-/**
-* @提取有效波形
-*/
-class ExtractValidWaveformTask : public QObject, public QRunnable{
-    Q_OBJECT
-public:
-    // explicit ExtractValidWaveformTask(const quint8& cameraIndex,
-    //                                   int threshold,
-    //                                   int pre_points,
-    //                                   int post_points,
-    //                                   const QString& filePath,
-    //                                   std::function<void(quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>&)> callback)
-    //     : mFilePath(filePath)
-    //     , mThreshold(threshold)
-    //     , mPre_points(pre_points)
-    //     , mPost_points(post_points)
-    //     , mCameraIndex(cameraIndex)
-    //     , mWaveformCallback(callback)
-    // {
-    //     this->setAutoDelete(true);
-    // }
+// ====== 有界队列：最多缓存 N 个文件（N*256MB 内存）======
 
-    explicit ExtractValidWaveformTask(const quint8& deviceIndex,
-                                      const quint8& cameraIndex,//0-表示所有通道
-                                      const quint32& packerStartTime,
-                                      int threshold,
-                                      int pre_points,
-                                      int post_points,
-                                      const QString& filePath,
-                                      std::function<void(quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>&)> callback)
-        : mDeviceIndex(deviceIndex)
-        , mCameraIndex(cameraIndex)
-        , mFilePath(filePath)
-        , mThreshold(threshold)
-        , mPre_points(pre_points)
-        , mPost_points(post_points)
-        , mPackerStartTime(packerStartTime)
-        , mWaveformCallback(callback)
-    {
-        this->setAutoDelete(true);
+// ====== 有界队列：最多缓存 N 个文件（N * 256MB 内存）======
+struct FileJob {
+    QString filePath;
+    quint8 deviceIndex = 0;      // 1~6
+    quint32 packerStartTime = 0; // ms
+    QByteArray data;             // 约 256MB
+};
+
+class BoundedFileQueue {
+public:
+    explicit BoundedFileQueue(int capacity) : mCapacity(qMax(1, capacity)) {}
+
+    void push(FileJob&& job) {
+        QMutexLocker lk(&mMutex);
+        while (!mStopped && mQueue.size() >= mCapacity) {
+            mNotFull.wait(&mMutex);
+        }
+        if (mStopped) return;
+        mQueue.enqueue(std::move(job));
+        mNotEmpty.wakeOne();
     }
 
-    void run() override{
-        if(!QFileInfo::exists(mFilePath)){
-            return;
+    // 返回 false：队列已结束（stop() 已调用且队列空）
+    bool pop(FileJob& out) {
+        QMutexLocker lk(&mMutex);
+        while (!mStopped && mQueue.isEmpty()) {
+            mNotEmpty.wait(&mMutex);
         }
+        if (mQueue.isEmpty()) return false;
 
-        QVector<qint16> ch0, ch1, ch2, ch3;
-        if(!DataAnalysisWorker::readBin4Ch_fast(mFilePath, ch0, ch1, ch2, ch3, true)){
-            return;
-        }
+        out = std::move(mQueue.front());
+        mQueue.dequeue();
+        mNotFull.wakeOne();
+        return true;
+    }
 
-        QVector<std::array<qint16, 512>> mWaveform;
-        int threshold = mThreshold;
-        int pre_points = mPre_points;
-        int post_points = mPost_points;
-
-        //2、提取通道号的数据channelIndex
-        //根据相机序号计算出是第几块光纤卡
-        int channelIndex = 0;//0-表示提取所有通道波形
-        if (mCameraIndex != 0){
-            mDeviceIndex = (mCameraIndex-1) / 4 + 1;
-            channelIndex = (mCameraIndex - 1) % 4 + 1;// 1、2、3、4
-        }
-
-        quint32 packerCurrentTime = 0;
-        if (channelIndex == 1 || mCameraIndex == 0) {
-            //3、扣基线，调整数据
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
-            DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, mDeviceIndex, 1);
-
-            //4、提取有效波形数据
-            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch0, 1, threshold, pre_points, post_points);
-            mWaveformCallback(packerCurrentTime, 1, wave_ch);
-        }
-        if (channelIndex == 2 || mCameraIndex == 0) {
-            //3、扣基线，调整数据
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
-            DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, mDeviceIndex, 2);
-
-            //4、提取有效波形数据
-            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch1, 2, threshold, pre_points, post_points);
-            mWaveformCallback(packerCurrentTime, 2, wave_ch);
-        }
-        if (channelIndex == 3 || mCameraIndex == 0) {
-            //3、扣基线，调整数据
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
-            DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, mDeviceIndex, 3);
-
-            //4、提取有效波形数据
-            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch2, 3, threshold, pre_points, post_points);
-            mWaveformCallback(packerCurrentTime, 3, wave_ch);
-        }
-        if (channelIndex == 4 || mCameraIndex == 0) {
-            //3、扣基线，调整数据
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch3);
-            DataAnalysisWorker::adjustDataWithBaseline(ch3, baseline_ch, mDeviceIndex, 4);
-
-            //4、提取有效波形数据
-            QVector<std::array<qint16, 512>> wave_ch = DataAnalysisWorker::overThreshold(ch3, 4, threshold, pre_points, post_points);
-            mWaveformCallback(packerCurrentTime, 4, wave_ch);
-        }
+    void stop() {
+        QMutexLocker lk(&mMutex);
+        mStopped = true;
+        mNotEmpty.wakeAll();
+        mNotFull.wakeAll();
     }
 
 private:
-    QString mFilePath;
-    quint8 mCameraIndex;
-    quint8 mDeviceIndex;
-    quint32 mPackerStartTime;
-    int mThreshold;
-    int mPre_points;
-    int mPost_points;
-    std::function<void(quint32 packerCurrentTime, quint8 channelIndex, QVector<std::array<qint16, 512>>&)> mWaveformCallback;
+    int mCapacity = 2;
+    QQueue<FileJob> mQueue;
+    QMutex mMutex;
+    QWaitCondition mNotEmpty;
+    QWaitCondition mNotFull;
+    bool mStopped = false;
 };
 
+// ====== 解析/提取任务：从内存 data 解析 4 通道并提取波形 ======
+class ExtractValidWaveformFromBufferTask : public QObject, public QRunnable {
+    Q_OBJECT
+public:
+    ExtractValidWaveformFromBufferTask(FileJob&& job,
+                                       quint8 cameraIndex, // 0=所有通道
+                                       int threshold,
+                                       int pre_points,
+                                       int post_points,
+                                       std::function<void(quint32 packerCurrentTime,
+                                                          quint8 channelIndex,
+                                                          QVector<std::array<qint16, 512>>&)> cb,
+                                       std::function<void()> onFinished = {})
+        : mJob(std::move(job))
+        , mCameraIndex(cameraIndex)
+        , mThreshold(threshold)
+        , mPre(pre_points)
+        , mPost(post_points)
+        , mCallback(std::move(cb))
+        , mOnFinished(std::move(onFinished))
+    {
+        setAutoDelete(true);
+    }
+
+    void run() override {
+        // 1) 从 buffer 解交织出 4 通道
+        QVector<qint16> ch0, ch1, ch2, ch3;
+        if (!DataAnalysisWorker::readBin4Ch_fast(mJob.data, ch0, ch1, ch2, ch3, true)) {
+            if (mOnFinished) mOnFinished();
+            return;
+        }
+
+        // 2) 通道选择逻辑（0=全通道；否则按相机号映射板卡+通道）
+        quint8 deviceIndex = mJob.deviceIndex;
+        int channelIndex = 0;
+        if (mCameraIndex != 0) {
+            deviceIndex = (mCameraIndex - 1) / 4 + 1;
+            channelIndex = (mCameraIndex - 1) % 4 + 1; // 1..4
+        }
+
+        quint32 packerCurrentTime = mJob.packerStartTime;
+
+        // 3) 基线 + 调整 + 过阈提取（每个通道独立）
+        if (channelIndex == 1 || mCameraIndex == 0) {
+            qint16 b = DataAnalysisWorker::calculateBaseline(ch0);
+            DataAnalysisWorker::adjustDataWithBaseline(ch0, b, deviceIndex, 1);
+            auto wave = DataAnalysisWorker::overThreshold(ch0, 1, mThreshold, mPre, mPost);
+            mCallback(packerCurrentTime, 1, wave);
+        }
+        if (channelIndex == 2 || mCameraIndex == 0) {
+            qint16 b = DataAnalysisWorker::calculateBaseline(ch1);
+            DataAnalysisWorker::adjustDataWithBaseline(ch1, b, deviceIndex, 2);
+            auto wave = DataAnalysisWorker::overThreshold(ch1, 2, mThreshold, mPre, mPost);
+            mCallback(packerCurrentTime, 2, wave);
+        }
+        if (channelIndex == 3 || mCameraIndex == 0) {
+            qint16 b = DataAnalysisWorker::calculateBaseline(ch2);
+            DataAnalysisWorker::adjustDataWithBaseline(ch2, b, deviceIndex, 3);
+            auto wave = DataAnalysisWorker::overThreshold(ch2, 3, mThreshold, mPre, mPost);
+            mCallback(packerCurrentTime, 3, wave);
+        }
+        if (channelIndex == 4 || mCameraIndex == 0) {
+            qint16 b = DataAnalysisWorker::calculateBaseline(ch3);
+            DataAnalysisWorker::adjustDataWithBaseline(ch3, b, deviceIndex, 4);
+            auto wave = DataAnalysisWorker::overThreshold(ch3, 4, mThreshold, mPre, mPost);
+            mCallback(packerCurrentTime, 4, wave);
+        }
+
+        if (mOnFinished) mOnFinished();
+    }
+
+private:
+    FileJob mJob;
+    quint8 mCameraIndex = 0;
+    int mThreshold = 0;
+    int mPre = 20;
+    int mPost = 491;
+    std::function<void(quint32, quint8, QVector<std::array<qint16, 512>>&)> mCallback;
+    std::function<void()> mOnFinished;
+};
 class QCustomPlot;
 class DataCompressWindow : public QMainWindow
 {
