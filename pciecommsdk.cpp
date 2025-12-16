@@ -351,7 +351,7 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, qu
         quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
         for (quint8 timeIndex=1; timeIndex<=3; ++timeIndex){
             quint32 packIndex = mTimestampMs[timeIndex-1] / 50 + 1;
-            quint32 packPos = mTimestampMs[timeIndex-1] % 50 - 1;
+            quint32 packPos = (mTimestampMs[timeIndex-1] - 1) % 50;
             if (currentPackIndex == packIndex){
                 QByteArray chunk = spectrumData.mid(packPos*1024, 1024);
 
@@ -447,7 +447,7 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeInde
         if (spectrumData.size() >= 1024*50){
             quint64 mTimestampMs[] = {mTimestampMs1, mTimestampMs2, mTimestampMs3};
             quint32 packIndex = mTimestampMs[timeIndex-1] / 50 + 1;
-            quint32 packPos = mTimestampMs[timeIndex-1] % 50 - 1;
+            quint32 packPos = (mTimestampMs[timeIndex-1] - 1) % 50;
             QByteArray chunk = spectrumData.mid(packPos*1024, 1024);
 
             bool ok;
