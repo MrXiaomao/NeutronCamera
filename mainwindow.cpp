@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "qcustomplot.h"
 #include "globalsettings.h"
@@ -33,7 +33,6 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     ui->pushButton_selChannel1->setEnabled(false);
     ui->pushButton_selChannel2->setEnabled(false);
 
-    mPCIeCommSdk.initialize();
     if (mPCIeCommSdk.numberOfDevices() <= 0){
         ui->action_init->setEnabled(false);
         ui->action_startMeasure->setEnabled(false);

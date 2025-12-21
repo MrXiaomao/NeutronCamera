@@ -14,7 +14,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+
 typedef int HANDLE;
+#define CloseHandle close
 #endif
 
 #include <QFile>
@@ -67,16 +69,18 @@ private:
 class DataCachPoolThread : public QThread {
     Q_OBJECT
 public:
-    explicit DataCachPoolThread(const quint32 cardIndex, const QString &saveFilePath);
+    explicit DataCachPoolThread();
 
     void run() override;
+
+    void setParamter(const quint32 cardIndex, const QString &saveFilePath);
 
     Q_SIGNAL void reportFileWriteElapsedtime(quint32,quint32);
     Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,QByteArray& data);
     Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,QByteArray& data);
 
     Q_SLOT void replyThreadExit();
-    Q_SLOT void replyCaptureData(QByteArray& waveformData, QByteArray& spectrumData);
+    Q_SLOT void replyCaptureData(const QByteArray& waveformData, const QByteArray& spectrumData);
 
     /**
     * @function name: reverseArray
@@ -91,9 +95,14 @@ private:
     quint32 mCardIndex;//设备名称
     QString mSaveFilePath;//保存路径
     QVector<QByteArray> mCachePool;
+    unsigned char *mTotalBytes[10];
     bool mTerminated = false;
     QMutex mMutexWrite;
     QElapsedTimer mElapsedTimer;
+
+    quint32 mPackref = 0;
+    bool mReady = false;
+    QWaitCondition mCondition;
 };
 
 class CaptureThread : public QThread {
@@ -114,11 +123,28 @@ public:
     explicit CaptureThread(const quint32 cardIndex,
                            HANDLE hFile,
                            HANDLE hUser,
-                           HANDLE hBypass,
-                           const QString &saveFilePath,
-                           quint32 captureTimeSeconds);
+                           HANDLE hBypass);
 
     void run() override;
+
+    void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds);
+
+    void pause(){
+        QMutexLocker locker(&mMutex);
+        mIsPaused = true;
+    }
+
+    void resume(){
+        QMutexLocker locker(&mMutex);
+        mIsPaused = false;
+        mCondition.wakeOne();
+    }
+
+    void stop(){
+        QMutexLocker locker(&mMutex);
+        mIsStopped = true;
+        mCondition.wakeOne();
+    }
 
     /**
     * @function name:prepared
@@ -163,7 +189,7 @@ public:
     * @param[out]       data
     * @return           void
     */
-    bool readWaveformData(QByteArray& data);
+    bool readWaveformData(const QByteArray& data, const int offset = 0);
 
     /**
     * @function name:readSpectrumData
@@ -172,11 +198,11 @@ public:
     * @param[out]       data
     * @return           bool
     */
-    bool readSpectrumData(QByteArray& data);
+    bool readSpectrumData(const QByteArray& data, const int offset = 0);
 
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
     Q_SIGNAL void reportThreadExit(quint32);
-    Q_SIGNAL void reportCaptureData(QByteArray& waveformData, QByteArray& spectrumData);
+    Q_SIGNAL void reportCaptureData(const QByteArray& waveformData, const QByteArray& spectrumData);
     Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,QByteArray& data);
     Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,QByteArray& data);
     Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
@@ -189,10 +215,20 @@ private:
     HANDLE mDeviceHandle;//设备句柄
     HANDLE mUserHandle;//用户句柄
     HANDLE mBypassHandle;//RAM句柄
+
     QString mSaveFilePath;//保存路径
     quint32 mCaptureTimeSeconds = 50;
     quint32 mCaptureRef = 1;
     quint32 mTimeout = 5000;//超时微秒
+
+    quint32 mCapturedRef = 0;
+    QVector<QByteArray> mWaveformDatas;
+    QVector<QByteArray> spectrumDatas;
+
+    QMutex mMutex;
+    QWaitCondition mCondition;
+    bool mIsPaused = false;
+    bool mIsStopped = false;
 };
 
 #define CAMNUMBER_DDR_PER   4   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
@@ -251,7 +287,8 @@ public:
     QStringList enumDevices();
 
     /*初始化*/
-    void initialize();
+    void initializeDevices();
+    void initCaptureThreads();
 
     /*设置采集参数，离线*/
     void setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex, quint32 timeLength, quint32 time1);
@@ -316,8 +353,8 @@ public:
 
     void writeCommand(QByteArray& data);
 
-    static bool writeData(HANDLE fd, quint64 offset, QByteArray& data);
-    static bool readData(HANDLE fd, quint64 offset, QByteArray& data);
+    static bool writeData(HANDLE hFile, quint64 offset, const QByteArray& data);
+    static bool readData(HANDLE hFile, quint64 offset, const QByteArray& data);
 
 signals:
 
