@@ -1,4 +1,4 @@
-﻿#include "pciecommsdk.h"
+#include "pciecommsdk.h"
 #include <math.h>
 #include <QDateTime>
 #include <QDir>
@@ -910,8 +910,11 @@ void PCIeCommSdk::initCaptureThreads()
             }
 
             if (allCaptureFinished)
+            {
                 emit reportCaptureFinished();
-        });
+                qInfo() << "数据采集完毕！";
+            }
+        }, Qt::DirectConnection);
         connect(captureThread, &CaptureThread::reportFileReadElapsedtime, this, &PCIeCommSdk::reportFileReadElapsedtime);
         connect(captureThread, &CaptureThread::reportFileWriteElapsedtime, this, &PCIeCommSdk::reportFileWriteElapsedtime);
         //connect(captureThread, QOverload<quint8,quint32,QByteArray&>::of(&CaptureThread::reportCaptureWaveformData), this, &PCIeCommSdk::replyCaptureWaveformData);
@@ -982,14 +985,14 @@ void DataCachPoolThread::replyThreadExit()
 */
 void DataCachPoolThread::replyCaptureData(const QByteArray& waveformData, const QByteArray& spectrumData)
 {
-    QElapsedTimer elapsedTimer;
-    elapsedTimer.start();
-    int size = waveformData.size();
-    const char *ptr = waveformData.data();
-    memcpy(mTotalBytes[0]/* + mPackref * 0x10000000*/, ptr, size);
-    ++mPackref;
-    qDebug() << "[" << mCardIndex << "]" << mPackref <<"write elapsedTimer=" << elapsedTimer.elapsed();
-    return;
+    // QElapsedTimer elapsedTimer;
+    // elapsedTimer.start();
+    // int size = waveformData.size();
+    // const char *ptr = waveformData.data();
+    // memcpy(mTotalBytes[0]/* + mPackref * 0x10000000*/, ptr, size);
+    // ++mPackref;
+    // qDebug() << "[" << mCardIndex << "]" << mPackref <<"write elapsedTimer=" << elapsedTimer.elapsed();
+    // return;
 
     QMutexLocker locker(&mMutexWrite);
     QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mCardIndex).arg(++mPackref);
@@ -1156,9 +1159,9 @@ CaptureThread::CaptureThread(const quint32 cardIndex, HANDLE hFile, HANDLE hUser
 
 void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTimeSeconds)
 {
-    mCapturedRef = 0;
-    mSaveFilePath = saveFilePath;
-    mCaptureTimeSeconds = captureTimeSeconds;
+    this->mCapturedRef = 0;
+    this->mSaveFilePath = saveFilePath;
+    this->mCaptureRef = quint32((double)captureTimeSeconds / 50.0 + 0.4);
     mDataCachPoolThread->setParamter(mCardIndex, mSaveFilePath);
 }
 
@@ -1168,7 +1171,6 @@ void CaptureThread::run()
     qRegisterMetaType<QVector<QPair<double,double>>>("QVector<QPair<double,double>>&");
 
     quint32 packingDuration = 50; // 打包时长
-    this->mCaptureRef = quint32((double)mCaptureTimeSeconds / 50.0 + 0.4);
 
     //启动数据缓存线程
     mDataCachPoolThread->start();
@@ -1190,12 +1192,6 @@ void CaptureThread::run()
 
         if (mIsStopped)
             break;
-
-        if (++mCapturedRef > this->mCaptureRef)
-        {
-            pause();
-            continue;
-        }
 
         QElapsedTimer elapsedTimer;
         elapsedTimer.start();
@@ -1244,10 +1240,16 @@ void CaptureThread::run()
         emit reportCaptureData(mWaveformDatas.at(mCapturedRef), spectrumData); //发给数据缓存处理线程
 #endif //APP_VERSION_1_0
 
-        if (mCapturedRef >= this->mCaptureRef){
+        if (++mCapturedRef >= this->mCaptureRef){
             event_rd = 1;
             pause();
             emit reportCaptureFinished(mCardIndex);
+
+            for (int i = 0; i < mWaveformDatas.size(); ++i)
+            {
+                emit reportCaptureData(mWaveformDatas.at(i), spectrumData); //发给数据缓存处理线程
+                //mDataCachPoolThread->replyCaptureData(mWaveformDatas.at(mCapturedRef), spectrumData);
+            }
         }
 
         qDebug() << "[" << mCardIndex << "] " << mCapturedRef << " elapsedTimer=" << elapsedTimer.elapsed();

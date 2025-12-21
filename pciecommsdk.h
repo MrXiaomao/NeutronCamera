@@ -1,4 +1,4 @@
-﻿#ifndef PCIECOMMSDK_H
+#ifndef PCIECOMMSDK_H
 #define PCIECOMMSDK_H
 
 #include <QObject>
@@ -217,7 +217,6 @@ private:
     HANDLE mBypassHandle;//RAM句柄
 
     QString mSaveFilePath;//保存路径
-    quint32 mCaptureTimeSeconds = 50;
     quint32 mCaptureRef = 1;
     quint32 mTimeout = 5000;//超时微秒
 
