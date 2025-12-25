@@ -719,16 +719,26 @@ void MainWindow::initUi()
     connect(mCommHelper, &CommHelper::reportVoltageCurrent, this, [=](quint8 moduleNo, QVector<QPair<float,float>>& pairs){
         quint32 column = moduleNo + 1;
 
+        if (pairs.size() != 12)
+            qDebug() << "";
+        QVector<QPair<float,float>> sortPairs;
+        for (int i=0; i<4; ++i)
+            sortPairs.append(pairs[i*2+1]);
+        for (int i=0; i<4; ++i)
+            sortPairs.append(pairs[i*2]);
+        for (int i=8; i<12; ++i)
+            sortPairs.append(pairs[i]);
+
         //29V电压
         quint8 rowOffset = 4;
         for (int row=0; row<4; ++row){
-            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(pairs[row].first, 'f', 2));
+            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(sortPairs[row].first, 'f', 2));
 
             //电压设成28~30V
-            if (pairs[row].first > 30 || pairs[row].first < 28){
+            if (sortPairs[row].first > 30 || sortPairs[row].first < 28){
                 ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(Qt::red);
 
-                qCritical().noquote() << "模组#" << moduleNo << " 29V电压异常，电压值：" << QString::number(pairs[row].first, 'f', 2) << "V";
+                qCritical().noquote() << "模组#" << moduleNo << " 29V电压异常，电压值：" << QString::number(sortPairs[row].first, 'f', 2) << "V";
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
@@ -741,11 +751,11 @@ void MainWindow::initUi()
             }
 
             //电流设置成0~20mA
-            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(pairs[row].second, 'f', 2));
-            if (pairs[row].second > 20 || pairs[row].second == 0){
+            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(sortPairs[row].second, 'f', 2));
+            if (sortPairs[row].second > 20 || sortPairs[row].second == 0){
                 ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(Qt::red);
 
-                qCritical().noquote() << "模组#" << moduleNo << " 29V电流异常，电流值：" << QString::number(pairs[row].first, 'f', 2) << "mA";
+                qCritical().noquote() << "模组#" << moduleNo << " 29V电流异常，电流值：" << QString::number(sortPairs[row].first, 'f', 2) << "mA";
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
@@ -761,13 +771,13 @@ void MainWindow::initUi()
         //48V电压
         rowOffset += 4;
         for (int row=4; row<8; ++row){
-            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(pairs[row].first, 'f', 2));
+            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(sortPairs[row].first, 'f', 2));
 
             //电压设成45~50V
-            if (pairs[row].first > 50 || pairs[row].first < 45){
+            if (sortPairs[row].first > 50 || sortPairs[row].first < 45){
                 ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(Qt::red);
 
-                qCritical().noquote() << "模组#" << moduleNo << " 48V电压异常，电压值：" << QString::number(pairs[row].first, 'f', 2) << "V";
+                qCritical().noquote() << "模组#" << moduleNo << " 48V电压异常，电压值：" << QString::number(sortPairs[row].first, 'f', 2) << "V";
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
@@ -780,11 +790,11 @@ void MainWindow::initUi()
             }
 
             //电流设置成0~20mA
-            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(pairs[row].second, 'f', 2));
-            if (pairs[row].second > 20 || pairs[row].second == 0){
+            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(sortPairs[row].second, 'f', 2));
+            if (sortPairs[row].second > 20 || sortPairs[row].second == 0){
                 ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(Qt::red);
 
-                qCritical().noquote() << "模组#" << moduleNo << " 48V电流异常，电流值：" << QString::number(pairs[row].first, 'f', 2) << "mA";
+                qCritical().noquote() << "模组#" << moduleNo << " 48V电流异常，电流值：" << QString::number(sortPairs[row].first, 'f', 2) << "mA";
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
@@ -800,13 +810,13 @@ void MainWindow::initUi()
         //运放板电压
         rowOffset += 4;
         for (int row=8; row<12; ++row){
-            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(pairs[row].first, 'f', 2));
+            ui->tableWidget_status->item(row + rowOffset, column)->setText(QString::number(sortPairs[row].first, 'f', 2));
 
             //电压设成45~50V
-            if (pairs[row].first > 50 || pairs[row].first < 45){
+            if (sortPairs[row].first > 50 || sortPairs[row].first < 45){
                 ui->tableWidget_status->item(row + rowOffset, column)->setTextColor(Qt::red);
 
-                qCritical().noquote() << "模组#" << moduleNo << " 运放板电压异常，电压值：" << QString::number(pairs[row].first, 2, 'f') << "V";
+                qCritical().noquote() << "模组#" << moduleNo << " 运放板电压异常，电压值：" << QString::number(sortPairs[row].first, 2, 'f') << "V";
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);
@@ -819,11 +829,11 @@ void MainWindow::initUi()
             }
 
             //电流设置成0~20mA
-            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(pairs[row].second, 'f', 2));
-            if (pairs[row].second > 20 || pairs[row].second == 0){
+            ui->tableWidget_status->item(row + rowOffset + 4, column)->setText(QString::number(sortPairs[row].second, 'f', 2));
+            if (sortPairs[row].second > 20 || sortPairs[row].second == 0){
                 ui->tableWidget_status->item(row + rowOffset + 4, column)->setTextColor(Qt::red);
 
-                qCritical().noquote() << "模组#" << moduleNo << " 运放板电流异常，电流值：" << QString::number(pairs[row].first, 2, 'f') << "mA";
+                qCritical().noquote() << "模组#" << moduleNo << " 运放板电流异常，电流值：" << QString::number(sortPairs[row].first, 2, 'f') << "mA";
 
                 mPCIeCommSdk.switchPower(moduleNo, false);
                 mPCIeCommSdk.switchVoltage(moduleNo, false);

@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+﻿#include "mainwindow.h"
 #include "offlinewindow.h"
 #include "datacompresswindow.h"
 #include "globalsettings.h"
@@ -52,8 +52,13 @@ static QTranslator qtbaseTranslator;
 static QTranslator appTranslator;
 int main(int argc, char *argv[])
 {
-    QApplication::setAttribute(Qt::AA_DisableHighDpiScaling); // 禁用高DPI缩放支持
-    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps); // 使用高DPI位图
+    // QApplication::setAttribute(Qt::AA_DisableHighDpiScaling); // 禁用高DPI缩放支持
+    // QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps); // 使用高DPI位图
+    // QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+    QGoodWindow::setup();
+    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+    QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
+    QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
     QApplication a(argc, argv);
@@ -70,13 +75,18 @@ int main(int argc, char *argv[])
         QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings,false);
     }
 
-    QString fontFamily = settings.value("Global/Options/fontFamily", "微软雅黑").toString();
-    quint32 fontPointSize = settings.value("Global/Options/fontPointSize", 12).toInt();
-    QFont font = qApp->font();
-    font.setStyleStrategy(QFont::PreferAntialias);
-    font.setHintingPreference(QFont::PreferFullHinting);
-    font.setFamily(fontFamily);
-    font.setPointSize(fontPointSize);
+    QFont font = QApplication::font();
+#if defined(Q_OS_WIN) && defined(Q_CC_MSVC)
+    int fontId = QFontDatabase::addApplicationFont(QApplication::applicationDirPath() + "/inziu-iosevkaCC-SC-regular.ttf");
+#else
+    int fontId = QFontDatabase::addApplicationFont(QStringLiteral(":/font/font/inziu-iosevkaCC-SC-regular.ttf"));
+#endif
+    QStringList fontFamilies = QFontDatabase::applicationFontFamilies(fontId);
+    if (fontFamilies.size() > 0) {
+        font.setFamily(fontFamilies[0]);
+        font.setPointSize(font.pointSize() + 4);
+    }
+    font.setFixedPitch(true);
     qApp->setFont(font);
     qApp->setStyle(new DarkStyle());
     qApp->style()->setObjectName("fusion");

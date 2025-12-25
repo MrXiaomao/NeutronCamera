@@ -1,4 +1,4 @@
-#ifndef COMMHELPER_H
+﻿#ifndef COMMHELPER_H
 #define COMMHELPER_H
 
 #include <QObject>
@@ -48,7 +48,7 @@ private:
     QTcpSocket *mTcpClient = nullptr;
     QUdpSocket *mUdpServer = nullptr;
     QLiteThread* mRequestCmdThread = nullptr;
-
+    QByteArray mRawData;
     /*
      初始化网络
     */

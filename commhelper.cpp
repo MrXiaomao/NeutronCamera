@@ -1,4 +1,4 @@
-#include "commhelper.h"
+﻿#include "commhelper.h"
 #include "globalsettings.h"
 
 #include <QTimer>
@@ -12,39 +12,39 @@ CommHelper::CommHelper(QObject *parent)
     /*初始化网络*/
     initSocket();
 
-    mRequestCmdThread = new QLiteThread(this);
-    mRequestCmdThread->setObjectName("mRequestCmdThread");
-    mRequestCmdThread->setWorkThreadProc([=](){
-        while (!mRequestCmdThread->isInterruptionRequested())
-        {
-            if (mTcpClient->isOpen()){
-                //发送查询指令
-                //@01*999*GET*01*#
-                for (int i=1; i<=18; ++i){
-                    QString askCommand = QString("@%1*999*GET*01*#").arg(i, 2, 10, QLatin1Char('0'));
-                    mTcpClient->write(askCommand.toLatin1());
-                    mTcpClient->waitForBytesWritten();
+    // mRequestCmdThread = new QLiteThread(this);
+    // mRequestCmdThread->setObjectName("mRequestCmdThread");
+    // mRequestCmdThread->setWorkThreadProc([=](){
+    //     while (!mRequestCmdThread->isInterruptionRequested())
+    //     {
+    //         if (mTcpClient->isOpen()){
+    //             //发送查询指令
+    //             //@01*999*GET*01*#
+    //             for (int i=1; i<=18; ++i){
+    //                 QString askCommand = QString("@%1*999*GET*01*#").arg(i, 2, 10, QLatin1Char('0'));
+    //                 mTcpClient->write(askCommand.toLatin1());
+    //                 mTcpClient->waitForBytesWritten();
 
-                    QThread::msleep(500);
-                }
-            }
+    //                 QThread::msleep(500);
+    //             }
+    //         }
 
-            QThread::msleep(1000);
-        }
-    });
-    mRequestCmdThread->start();
-    connect(this, &CommHelper::destroyed, [=]() {
-        mRequestCmdThread->exit(0);
-        mRequestCmdThread->wait(500);
-    });
+    //         QThread::msleep(1000);
+    //     }
+    // });
+    // mRequestCmdThread->start();
+    // connect(this, &CommHelper::destroyed, [=]() {
+    //     mRequestCmdThread->exit(0);
+    //     mRequestCmdThread->wait(500);
+    // });
 }
 
 CommHelper::~CommHelper()
 {
-    mRequestCmdThread->requestInterruption();
-    mRequestCmdThread->quit();
-    mRequestCmdThread->wait();
-    mRequestCmdThread->deleteLater();
+    // mRequestCmdThread->requestInterruption();
+    // mRequestCmdThread->quit();
+    // mRequestCmdThread->wait();
+    // mRequestCmdThread->deleteLater();
 
     this->disconnectServer();
 }
@@ -124,8 +124,14 @@ void CommHelper::error(QAbstractSocket::SocketError error)
 void CommHelper::readyRead()
 {
     //读取新的数据
-    QByteArray rawData = mTcpClient->readAll();
-    if (rawData.startsWith('@') && rawData.endsWith('#')){
+    QByteArray tempData = mTcpClient->readAll();
+    qDebug() << tempData;
+    mRawData.append(tempData);
+    while (mRawData.contains('@') && mRawData.contains('#')){
+        quint32 start = mRawData.indexOf('@');
+        quint32 end = mRawData.indexOf('#', start);
+        QByteArray rawData = mRawData.mid(start, end - start + 1);
+        mRawData.remove(0, end + 1);
         quint8 moduleNo = rawData.mid(1, 2).toInt();
         /*
             @01*999*GETR*01*
@@ -163,7 +169,7 @@ void CommHelper::readyRead()
         //IHA238_01 = 0.00V, 0.00mA
         for (int i=0; i<lines.size(); ++i){
             QString input = lines.at(i);
-            if (input.contains("IHA238")){
+            if (input.contains("INA238")){
                 QRegularExpression regex("(\\d+\\.\\d+)(V|mA)");
                 QRegularExpressionMatchIterator iterator = regex.globalMatch(input);
 
@@ -201,15 +207,23 @@ void CommHelper::readyRead()
             }
         }
 
-        emit reportTemperature(moduleNo, temperature);
-        emit reportVoltageCurrent(moduleNo, voltage_current);
+        if (voltage_current.size() != 12)
+        {
+            qDebug() << QString(rawData);
+            qDebug() << "exception";
+        }
+        else{
+
+            emit reportTemperature(moduleNo, temperature);
+            emit reportVoltageCurrent(moduleNo, voltage_current);
+        }
     }
 }
 
 
 void CommHelper::connected()
 {
-
+    mTcpClient->write("start");//stop
 }
 
 /*
@@ -235,5 +249,7 @@ bool CommHelper::connectServer()
 */
 void CommHelper::disconnectServer()
 {
+    if (mTcpClient->isOpen())
+        mTcpClient->write("stop");
     this->mTcpClient->close();
 }

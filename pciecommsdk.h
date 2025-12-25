@@ -1,4 +1,4 @@
-#ifndef PCIECOMMSDK_H
+﻿#ifndef PCIECOMMSDK_H
 #define PCIECOMMSDK_H
 
 #include <QObject>
@@ -95,7 +95,6 @@ private:
     quint32 mCardIndex;//设备名称
     QString mSaveFilePath;//保存路径
     QVector<QByteArray> mCachePool;
-    unsigned char *mTotalBytes[10];
     bool mTerminated = false;
     QMutex mMutexWrite;
     QElapsedTimer mElapsedTimer;
@@ -123,7 +122,8 @@ public:
     explicit CaptureThread(const quint32 cardIndex,
                            HANDLE hFile,
                            HANDLE hUser,
-                           HANDLE hBypass);
+                           HANDLE hBypass,
+                           HANDLE hEvent);
 
     void run() override;
 
@@ -215,6 +215,7 @@ private:
     HANDLE mDeviceHandle;//设备句柄
     HANDLE mUserHandle;//用户句柄
     HANDLE mBypassHandle;//RAM句柄
+    HANDLE mEventHandle;//中断句柄
 
     QString mSaveFilePath;//保存路径
     quint32 mCaptureRef = 1;
@@ -256,6 +257,7 @@ public:
     };
 
     Q_SIGNAL void reportNotFoundDevices();
+    Q_SIGNAL void reportOpenDeviceFail(quint8);
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
     Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
     Q_SIGNAL void reportFileWriteElapsedtime(quint32, quint32);
@@ -355,6 +357,7 @@ public:
     static bool writeData(HANDLE hFile, quint64 offset, const QByteArray& data);
     static bool readData(HANDLE hFile, quint64 offset, const QByteArray& data);
 
+    HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE);//O_RDWR
 signals:
 
 
@@ -363,6 +366,8 @@ private:
     QMap<quint32, HANDLE> mMapDevice;//访问数据设备句柄
     QMap<quint32, HANDLE> mMapUser;//设备用户句柄
     QMap<quint32, HANDLE> mMapBypass;//设备控制句柄
+    QMap<quint32, HANDLE> mMapEvent;//设备中断句柄
+
     QMap<quint32, bool> mMapPower;//探测器的1#电源开关
     QMap<quint32, bool> mMapVoltage;//探测器的1#电压开关
     QMap<quint32, bool> mMapBackupPower;//探测器的2#电源开关

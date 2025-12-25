@@ -1,4 +1,4 @@
-#include "pciecommsdk.h"
+﻿#include "pciecommsdk.h"
 #include <math.h>
 #include <QDateTime>
 #include <QDir>
@@ -16,6 +16,10 @@
 #define	XDMA_FILE_C2H_1		"\\c2h_1"
 #define	XDMA_FILE_C2H_2		"\\c2h_2"
 #define	XDMA_FILE_C2H_3		"\\c2h_3"
+#define	XDMA_FILE_EVENT_0	"\\event_0"
+#define	XDMA_FILE_EVENT_1	"\\event_1"
+#define	XDMA_FILE_EVENT_2	"\\event_2"
+#define	XDMA_FILE_EVENT_3	"\\event_3"
 #else
 #define	XDMA_FILE_USER		"_user"
 #define	XDMA_FILE_CONTROL	"_control"
@@ -28,6 +32,10 @@
 #define	XDMA_FILE_C2H_1		"_c2h_1"
 #define	XDMA_FILE_C2H_2		"_c2h_2"
 #define	XDMA_FILE_C2H_3		"_c2h_3"
+#define	XDMA_FILE_EVENT_0	"_event_0"
+#define	XDMA_FILE_EVENT_1	"_event_1"
+#define	XDMA_FILE_EVENT_2	"_event_2"
+#define	XDMA_FILE_EVENT_3	"_event_3"
 #endif
 
 PCIeCommSdk::PCIeCommSdk(QObject *parent)
@@ -64,6 +72,10 @@ PCIeCommSdk::~PCIeCommSdk()
 
 QStringList PCIeCommSdk::enumDevices()
 {
+#ifdef _TEST
+    return QStringList() << "/dev/xdma0" << "/dev/xdma1" << "/dev/xdma2";
+#endif
+
 #ifdef _WIN32
     const GUID guid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}};
     QStringList lstDevices;
@@ -822,57 +834,37 @@ void PCIeCommSdk::initializeDevices()
 {
     for (int cardIndex = 1; cardIndex <= numberOfDevices(); ++cardIndex){
         QString devicePath = mDevices.at(cardIndex - 1) + XDMA_FILE_C2H_0;
+        mMapDevice[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_C2H_0);
+        mMapUser[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_USER);
+        mMapBypass[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_BYPASS);
+        mMapEvent[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_EVENT_0);
+
 #ifdef _WIN32
-        //FILE_FLAG_SEQUENTIAL_SCAN
-        //FILE_FLAG_NO_BUFFERING
-        HANDLE fd = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING, NULL);
-        if (fd == INVALID_HANDLE_VALUE) {
-            emit reportCaptureFail(cardIndex, GetLastError());
+        if (mMapDevice[cardIndex] == INVALID_HANDLE_VALUE
+            || mMapUser[cardIndex] == INVALID_HANDLE_VALUE
+            || mMapBypass[cardIndex] == INVALID_HANDLE_VALUE
+            || mMapEvent[cardIndex] == INVALID_HANDLE_VALUE)
+        {
+            emit reportOpenDeviceFail(cardIndex);
+            if (mMapDevice[cardIndex] != INVALID_HANDLE_VALUE)
+                CloseHandle(mMapDevice[cardIndex]);
+            if (mMapUser[cardIndex] != INVALID_HANDLE_VALUE)
+                CloseHandle(mMapUser[cardIndex]);
+            if (mMapBypass[cardIndex] != INVALID_HANDLE_VALUE)
+                CloseHandle(mMapBypass[cardIndex]);
+            if (mMapEvent[cardIndex] != INVALID_HANDLE_VALUE)
+                CloseHandle(mMapEvent[cardIndex]);
 #else
-        int fd = open(devicePath.toStdString().c_str(), O_RDWR);
-        //int fd_usr = open("/dev/xdma0_user",O_RDWR);
-        if (fd < 0) {
+            if (mMapDevice[cardIndex] >= 0)
+                CloseHandle(mMapDevice[cardIndex]);
+            if (mMapUser[cardIndex] >= 0)
+                CloseHandle(mMapUser[cardIndex]);
+            if (mMapBypass[cardIndex] >= 0)
+                CloseHandle(mMapBypass[cardIndex]);
+            if (mMapEvent[cardIndex] >= 0)
+                CloseHandle(mMapEvent[cardIndex]);
 #endif
             continue;
-        }
-        else{
-            mMapDevice[cardIndex] = fd;
-
-            devicePath = mDevices.at(cardIndex - 1) + XDMA_FILE_USER;
-#ifdef _WIN32
-            fd = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (fd == INVALID_HANDLE_VALUE) {
-#else
-            fd = open(devicePath.toStdString().c_str(), O_RDWR);
-            if (fd < 0) {
-#endif
-                CloseHandle(mMapDevice[cardIndex]);
-                mMapDevice.remove(cardIndex);
-                continue;
-            }
-            else{
-                mMapUser[cardIndex] = fd;
-            }
-#ifndef APP_VERSION_1_0
-            devicePath = mDevices.at(cardIndex - 1) + XDMA_FILE_BYPASS;
-#ifdef _WIN32
-            fd = CreateFileA(devicePath.toStdString().c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-            if (fd == INVALID_HANDLE_VALUE) {
-#else
-            fd = open(devicePath.toStdString().c_str(), O_RDWR);
-            if (fd < 0) {
-#endif
-                CloseHandle(mMapDevice[cardIndex]);
-                CloseHandle(mMapUser[cardIndex]);
-
-                mMapDevice.remove(cardIndex);
-                mMapUser.remove(cardIndex);
-                continue;
-            }
-            else{
-                mMapBypass[cardIndex] = fd;
-            }
-#endif //!APP_VERSION_1_0
         }
     }
 
@@ -883,6 +875,20 @@ void PCIeCommSdk::initializeDevices()
     }
 }
 
+HANDLE PCIeCommSdk::getHandle(QString path, quint32 flags)
+{
+#ifdef _WIN32
+    //FILE_FLAG_SEQUENTIAL_SCAN
+    //FILE_FLAG_NO_BUFFERING
+    HANDLE fd = CreateFileA(path.toStdString().c_str(), flags/*GENERIC_READ | GENERIC_WRITE*/, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_NO_BUFFERING, NULL);
+#else
+    int fd = open(devicePath.toStdString().c_str(), flags/*O_RDWR*/);
+    //int fd_usr = open("/dev/xdma0_user",O_RDWR);
+#endif
+
+    return fd;
+}
+
 void PCIeCommSdk::initCaptureThreads()
 {
     for (int cardIndex = 1; cardIndex <= numberOfDevices(); ++cardIndex)
@@ -890,7 +896,8 @@ void PCIeCommSdk::initCaptureThreads()
         CaptureThread *captureThread = new CaptureThread(cardIndex,
                                                          mMapDevice[cardIndex],
                                                          mMapUser[cardIndex],
-                                                         mMapBypass[cardIndex]);
+                                                         mMapBypass[cardIndex],
+                                                         mMapEvent[cardIndex]);
         captureThread->setPriority(QThread::Priority::HighestPriority);
         connect(captureThread, &CaptureThread::reportThreadExit, this, [=](quint32 index){
             mMapCaptureThread.remove(index);
@@ -944,15 +951,8 @@ void PCIeCommSdk::initCaptureThreads()
 * @return
 */
 DataCachPoolThread::DataCachPoolThread()
-
 {
-    for (int i=0; i<10; ++i)
-    {
-        mTotalBytes[i] = (unsigned char*)malloc(0x10000000 * 24 - 1/*1024*1024*1024*4*/);
-        if (mTotalBytes[i] == nullptr){
-            qDebug() << "Memory overflow.";
-        }
-    }
+
 }
 
 void DataCachPoolThread::setParamter(const quint32 cardIndex, const QString &saveFilePath)
@@ -985,15 +985,6 @@ void DataCachPoolThread::replyThreadExit()
 */
 void DataCachPoolThread::replyCaptureData(const QByteArray& waveformData, const QByteArray& spectrumData)
 {
-    // QElapsedTimer elapsedTimer;
-    // elapsedTimer.start();
-    // int size = waveformData.size();
-    // const char *ptr = waveformData.data();
-    // memcpy(mTotalBytes[0]/* + mPackref * 0x10000000*/, ptr, size);
-    // ++mPackref;
-    // qDebug() << "[" << mCardIndex << "]" << mPackref <<"write elapsedTimer=" << elapsedTimer.elapsed();
-    // return;
-
     QMutexLocker locker(&mMutexWrite);
     QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mCardIndex).arg(++mPackref);
     QFile file(filename);
@@ -1005,14 +996,12 @@ void DataCachPoolThread::replyCaptureData(const QByteArray& waveformData, const 
         file.close();
     }
 
-    return;
+    // return;
 
-    mCachePool.append(waveformData);
-#ifndef APP_VERSION_1_0
-    mCachePool.append(spectrumData);
-#endif
-    mReady = true;
-    mCondition.wakeAll();
+    // mCachePool.append(waveformData);
+    // mCachePool.append(spectrumData);
+    // mReady = true;
+    // mCondition.wakeAll();
 }
 
 void DataCachPoolThread::run()
@@ -1067,7 +1056,6 @@ void DataCachPoolThread::run()
                 tempPool.pop_front();
             }
 
-#ifndef APP_VERSION_1_0
             //写能谱数据
             {
                 QByteArray data = reverseArray(tempPool.at(0));
@@ -1085,7 +1073,6 @@ void DataCachPoolThread::run()
 
                 tempPool.pop_front();
             }
-#endif //APP_VERSION_1_0
 
             mPackref++;
         }
@@ -1124,19 +1111,19 @@ QByteArray DataCachPoolThread::reverseArray(const QByteArray& data)
 * @param[out]
 * @return
 */
-CaptureThread::CaptureThread(const quint32 cardIndex, HANDLE hFile, HANDLE hUser, HANDLE hBypass)
+CaptureThread::CaptureThread(const quint32 cardIndex, HANDLE hFile, HANDLE hUser, HANDLE hBypass, HANDLE hEvent)
     : mCardIndex(cardIndex)
     , mDeviceHandle(hFile)
     , mUserHandle(hUser)
     , mBypassHandle(hBypass)
+    , mEventHandle(hEvent)
 {
-#ifdef APP_VERSION_1_0
-    int size = 0x10000000;
-#else
     int size = 0x0BEBC200;
-#endif
-
+#ifdef _TEST
+    int capacity = 4;
+#else
     int capacity = 200;
+#endif //
     mWaveformDatas.reserve(capacity);
     try{
         for (int i=0; i < capacity; ++i){
@@ -1196,14 +1183,6 @@ void CaptureThread::run()
         QElapsedTimer elapsedTimer;
         elapsedTimer.start();
 
-#ifdef APP_VERSION_1_0
-        //读原始数据
-        event_rd = event_rd++ % 2;
-        if (readWaveformData(mWaveformDatas.at(mCapturedRef), event_rd * 0x10000000)){
-            //emit reportCaptureData(mWaveformDatas.at(mCapturedRef), spectrumData); //发给数据缓存处理线程
-            //mDataCachPoolThread->replyCaptureData(mWaveformDatas.at(mCapturedRef), spectrumData);
-        }
-#else
         //检查设备是否准备好
         if (firstQuery){
             if (prepared()){
@@ -1238,7 +1217,6 @@ void CaptureThread::run()
             break;
 
         emit reportCaptureData(mWaveformDatas.at(mCapturedRef), spectrumData); //发给数据缓存处理线程
-#endif //APP_VERSION_1_0
 
         if (++mCapturedRef >= this->mCaptureRef){
             event_rd = 1;
