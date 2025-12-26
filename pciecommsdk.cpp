@@ -1261,68 +1261,44 @@ void CaptureThread::run()
 
 #ifdef _VER_2_0
         // 判断中断1，如果有信号，先处理中断
-        while (1)
-        {
-            {
-                QMutexLocker locker(&irq1Mutex);
-                if (irq1Triggered)
-                {
-                    clear();
-                }
-            }
+        if (irq1Wait.wait(&irq1Mutex, 5)){
+            clear();
+        }
 
-            // 继续判断中断2，如果有信号，先处理中断
-            {
-                QMutexLocker locker(&irq2Mutex);
-                if (irq2Triggered)
-                {
-                    // 清空DDR和RAM
-                    empty();
-
-                    // 此时会再次触发中断1，所以需要处理中断1
-                    clear();
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            QThread::msleep(1);
+        // 继续判断中断2，如果有信号，先处理中断
+        if (irq2Wait.wait(&irq2Mutex, 5)){
+            // 清空DDR和RAM
+            empty();
+            // 此时肯定会再次触发中断1，所以需要处理中断1
+            irq1Wait.wait(&irq1Mutex);
+            clear();
         }
 
         // 开始测量
         startMeasure();
+        // 此时肯定会再次触发中断1，所以需要处理中断1
+        irq1Wait.wait(&irq1Mutex);
+        clear();
 
-        // 判断中断2
-        while (1)
+        // 判断中断2，判断DDR和RAM是否有数据
+        if (irq2Wait.wait(&irq2Mutex, 5))
         {
-            QMutexLocker locker(&irq2Mutex);
-            if (irq2Triggered)
-            {
-                // 处理中断1
-                clear();
+            //读原始数据
+            if (readWaveformData(mWaveformDatas.at(mCapturedRef))){
 
-                break;
             }
 
-            QThread::msleep(1);
+            //读能谱数据
+            if (readSpectrumData(mSpectrumDatas.at(mCapturedRef))){
+
+            }
+
+            // 清空DDR和RAM
+            empty();
+            // 此时肯定会再次触发中断1，所以需要处理中断1
+            irq1Wait.wait(&irq1Mutex);
+            clear();
         }
-
-        //读原始数据
-        if (readWaveformData(mWaveformDatas.at(mCapturedRef))){
-
-        }
-
-        //读能谱数据
-        if (readSpectrumData(mSpectrumDatas.at(mCapturedRef))){
-
-        }
-
-        // 清空DDR和RAM
-        empty();
-        // 此时会再次触发中断1，所以需要处理中断1
-        clear();
 
 #else
 
