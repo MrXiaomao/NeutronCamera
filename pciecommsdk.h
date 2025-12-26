@@ -123,7 +123,8 @@ public:
                            HANDLE hFile,
                            HANDLE hUser,
                            HANDLE hBypass,
-                           HANDLE hEvent);
+                           HANDLE hEvent1,
+                           HANDLE hEvent2);
 
     void run() override;
 
@@ -146,41 +147,10 @@ public:
         mCondition.wakeOne();
     }
 
-    /**
-    * @function name:prepared
-    * @brief 第一次查询准备
-    * @param[in]
-    * @param[out]
-    * @return           bool
-    */
-    bool prepared();
-
-    /**
-    * @function name:canRead
-    * @brief 判断DDR和RAM数据是否填满可读
-    * @param[in]
-    * @param[out]
-    * @return           bool
-    */
-    bool canRead();
-
-    /**
-    * @function name:resetReadflag
-    * @brief 清空DDR和RAM满状态
-    * @param[in]
-    * @param[out]
-    * @return           bool
-    */
-    bool emptyStatus();
-
-    /**
-    * @function name:resetReadflag
-    * @brief 重置可读写标识
-    * @param[in]
-    * @param[out]
-    * @return           bool
-    */
-    bool resetReadflag();
+    bool startMeasure();
+    void clear();
+    void empty();
+    void handleIrq(int);
 
     /**
     * @function name:readWaveformData
@@ -215,7 +185,7 @@ private:
     HANDLE mDeviceHandle;//设备句柄
     HANDLE mUserHandle;//用户句柄
     HANDLE mBypassHandle;//RAM句柄
-    HANDLE mEventHandle;//中断句柄
+    HANDLE mEventHandle[2];//中断句柄
 
     QString mSaveFilePath;//保存路径
     quint32 mCaptureRef = 1;
@@ -223,12 +193,14 @@ private:
 
     quint32 mCapturedRef = 0;
     QVector<QByteArray> mWaveformDatas;
-    QVector<QByteArray> spectrumDatas;
+    QVector<QByteArray> mSpectrumDatas;
 
     QMutex mMutex;
     QWaitCondition mCondition;
     bool mIsPaused = false;
     bool mIsStopped = false;
+    QMutex mEventMutex[2];
+    QWaitCondition mInterruptEvent[2];
 };
 
 #define CAMNUMBER_DDR_PER   4   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
@@ -280,6 +252,8 @@ public:
     Q_SLOT void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
     Q_SLOT void stopCapture(quint32 index);
     Q_SLOT void stopAllCapture();
+
+    Q_SLOT void reset();/* 重置 */
 
     /*获取设备数量*/
     quint32 numberOfDevices();
@@ -366,7 +340,8 @@ private:
     QMap<quint32, HANDLE> mMapDevice;//访问数据设备句柄
     QMap<quint32, HANDLE> mMapUser;//设备用户句柄
     QMap<quint32, HANDLE> mMapBypass;//设备控制句柄
-    QMap<quint32, HANDLE> mMapEvent;//设备中断句柄
+    QMap<quint32, HANDLE> mMapEvent1;//设备中断句柄
+    QMap<quint32, HANDLE> mMapEvent2;//设备中断句柄
 
     QMap<quint32, bool> mMapPower;//探测器的1#电源开关
     QMap<quint32, bool> mMapVoltage;//探测器的1#电压开关

@@ -1,6 +1,6 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "qcustomplot.h"
+#include "qcustomplothelper.h"
 #include "globalsettings.h"
 #include "switchbutton.h"
 
@@ -37,6 +37,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         ui->action_init->setEnabled(false);
         ui->action_startMeasure->setEnabled(false);
         ui->action_stopMeasure->setEnabled(false);
+        ui->action_reset->setEnabled(false);
     }
     else{
         ui->action_init->setEnabled(true);
@@ -334,10 +335,6 @@ void MainWindow::initUi()
     ui->action_lightTheme->setChecked(!mIsDarkTheme);
     ui->action_darkTheme->setChecked(mIsDarkTheme);
 
-    QActionGroup *actionChartGroup = new QActionGroup(this);
-    ui->action_linear->setActionGroup(actionChartGroup);
-    ui->action_logarithm->setActionGroup(actionChartGroup);
-
     // 任务栏信息
     QLabel *label_Idle = new QLabel(ui->statusbar);
     label_Idle->setObjectName("label_Idle");
@@ -350,21 +347,6 @@ void MainWindow::initUi()
 
     ui->statusbar->setContentsMargins(5, 0, 5, 0);
     ui->statusbar->addWidget(label_Idle);
-
-    // 工作日志
-    {
-        QGraphicsScene *scene = new QGraphicsScene(this);
-        scene->setObjectName("logGraphicsScene");
-        QGraphicsTextItem *textItem = scene->addText(tr("工作日志"));
-        textItem->setObjectName("logGraphicsTextItem");
-        textItem->setPos(0,0);
-        //textItem->setRotation(-90);
-        ui->graphicsView->setFrameStyle(0);
-        ui->graphicsView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        ui->graphicsView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        ui->graphicsView->setFixedHeight(30);
-        ui->graphicsView->setScene(scene);
-    }
 
     /*设置任务栏信息*/
     QLabel *label_systemtime = new QLabel(ui->statusbar);
@@ -426,7 +408,7 @@ void MainWindow::initUi()
         //中间布局
         {
             QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget_LSD);
-            splitterV1->setHandleWidth(2);
+            splitterV1->setHandleWidth(1);
             splitterV1->addWidget(ui->spectroMeter_neutronSpectrum);
             splitterV1->addWidget(ui->spectroMeter_gammaSpectrum);
             splitterV1->setSizes(QList<int>() << 100000 << 100000);
@@ -437,7 +419,7 @@ void MainWindow::initUi()
         }
         {
             QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget_PSD);
-            splitterV1->setHandleWidth(2);
+            splitterV1->setHandleWidth(1);
             splitterV1->addWidget(ui->spectroMeter_time1_PSD);
             splitterV1->addWidget(ui->spectroMeter_time2_PSD);
             splitterV1->addWidget(ui->spectroMeter_time3_PSD);
@@ -449,7 +431,7 @@ void MainWindow::initUi()
         }
         {
             QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget_LBD);
-            splitterV1->setHandleWidth(2);
+            splitterV1->setHandleWidth(1);
             splitterV1->addWidget(ui->spectroMeter_time1_LBD);
             splitterV1->addWidget(ui->spectroMeter_time2_LBD);
             splitterV1->addWidget(ui->spectroMeter_time3_LBD);
@@ -463,7 +445,7 @@ void MainWindow::initUi()
         //大布局
         QSplitter *splitterH1 = new QSplitter(Qt::Horizontal,this);
         splitterH1->setObjectName("splitterH1");
-        splitterH1->setHandleWidth(2);
+        splitterH1->setHandleWidth(1);
         splitterH1->addWidget(ui->leftStackedWidget);
         splitterH1->addWidget(ui->centralHboxTabWidget);
         splitterH1->addWidget(ui->rightVboxWidget);
@@ -488,7 +470,7 @@ void MainWindow::initUi()
         QHBoxLayout* sideHboxLayout = new QHBoxLayout();
         sideHboxLayout->setObjectName("sideHboxLayout");
         sideHboxLayout->setContentsMargins(0,0,0,0);
-        sideHboxLayout->setSpacing(2);
+        sideHboxLayout->setSpacing(1);
 
         QWidget* sideProxyWidget = new QWidget();
         sideProxyWidget->setObjectName("sideProxyWidget");
@@ -851,20 +833,14 @@ void MainWindow::initUi()
 
 void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel)
 {
-    customPlot->installEventFilter(this);
     customPlot->setAntialiasedElements(QCP::aeAll);
-    customPlot->legend->setVisible(false);
+    customPlot->legend->setVisible(true);
     customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom/* | QCP::iSelectPlottables*/);
     customPlot->xAxis->setTickLabelRotation(-45);
-    // customPlot->xAxis->rescale(false);
-    // customPlot->yAxis->rescale(false);
-    // customPlot->yAxis->ticker()->setTickCount(5);
-    // customPlot->xAxis->ticker()->setTickCount(10);
-    // customPlot->yAxis2->ticker()->setTickCount(5);
-    // customPlot->xAxis2->ticker()->setTickCount(10);
     customPlot->xAxis->setLabel(axisXLabel);
     customPlot->yAxis->setLabel(axisYLabel);
     customPlot->axisRect()->setupFullAxesBox(true);
+
 
     if (customPlot == ui->spectroMeter_time1_PSD ||
         customPlot == ui->spectroMeter_time2_PSD ||
@@ -891,7 +867,8 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->setName(title[i]);
         }
 
-        setCheckBoxHelper(customPlot);
+        QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
+        customPlotHelper->setGraphCheckBox(customPlot);
     }
     else if (customPlot == ui->spectroMeter_neutronSpectrum){
         customPlot->xAxis->setRange(0, 2048);
@@ -911,7 +888,8 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->setName(title[i]);
         }
 
-        setCheckBoxHelper(customPlot);
+        QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
+        customPlotHelper->setGraphCheckBox(customPlot);
     }
     else if (customPlot == ui->spectroMeter_gammaSpectrum){
         customPlot->xAxis->setRange(0, 2048);
@@ -931,7 +909,8 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->setName(title[i]);
         }
 
-        setCheckBoxHelper(customPlot);
+        QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
+        customPlotHelper->setGraphCheckBox(customPlot);
     }
 
     customPlot->replot();
@@ -941,41 +920,6 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
     // 是否允许X轴自适应缩放
     connect(customPlot, SIGNAL(mousePress(QMouseEvent*)), this, SLOT(slotShowTracer(QMouseEvent*)));
     connect(customPlot, SIGNAL(mouseRelease(QMouseEvent*)), this, SLOT(slotRestorePlot(QMouseEvent*)));
-}
-
-void MainWindow::setCheckBoxHelper(QCustomPlot* customPlot)
-{
-    customPlot->legend->setVisible(false);
-
-    //添加可选项
-    static int index = 0;
-    for (int i=0; i<2; ++i){
-        QCheckBox* checkBox = new QCheckBox(customPlot);
-        checkBox->setText(customPlot->graph(i)->name());
-        checkBox->setObjectName(tr(""));
-        QIcon actionIcon = roundPixmap(QSize(16,16), customPlot->graph(i)->pen().color());
-        checkBox->setIcon(actionIcon);
-        checkBox->setProperty("index", i+1);
-        checkBox->setChecked(true);
-        connect(checkBox, &QCheckBox::stateChanged, this, [=](int state){
-            int index = checkBox->property("index").toInt();
-            QCPGraph *graph = customPlot->graph(i);
-            if (graph){
-                graph->setVisible(Qt::CheckState::Checked == state ? true : false);
-                customPlot->replot();
-            }
-        });
-    }
-    connect(customPlot, &QCustomPlot::afterLayout, this, [=](){
-        QCustomPlot* customPlot = qobject_cast<QCustomPlot*>(sender());
-        QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
-        QFontMetrics fontMetrics(customPlot->font());
-        int avg_height = fontMetrics.ascent() + fontMetrics.descent();
-        int i = 0;
-        for (auto checkBox : checkBoxs){
-            checkBox->move(customPlot->axisRect()->left() + 10, customPlot->axisRect()->topRight().y() + i++ * avg_height + 5);
-        }
-    });
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
@@ -1330,8 +1274,7 @@ void MainWindow::applyColorTheme()
                                     .arg(palette.color(QPalette::Dark).red())
                                     .arg(palette.color(QPalette::Dark).green())
                                     .arg(palette.color(QPalette::Dark).blue())
-                                          : QString("background-color:white;color:black;");
-        ui->logWidget->setStyleSheet(styleSheet);
+                                : QString("background-color:white;color:black;");
 
         //更新样式表
         QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
@@ -1339,10 +1282,6 @@ void MainWindow::applyColorTheme()
         for (auto checkBox : checkBoxs){
             checkBox->setStyleSheet(styleSheet);
         }
-
-        QGraphicsScene *scene = this->findChild<QGraphicsScene*>("logGraphicsScene");
-        QGraphicsTextItem *textItem = (QGraphicsTextItem*)scene->items()[0];
-        textItem->setHtml(mIsDarkTheme ? QString("<font color='white'>工作日志</font>") : QString("<font color='black'>工作日志</font>"));
 
         QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
         if (colorMap){
@@ -1380,6 +1319,11 @@ void MainWindow::applyColorTheme()
         customPlot->xAxis2->setTickLabelColor(palette.color(QPalette::WindowText));
         customPlot->yAxis->setTickLabelColor(palette.color(QPalette::WindowText));
         customPlot->yAxis2->setTickLabelColor(palette.color(QPalette::WindowText));
+        // 隐藏x2、y2刻度线
+        customPlot->xAxis2->setTicks(false);
+        customPlot->yAxis2->setTicks(false);
+        customPlot->xAxis2->setSubTicks(false);
+        customPlot->yAxis2->setSubTicks(false);
 
         customPlot->replot();
     }
@@ -1464,42 +1408,6 @@ QPixmap MainWindow::dblroundPixmap(QSize sz, QColor clrIn, QColor clrOut)
     return result;
 }
 
-
-void MainWindow::on_action_linear_triggered(bool checked)
-{
-    QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
-    for (auto customPlot : customPlots){
-        customPlot->yAxis->setSubTicks(false);
-        customPlot->yAxis2->setSubTicks(false);
-
-        QSharedPointer<QCPAxisTicker> ticker(new QCPAxisTicker);
-        customPlot->yAxis->setTicker(ticker);
-
-        customPlot->yAxis->setScaleType(QCPAxis::ScaleType::stLinear);
-        customPlot->yAxis->setNumberFormat("f");
-        customPlot->yAxis->setNumberPrecision(0);
-
-        customPlot->replot();
-    }
-}
-
-
-void MainWindow::on_action_logarithm_triggered(bool checked)
-{
-    QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
-    for (auto customPlot : customPlots){
-        customPlot->yAxis->setSubTicks(true);
-        customPlot->yAxis2->setSubTicks(true);
-
-        customPlot->yAxis->setScaleType(QCPAxis::ScaleType::stLogarithmic);
-        customPlot->yAxis->setNumberFormat("eb");//使用科学计数法表示刻度
-        customPlot->yAxis->setNumberPrecision(0);//小数点后面小数位数
-
-        QSharedPointer<QCPAxisTickerLog> logTicker(new QCPAxisTickerLog);
-        customPlot->yAxis->setTicker(logTicker);
-        customPlot->replot();
-    }
-}
 
 void MainWindow::on_pushButton_openPower_clicked()
 {
@@ -2044,5 +1952,12 @@ void MainWindow::on_action_status_triggered(bool checked)
         else
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LBD);
     }
+}
+
+
+void MainWindow::on_action_reset_triggered()
+{
+    // PCIe重置
+    mPCIeCommSdk.reset();
 }
 

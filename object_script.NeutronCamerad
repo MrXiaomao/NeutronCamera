@@ -76,6 +76,7 @@ temp/obj/xmllayout.o
 temp/obj/wdcappender.o
 temp/obj/colorconsoleappender.o
 temp/obj/qcustomplot.o
+temp/obj/qcustomplothelper.o
 temp/obj/stylecommon.o
 temp/obj/lightstyle.o
 temp/obj/darkstyle.o
@@ -149,6 +150,7 @@ temp/obj/moc_mainwindow.o
 temp/obj/moc_qprogressindicator.o
 temp/obj/moc_switchbutton.o
 temp/obj/moc_qcustomplot.o
+temp/obj/moc_qcustomplothelper.o
 temp/obj/moc_lightstyle.o
 temp/obj/moc_darkstyle.o
 temp/obj/moc_customcolorstyle.o

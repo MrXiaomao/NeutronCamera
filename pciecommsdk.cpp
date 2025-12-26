@@ -184,6 +184,18 @@ void PCIeCommSdk::stopAllCapture()
     }
 }
 
+void PCIeCommSdk::reset()
+{
+    for (int index = 1; index <= mDevices.size(); ++index){
+#ifdef _WIN32
+        if (mMapUser[index] != INVALID_HANDLE_VALUE)
+#else
+        if (mMapUser[index] >= 0)
+#endif
+            writeData(mMapUser[index], 0x20000, QByteArray::fromHex("01 D0 34 12"));
+    }
+}
+
 #include <QtEndian>
 /* 在线数据分析
  *
@@ -837,13 +849,15 @@ void PCIeCommSdk::initializeDevices()
         mMapDevice[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_C2H_0);
         mMapUser[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_USER);
         mMapBypass[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_BYPASS);
-        mMapEvent[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_EVENT_0);
+        mMapEvent1[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_EVENT_0);
+        mMapEvent2[cardIndex] = getHandle(mDevices.at(cardIndex - 1) + XDMA_FILE_EVENT_1);
 
 #ifdef _WIN32
         if (mMapDevice[cardIndex] == INVALID_HANDLE_VALUE
             || mMapUser[cardIndex] == INVALID_HANDLE_VALUE
             || mMapBypass[cardIndex] == INVALID_HANDLE_VALUE
-            || mMapEvent[cardIndex] == INVALID_HANDLE_VALUE)
+            || mMapEvent1[cardIndex] == INVALID_HANDLE_VALUE
+            || mMapEvent2[cardIndex] == INVALID_HANDLE_VALUE)
         {
             emit reportOpenDeviceFail(cardIndex);
             if (mMapDevice[cardIndex] != INVALID_HANDLE_VALUE)
@@ -852,8 +866,10 @@ void PCIeCommSdk::initializeDevices()
                 CloseHandle(mMapUser[cardIndex]);
             if (mMapBypass[cardIndex] != INVALID_HANDLE_VALUE)
                 CloseHandle(mMapBypass[cardIndex]);
-            if (mMapEvent[cardIndex] != INVALID_HANDLE_VALUE)
-                CloseHandle(mMapEvent[cardIndex]);
+            if (mMapEvent1[cardIndex] != INVALID_HANDLE_VALUE)
+                CloseHandle(mMapEvent1[cardIndex]);
+            if (mMapEvent2[cardIndex] != INVALID_HANDLE_VALUE)
+                CloseHandle(mMapEvent2[cardIndex]);
 #else
             if (mMapDevice[cardIndex] >= 0)
                 CloseHandle(mMapDevice[cardIndex]);
@@ -861,8 +877,10 @@ void PCIeCommSdk::initializeDevices()
                 CloseHandle(mMapUser[cardIndex]);
             if (mMapBypass[cardIndex] >= 0)
                 CloseHandle(mMapBypass[cardIndex]);
-            if (mMapEvent[cardIndex] >= 0)
-                CloseHandle(mMapEvent[cardIndex]);
+            if (mMapEvent1[cardIndex] >= 0)
+                CloseHandle(mMapEvent1[cardIndex]);
+            if (mMapEvent2[cardIndex] >= 0)
+                CloseHandle(mMapEvent2[cardIndex]);
 #endif
             continue;
         }
@@ -897,7 +915,8 @@ void PCIeCommSdk::initCaptureThreads()
                                                          mMapDevice[cardIndex],
                                                          mMapUser[cardIndex],
                                                          mMapBypass[cardIndex],
-                                                         mMapEvent[cardIndex]);
+                                                         mMapEvent1[cardIndex],
+                                                         mMapEvent2[cardIndex]);
         captureThread->setPriority(QThread::Priority::HighestPriority);
         connect(captureThread, &CaptureThread::reportThreadExit, this, [=](quint32 index){
             mMapCaptureThread.remove(index);
@@ -995,13 +1014,6 @@ void DataCachPoolThread::replyCaptureData(const QByteArray& waveformData, const 
         file.write(waveformData);
         file.close();
     }
-
-    // return;
-
-    // mCachePool.append(waveformData);
-    // mCachePool.append(spectrumData);
-    // mReady = true;
-    // mCondition.wakeAll();
 }
 
 void DataCachPoolThread::run()
@@ -1111,14 +1123,15 @@ QByteArray DataCachPoolThread::reverseArray(const QByteArray& data)
 * @param[out]
 * @return
 */
-CaptureThread::CaptureThread(const quint32 cardIndex, HANDLE hFile, HANDLE hUser, HANDLE hBypass, HANDLE hEvent)
+CaptureThread::CaptureThread(const quint32 cardIndex, HANDLE hFile, HANDLE hUser, HANDLE hBypass, HANDLE hEvent1, HANDLE hEvent2)
     : mCardIndex(cardIndex)
     , mDeviceHandle(hFile)
     , mUserHandle(hUser)
     , mBypassHandle(hBypass)
-    , mEventHandle(hEvent)
 {
-    int size = 0x0BEBC200;
+    mEventHandle[0] = (hEvent1);
+    mEventHandle[1] = (hEvent2);
+
 #ifdef _TEST
     int capacity = 4;
 #else
@@ -1127,7 +1140,8 @@ CaptureThread::CaptureThread(const quint32 cardIndex, HANDLE hFile, HANDLE hUser
     mWaveformDatas.reserve(capacity);
     try{
         for (int i=0; i < capacity; ++i){
-            mWaveformDatas.push_back(QByteArray(size, 0));
+            mWaveformDatas.push_back(QByteArray(0x0BEBC200, 0));
+            mSpectrumDatas.push_back(QByteArray(0xc800, 0));
         }
     }
     catch (const std::bad_alloc& e){
@@ -1152,6 +1166,21 @@ void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTime
     mDataCachPoolThread->setParamter(mCardIndex, mSaveFilePath);
 }
 
+bool CaptureThread::startMeasure()
+{
+    PCIeCommSdk::writeData(mUserHandle, 0x20000, QByteArray::fromHex("01 E0 34 12"));
+}
+
+void CaptureThread::clear()
+{
+    PCIeCommSdk::writeData(mUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
+}
+
+void CaptureThread::empty()
+{
+    PCIeCommSdk::writeData(mUserHandle, 0x20000, QByteArray::fromHex("01 F0 34 12"));
+}
+
 void CaptureThread::run()
 {
     qRegisterMetaType<QByteArray>("QByteArray&");
@@ -1162,13 +1191,60 @@ void CaptureThread::run()
     //启动数据缓存线程
     mDataCachPoolThread->start();
 
+    bool irq1Triggered = false;
+    bool irq2Triggered = false;
+    QMutex irq1Mutex, irq2Mutex;
+    QWaitCondition irq1Wait, irq2Wait;
+
+    //创建一个指令收发中断线程
+    std::thread([&](){
+        while (!mIsStopped)
+        {
+            QMutexLocker locker(&irq1Mutex);
+            irq1Triggered  = false;
+            QByteArray readBuf(1, 0);
+            if (PCIeCommSdk::readData(mEventHandle[0], 0x0, readBuf)){
+                if (readBuf.at(0) == 0x01){
+                    irq1Triggered = true;
+                    irq1Wait.wakeAll();
+                }
+                else
+                {
+                    irq1Triggered = false;
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
+        }
+    }).detach();
+
+    //创建一个状态查询中断线程
+    std::thread([&](){
+        while (!mIsStopped)
+        {
+            QMutexLocker locker(&irq2Mutex);
+            irq2Triggered = false;
+            QByteArray readBuf(1, 0);
+            if (PCIeCommSdk::readData(mEventHandle[1], 0x0, readBuf)){
+                if (readBuf.at(0) == 0x01)
+                {
+                    irq2Triggered = true;
+                    irq2Wait.wakeAll();
+                }
+                else
+                {
+                    irq2Triggered = false;
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::microseconds(1));
+        }
+    }).detach();
+
     bool firstQuery = true;
     qDebug() << "createCaptureThread id:" << this->currentThreadId();
 
     int event_rd = 0;
-    int size = 0xc800;//50*1024
-    QByteArray spectrumData(size, 0);
-
     while (!mIsStopped)
     {
         QMutexLocker locker(&mMutex);
@@ -1182,6 +1258,73 @@ void CaptureThread::run()
 
         QElapsedTimer elapsedTimer;
         elapsedTimer.start();
+
+#ifdef _VER_2_0
+        // 判断中断1，如果有信号，先处理中断
+        while (1)
+        {
+            {
+                QMutexLocker locker(&irq1Mutex);
+                if (irq1Triggered)
+                {
+                    clear();
+                }
+            }
+
+            // 继续判断中断2，如果有信号，先处理中断
+            {
+                QMutexLocker locker(&irq2Mutex);
+                if (irq2Triggered)
+                {
+                    // 清空DDR和RAM
+                    empty();
+
+                    // 此时会再次触发中断1，所以需要处理中断1
+                    clear();
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            QThread::msleep(1);
+        }
+
+        // 开始测量
+        startMeasure();
+
+        // 判断中断2
+        while (1)
+        {
+            QMutexLocker locker(&irq2Mutex);
+            if (irq2Triggered)
+            {
+                // 处理中断1
+                clear();
+
+                break;
+            }
+
+            QThread::msleep(1);
+        }
+
+        //读原始数据
+        if (readWaveformData(mWaveformDatas.at(mCapturedRef))){
+
+        }
+
+        //读能谱数据
+        if (readSpectrumData(mSpectrumDatas.at(mCapturedRef))){
+
+        }
+
+        // 清空DDR和RAM
+        empty();
+        // 此时会再次触发中断1，所以需要处理中断1
+        clear();
+
+#else
 
         //检查设备是否准备好
         if (firstQuery){
@@ -1204,7 +1347,7 @@ void CaptureThread::run()
         }
 
         //读能谱数据
-        if (readSpectrumData(spectrumData)){
+        if (readSpectrumData(mSpectrumDatas.at(mCapturedRef))){
 
         }
 
@@ -1216,7 +1359,7 @@ void CaptureThread::run()
         if (!resetReadflag())
             break;
 
-        emit reportCaptureData(mWaveformDatas.at(mCapturedRef), spectrumData); //发给数据缓存处理线程
+#endif // _VER_2_0
 
         if (++mCapturedRef >= this->mCaptureRef){
             event_rd = 1;
@@ -1224,9 +1367,8 @@ void CaptureThread::run()
             emit reportCaptureFinished(mCardIndex);
 
             for (int i = 0; i < mWaveformDatas.size(); ++i)
-            {
-                emit reportCaptureData(mWaveformDatas.at(i), spectrumData); //发给数据缓存处理线程
-                //mDataCachPoolThread->replyCaptureData(mWaveformDatas.at(mCapturedRef), spectrumData);
+            {                   
+                emit reportCaptureData(mWaveformDatas.at(i), mSpectrumDatas.at(mCapturedRef)); //发给数据缓存处理线程
             }
         }
 
@@ -1242,140 +1384,6 @@ void CaptureThread::run()
     mDataCachPoolThread->deleteLater();
 
     qDebug() << "destroyCaptureThread id:" << this->currentThreadId();
-}
-
-/**
-* @function name:prepared
-* @brief 第一次查询准备
-* @param[in]
-* @param[out]
-* @return           bool
-*/
-bool CaptureThread::prepared()
-{
-    return emptyStatus();
-}
-
-/**
-* @function name:canRead
-* @brief 判断DDR和RAM数据是否填满可读
-* @param[in]
-* @param[out]
-* @return           bool
-*/
-//判断是否可读
-bool CaptureThread::canRead()
-{
-    // 2.开始测量
-    // xdma_rw.exe user write 0x20000 0x01 0xE0 0x34 0x12
-    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
-    // xdma_rw.exe user write 0x20000 0x00 0xE0 0x34 0x12
-    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
-    while (1){
-        if (this->isInterruptionRequested())
-            break;
-
-        QByteArray buf1 = QByteArray::fromHex("01 E0 34 12");
-        QByteArray buf2 = QByteArray::fromHex("00 D0 34 12");
-        QByteArray buf3 = QByteArray::fromHex("00 E0 34 12");
-        QByteArray buf4 = QByteArray::fromHex("00 D0 34 12");
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf1);
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf2);
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf3);
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf4);
-
-        //3.继续查询DDR和RAM状态
-        //xdma_rw.exe user read 0 -l 1
-        //若返回1，表示DDR和RAM写满了，可以进行读操作
-        QByteArray readBuf(1, 0);
-        if (PCIeCommSdk::readData(mUserHandle, 0x0, readBuf)){
-            if (readBuf.at(0) == 0x01)
-                return true;
-        }
-
-        QThread::usleep(mTimeout);
-        continue;
-    }
-
-    return false;
-}
-
-/**
-* @function name:resetReadflag
-* @brief 清空DDR和RAM满状态
-* @param[in]
-* @param[out]
-* @return           bool
-*/
-bool CaptureThread::emptyStatus()
-{
-    // 5.PC读取完成，清空DDR和RAM满状态
-    // xdma_rw.exe user write 0x20000 0x01 0xF0 0x34 0x12
-    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
-    while (1){
-        if (this->isInterruptionRequested())
-            break;
-
-        QByteArray buf1 = QByteArray::fromHex("01 F0 34 12");
-        QByteArray buf2 = QByteArray::fromHex("00 D0 34 12");
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf1);
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf2);
-
-        // 6.获取查询DDR和RAM状态
-        // xdma_rw.exe user read 0 -l 1
-        // 若返回0，则准备下一次测量
-        QByteArray readBuf(1, 0);
-        if (PCIeCommSdk::readData(mUserHandle, 0x0, readBuf)){
-            if (readBuf.at(0) == 0x00)
-                return true;
-        }
-
-        QThread::usleep(mTimeout);
-        continue;
-    }
-
-    return false;
-}
-
-/**
-* @function name:resetReadflag
-* @brief 重置可读写标识
-* @param[in]
-* @param[out]
-* @return           bool
-*/
-bool CaptureThread::resetReadflag()
-{
-    // 7.再发一次“开始测量”，用于复位
-    // xdma_rw.exe user write 0x20000 0x01 0xE0 0x34 0x12
-    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
-    // xdma_rw.exe user write 0x20000 0x00 0xE0 0x34 0x12
-    // xdma_rw.exe user write 0x20000 0x00 0xD0 0x34 0x12
-
-    while(1){
-        QByteArray buf1 = QByteArray::fromHex("01 E0 34 12");
-        QByteArray buf2 = QByteArray::fromHex("00 D0 34 12");
-        QByteArray buf3 = QByteArray::fromHex("00 E0 34 12");
-        QByteArray buf4 = QByteArray::fromHex("00 D0 34 12");
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf1);
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf2);
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf3);
-        PCIeCommSdk::writeData(mUserHandle, 0x20000, buf4);
-
-        // 8.继续查询DDR和RAM状态
-        // xdma_rw.exe user read 0 -l 1
-        // 若返回0，则进行下一次测量
-        QByteArray readBuf(1, 0);
-        if (PCIeCommSdk::readData(mUserHandle, 0x0, readBuf)){
-            if (readBuf.at(0) == 0x00)
-                return true;
-        }
-
-        QThread::usleep(mTimeout);
-        continue;
-    }
-
-    return false;
 }
 
 /**

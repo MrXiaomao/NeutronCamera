@@ -83,9 +83,16 @@ int main(int argc, char *argv[])
 #endif
     QStringList fontFamilies = QFontDatabase::applicationFontFamilies(fontId);
     if (fontFamilies.size() > 0) {
-        font.setFamily(fontFamilies[0]);
-        font.setPointSize(font.pointSize() + 4);
+        font.setFamily(fontFamilies[0]);//启用内置字体
     }
+
+    int pointSize = font.pointSize();
+    qreal dpi = QGuiApplication::primaryScreen()->devicePixelRatio();
+    if (dpi >= 2.0)
+        pointSize += 3;
+    else if (dpi > 1.0)
+        pointSize += 2;
+    font.setPointSize(pointSize);
     font.setFixedPitch(true);
     qApp->setFont(font);
     qApp->setStyle(new DarkStyle());

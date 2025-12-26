@@ -39,6 +39,9 @@
        </size>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
+       <property name="spacing">
+        <number>0</number>
+       </property>
        <property name="leftMargin">
         <number>0</number>
        </property>
@@ -581,7 +584,7 @@
         <item row="0" column="0">
          <widget class="QStackedWidget" name="stackedWidget">
           <property name="currentIndex">
-           <number>1</number>
+           <number>3</number>
           </property>
           <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
            <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -611,7 +614,7 @@
           <widget class="QWidget" name="spectroMeterPageInfoWidget_PSD">
            <layout class="QVBoxLayout" name="verticalLayout_11">
             <property name="spacing">
-             <number>2</number>
+             <number>0</number>
             </property>
             <property name="leftMargin">
              <number>0</number>
@@ -676,6 +679,9 @@
              <number>0</number>
             </property>
             <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <property name="spacing">
              <number>0</number>
             </property>
             <item row="0" column="0">
@@ -1520,7 +1526,10 @@
               </widget>
              </item>
              <item>
-              <widget class="QWidget" name="logWidget" native="true">
+              <widget class="QGroupBox" name="logGroupBox">
+               <property name="title">
+                <string>工作日志</string>
+               </property>
                <layout class="QVBoxLayout" name="verticalLayout">
                 <property name="spacing">
                  <number>0</number>
@@ -1537,25 +1546,6 @@
                 <property name="bottomMargin">
                  <number>0</number>
                 </property>
-                <item>
-                 <widget class="QGraphicsView" name="graphicsView">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="maximumSize">
-                   <size>
-                    <width>16777215</width>
-                    <height>40</height>
-                   </size>
-                  </property>
-                  <property name="alignment">
-                   <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-                  </property>
-                 </widget>
-                </item>
                 <item>
                  <widget class="QTextEdit" name="textEdit_log">
                   <property name="enabled">
@@ -1724,11 +1714,10 @@
     <bool>false</bool>
    </attribute>
    <addaction name="action_init"/>
+   <addaction name="action_reset"/>
+   <addaction name="separator"/>
    <addaction name="action_startMeasure"/>
    <addaction name="action_stopMeasure"/>
-   <addaction name="separator"/>
-   <addaction name="action_linear"/>
-   <addaction name="action_logarithm"/>
    <addaction name="separator"/>
    <addaction name="action_status"/>
    <addaction name="action_clock"/>
@@ -1978,42 +1967,6 @@
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_linear">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../3rdParty/resource/resource.qrc">
-     <normaloff>:/line.png</normaloff>:/line.png</iconset>
-   </property>
-   <property name="text">
-    <string>线性图像</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
-  <action name="action_logarithm">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>false</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../3rdParty/resource/resource.qrc">
-     <normaloff>:/mathlog.png</normaloff>:/mathlog.png</iconset>
-   </property>
-   <property name="text">
-    <string>对数图像</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
   <action name="action_cfgNet">
    <property name="icon">
     <iconset resource="../3rdParty/resource/resource.qrc">
@@ -2081,6 +2034,18 @@
    </property>
    <property name="text">
     <string>状态监测</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_reset">
+   <property name="icon">
+    <iconset resource="../3rdParty/resource/resource.qrc">
+     <normaloff>:/restore.png</normaloff>:/restore.png</iconset>
+   </property>
+   <property name="text">
+    <string>复位</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

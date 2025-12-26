@@ -1,4 +1,4 @@
-#ifndef MAINWINDOW_H
+﻿#ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
 #include <QMainWindow>
@@ -43,7 +43,6 @@ public:
     void initUi();
     void restoreSettings();
     void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
-    void setCheckBoxHelper(QCustomPlot* customPlot);
     void applyColorTheme();
 
     qint64 getDiskFreeSpace(const QString& disk = "C:/");
@@ -86,10 +85,6 @@ private slots:
 
     void on_action_colorTheme_triggered();
 
-    void on_action_linear_triggered(bool checked);
-
-    void on_action_logarithm_triggered(bool checked);
-
     void on_pushButton_openPower_clicked();
 
     void on_pushButton_closePower_clicked();
@@ -131,6 +126,8 @@ private slots:
     void on_action_stop_triggered(bool checked);
 
     void on_action_status_triggered(bool checked);
+
+    void on_action_reset_triggered();
 
 private:
     Ui::MainWindow *ui;
