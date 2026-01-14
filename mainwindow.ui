@@ -369,6 +369,9 @@
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <property name="spacing">
+           <number>0</number>
+          </property>
           <item>
            <widget class="QLabel" name="label_2">
             <property name="text">
@@ -405,10 +408,6 @@
             <property name="text">
              <string>1#偏压开</string>
             </property>
-            <property name="icon">
-             <iconset resource="../3rdParty/resource/resource.qrc">
-              <normaloff>:/work-on.png</normaloff>:/work-on.png</iconset>
-            </property>
            </widget>
           </item>
           <item>
@@ -416,20 +415,12 @@
             <property name="text">
              <string>2#电源开</string>
             </property>
-            <property name="icon">
-             <iconset resource="../3rdParty/resource/resource.qrc">
-              <normaloff>:/work-on.png</normaloff>:/work-on.png</iconset>
-            </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="pushButton_openVoltage_2">
             <property name="text">
              <string>2#偏压开</string>
-            </property>
-            <property name="icon">
-             <iconset resource="../3rdParty/resource/resource.qrc">
-              <normaloff>:/work-on.png</normaloff>:/work-on.png</iconset>
             </property>
            </widget>
           </item>
@@ -444,6 +435,9 @@
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_5">
+          <property name="spacing">
+           <number>0</number>
+          </property>
           <item>
            <widget class="QLabel" name="label_3">
             <property name="text">
@@ -480,10 +474,6 @@
             <property name="text">
              <string>1#偏压关</string>
             </property>
-            <property name="icon">
-             <iconset resource="../3rdParty/resource/resource.qrc">
-              <normaloff>:/work-off.png</normaloff>:/work-off.png</iconset>
-            </property>
            </widget>
           </item>
           <item>
@@ -491,20 +481,12 @@
             <property name="text">
              <string>2#电源关</string>
             </property>
-            <property name="icon">
-             <iconset resource="../3rdParty/resource/resource.qrc">
-              <normaloff>:/work-off.png</normaloff>:/work-off.png</iconset>
-            </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="pushButton_closeVoltage_2">
             <property name="text">
              <string>2#偏压关</string>
-            </property>
-            <property name="icon">
-             <iconset resource="../3rdParty/resource/resource.qrc">
-              <normaloff>:/work-off.png</normaloff>:/work-off.png</iconset>
             </property>
            </widget>
           </item>
@@ -584,7 +566,7 @@
         <item row="0" column="0">
          <widget class="QStackedWidget" name="stackedWidget">
           <property name="currentIndex">
-           <number>3</number>
+           <number>0</number>
           </property>
           <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
            <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -1728,7 +1710,7 @@
   </widget>
   <action name="action_data_compress">
    <property name="icon">
-    <iconset resource="lresource.qrc">
+    <iconset>
      <normaloff>:/resource/image/compress.png</normaloff>:/resource/image/compress.png</iconset>
    </property>
    <property name="text">
@@ -1927,7 +1909,7 @@
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="lresource.qrc">
+    <iconset>
      <normaloff>:/resource/image/clock.png</normaloff>:/resource/image/clock.png</iconset>
    </property>
    <property name="text">
@@ -1942,7 +1924,7 @@
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="lresource.qrc">
+    <iconset>
      <normaloff>:/resource/image/shotNum.png</normaloff>:/resource/image/shotNum.png</iconset>
    </property>
    <property name="text">
@@ -1957,7 +1939,7 @@
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="lresource.qrc">
+    <iconset>
      <normaloff>:/resource/image/stop.png</normaloff>:/resource/image/stop.png</iconset>
    </property>
    <property name="text">
@@ -2014,7 +1996,7 @@
   </action>
   <action name="action_init">
    <property name="icon">
-    <iconset resource="lresource.qrc">
+    <iconset>
      <normaloff>:/resource/image/pictogram.png</normaloff>:/resource/image/pictogram.png</iconset>
    </property>
    <property name="text">
@@ -2029,7 +2011,7 @@
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="lresource.qrc">
+    <iconset>
      <normaloff>:/resource/image/status.png</normaloff>:/resource/image/status.png</iconset>
    </property>
    <property name="text">
@@ -2061,7 +2043,6 @@
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="lresource.qrc"/>
   <include location="../3rdParty/resource/resource.qrc"/>
   <include location="../3rdParty/resource/resource.qrc"/>
  </resources>

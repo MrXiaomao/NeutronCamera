@@ -76,8 +76,8 @@ public:
     void setParamter(const quint32 cardIndex, const QString &saveFilePath);
 
     Q_SIGNAL void reportFileWriteElapsedtime(quint32,quint32);
-    Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,QByteArray& data);
-    Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,QByteArray& data);
+    Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
+    Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,const QByteArray& data);
 
     Q_SLOT void replyThreadExit();
     Q_SLOT void replyCaptureData(const QByteArray& waveformData, const QByteArray& spectrumData);
@@ -107,6 +107,13 @@ private:
 class CaptureThread : public QThread {
     Q_OBJECT
 public:
+    // 共享数据（原子变量+条件变量）
+    struct SharedData {
+        std::atomic<bool> trigger{false};          // 原子变量：线程A修改，线程B读取
+        QWaitCondition cond;            // 条件变量：线程B等待通知
+        QMutex mutex;                   // 条件变量必须配合互斥锁（Qt要求）
+    };
+
     /**
     * @function name: CaptureThread
     * @brief 构造函数
@@ -119,7 +126,7 @@ public:
     * @param[out]
     * @return
     */
-    explicit CaptureThread(const quint32 cardIndex,
+    explicit CaptureThread(bool isDDR1, const quint32 cardIndex,
                            HANDLE hFile,
                            HANDLE hUser,
                            HANDLE hBypass,
@@ -150,7 +157,6 @@ public:
     bool startMeasure();
     void clear();
     void empty();
-    void handleIrq(int);
 
     /**
     * @function name:readWaveformData
@@ -173,13 +179,14 @@ public:
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
     Q_SIGNAL void reportThreadExit(quint32);
     Q_SIGNAL void reportCaptureData(const QByteArray& waveformData, const QByteArray& spectrumData);
-    Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,QByteArray& data);
-    Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,QByteArray& data);
+    Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
+    Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,const QByteArray& data);
     Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
     Q_SIGNAL void reportFileWriteElapsedtime(quint32, quint32);
     Q_SIGNAL void reportCaptureFinished(quint32);
 
 private:
+    std::atomic<bool> mIsDDR1 = true;
     DataCachPoolThread* mDataCachPoolThread = nullptr;
     quint32 mCardIndex;//设备名称
     HANDLE mDeviceHandle;//设备句柄
@@ -188,19 +195,21 @@ private:
     HANDLE mEventHandle[2];//中断句柄
 
     QString mSaveFilePath;//保存路径
-    quint32 mCaptureRef = 1;
+    quint32 mCaptureCount = 1;
     quint32 mTimeout = 5000;//超时微秒
 
-    quint32 mCapturedRef = 0;
+    std::atomic<quint32> mCapturedRef = 0;
     QVector<QByteArray> mWaveformDatas;
     QVector<QByteArray> mSpectrumDatas;
 
     QMutex mMutex;
     QWaitCondition mCondition;
-    bool mIsPaused = false;
-    bool mIsStopped = false;
+    std::atomic<bool> mIsPaused = false;
+    std::atomic<bool> mIsStopped = false;
     QMutex mEventMutex[2];
     QWaitCondition mInterruptEvent[2];
+
+    SharedData mIrq1Trigger, mIrq2Trigger;
 };
 
 #define CAMNUMBER_DDR_PER   4   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
@@ -244,8 +253,8 @@ public:
     Q_SIGNAL void reportBackupVoltageStatus(quint32, bool);
     Q_SIGNAL void reportBackupChannelStatus(quint32, bool);
 
-    Q_SLOT void replyCaptureWaveformData(quint8, quint32, QByteArray&);
-    Q_SLOT void replyCaptureSpectrumData(quint8, quint32, QByteArray&);
+    Q_SLOT void replyCaptureWaveformData(quint8, quint32, const QByteArray&);
+    Q_SLOT void replyCaptureSpectrumData(quint8, quint32, const  QByteArray&);
     Q_SLOT void replySettingFinished();
 
     Q_SLOT void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
@@ -328,8 +337,8 @@ public:
 
     void writeCommand(QByteArray& data);
 
-    static bool writeData(HANDLE hFile, quint64 offset, const QByteArray& data);
-    static bool readData(HANDLE hFile, quint64 offset, const QByteArray& data);
+    inline static bool writeData(HANDLE hFile, quint64 offset, const QByteArray& data);
+    inline static bool readData(HANDLE hFile, quint64 offset, const QByteArray& data);
 
     HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE);//O_RDWR
 signals:

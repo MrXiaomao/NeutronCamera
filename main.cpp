@@ -1,4 +1,7 @@
-﻿#include "mainwindow.h"
+﻿//指定文件的编码为UTF-8
+#pragma execution_character_set("utf-8")
+
+#include "mainwindow.h"
 #include "offlinewindow.h"
 #include "datacompresswindow.h"
 #include "globalsettings.h"
@@ -30,8 +33,8 @@ QtMessageHandler system_default_message_handler = NULL;// 用来保存系统默�
 void AppMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString &msg)
 {
     QMutexLocker locker(&mutexMsg);
-    if (type == QtWarningMsg)
-        return;
+    if (type == QtWarningMsg && context.file == nullptr && context.function == nullptr)
+        return;// 主要用于过滤系统的警告信息
 
     if (mMainWindow && type != QtDebugMsg){
         QMetaObject::invokeMethod(mMainWindow, "reporWriteLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(QtMsgType, type));
@@ -180,6 +183,7 @@ int main(int argc, char *argv[])
         QGoodWindow::setAppCustomTheme(isDarkTheme, themeColor); // Must be >96
     }
 
+    QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
     QGoodWindowHelper w;
     if (args.contains("-m") && args.contains("offline")){
         QApplication::setApplicationName("中子相机数据处理离线版");

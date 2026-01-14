@@ -582,14 +582,17 @@ void OfflineWindow::on_action_openfile_triggered()
 
         emit reporWriteLog("实验炮号：" + mShotNum);
         if (mCurrentDetectorType == dtLBD){
+            ui->action_typeLSD->setChecked(true);
             emit ui->action_typeLBD->triggered(true);
             emit reporWriteLog("探测器类型：LBD探测器");
         }
         else if (mCurrentDetectorType == dtLSD){
+            ui->action_typeLSD->setChecked(true);
             emit ui->action_typeLSD->triggered(true);
             emit reporWriteLog("探测器类型：LSD探测器");
         }
         else if (mCurrentDetectorType == dtPSD){
+            ui->action_typePSD->setChecked(true);
             emit ui->action_typePSD->triggered(true);
             emit reporWriteLog("探测器类型：PSD探测器");
         }

@@ -30,6 +30,10 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     ui->pushButton_closePower->setEnabled(false);
     ui->pushButton_openVoltage->setEnabled(false);
     ui->pushButton_closeVoltage->setEnabled(false);
+    ui->pushButton_openPower_2->setEnabled(false);
+    ui->pushButton_closePower_2->setEnabled(false);
+    ui->pushButton_openVoltage_2->setEnabled(false);
+    ui->pushButton_closeVoltage_2->setEnabled(false);
     ui->pushButton_selChannel1->setEnabled(false);
     ui->pushButton_selChannel2->setEnabled(false);
 
@@ -232,6 +236,7 @@ void MainWindow::initUi()
         for (int row=0; row<ui->tableWidget_camera->rowCount(); ++row){
             for (int column=2; column<=6; ++column){
                 SwitchButton* cell = new SwitchButton(this);
+                cell->setContentsMargins(5, 2, 5, 2);
                 if (column == 2){
                     cell->setObjectName(QString("1#Power#%1").arg(row+1));
                     cell->setProperty("isPower", true);
@@ -608,7 +613,7 @@ void MainWindow::initUi()
             }
         }
 
-        if (settings.contains("Global/splitter/State")){
+        if (settings.contains("Global/splitterV2/State")){
             QSplitter *splitterV2 = this->findChild<QSplitter*>("splitterV2");
             if (splitterV2)
             {
@@ -1632,8 +1637,10 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
     }
 }
 
-void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<double,double>>& pairs)
+void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraIndex, QVector<QPair<double,double>>& pairs)
 {
+    quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
+
     //实测曲线
     QCustomPlot* customPlot = nullptr;
     if (mCurrentDetectorType == dtLSD && timestampIndex == 1){
@@ -1679,8 +1686,10 @@ void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraOrient
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void MainWindow::replyGammaSpectrum(quint8 timestampIndex, quint8 cameraOrientation, QVector<QPair<double,double>>& pairs)
+void MainWindow::replyGammaSpectrum(quint8 timestampIndex, quint8 cameraIndex , QVector<QPair<double,double>>& pairs)
 {
+    quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
+
     //实测曲线
     QCustomPlot* customPlot = nullptr;
     if (mCurrentDetectorType == dtLSD && timestampIndex == 1){
@@ -1898,6 +1907,10 @@ void MainWindow::on_action_init_triggered()
         ui->pushButton_closePower->setEnabled(true);
         ui->pushButton_openVoltage->setEnabled(true);
         ui->pushButton_closeVoltage->setEnabled(true);
+        ui->pushButton_openPower_2->setEnabled(true);
+        ui->pushButton_closePower_2->setEnabled(true);
+        ui->pushButton_openVoltage_2->setEnabled(true);
+        ui->pushButton_closeVoltage_2->setEnabled(true);
         ui->pushButton_selChannel1->setEnabled(true);
         ui->pushButton_selChannel2->setEnabled(true);
     }
@@ -1943,10 +1956,14 @@ void MainWindow::on_action_stop_triggered(bool checked)
 
 void MainWindow::on_action_status_triggered(bool checked)
 {
-    if (checked){      
+    if (checked){
+        // QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/status.png"), QSize(36, 36), Qt::green);
+        // ui->action_status->setIcon(QIcon(pixmap));
         ui->stackedWidget->setCurrentWidget(ui->statusMonitorPageInfoWidget);
     }
     else{
+        // QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/status.png"), QSize(36, 24), Qt::black);
+        // ui->action_status->setIcon(QIcon(pixmap));
         if (ui->action_typePSD->isChecked())
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD);
         else
