@@ -247,12 +247,6 @@ public:
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
 
-    Q_SIGNAL void reportPowerStatus(quint32, bool);
-    Q_SIGNAL void reportVoltageStatus(quint32, bool);
-    Q_SIGNAL void reportBackupPowerStatus(quint32, bool);
-    Q_SIGNAL void reportBackupVoltageStatus(quint32, bool);
-    Q_SIGNAL void reportBackupChannelStatus(quint32, bool);
-
     Q_SLOT void replyCaptureWaveformData(quint8, quint32, const QByteArray&);
     Q_SLOT void replyCaptureSpectrumData(quint8, quint32, const  QByteArray&);
     Q_SLOT void replySettingFinished();
@@ -284,12 +278,6 @@ public:
     void analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLength, quint32 remainTime, QString filePath);
     
     void analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
-
-    bool switchPower(quint32, bool);
-    bool switchVoltage(quint32, bool);
-    bool switchBackupPower(quint32, bool);
-    bool switchBackupVoltage(quint32, bool);
-    bool switchBackupChannel(quint32, bool);
 
     /*指令集*/
     //死时间
@@ -351,12 +339,6 @@ private:
     QMap<quint32, HANDLE> mMapBypass;//设备控制句柄
     QMap<quint32, HANDLE> mMapEvent1;//设备中断句柄
     QMap<quint32, HANDLE> mMapEvent2;//设备中断句柄
-
-    QMap<quint32, bool> mMapPower;//探测器的1#电源开关
-    QMap<quint32, bool> mMapVoltage;//探测器的1#电压开关
-    QMap<quint32, bool> mMapBackupPower;//探测器的2#电源开关
-    QMap<quint32, bool> mMapBackupVoltage;//探测器的2#电压开关
-    QMap<quint32, bool> mMapChannel;//选通开关,true-1#,false-2#
 
     QStringList mDevices;
     QMap<quint32, bool> mThreadRunning;

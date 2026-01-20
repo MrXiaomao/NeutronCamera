@@ -685,46 +685,6 @@ bool PCIeCommSdk::openHistoryFile(QString filename)
 
 }
 
-bool PCIeCommSdk::switchPower(quint32 channel, bool on)
-{
-    mMapPower[channel] = on;
-
-    emit reportPowerStatus(channel, on);
-    return true;
-}
-
-bool PCIeCommSdk::switchVoltage(quint32 channel, bool on)
-{
-    mMapVoltage[channel] = on;
-
-    emit reportVoltageStatus(channel, on);
-    return true;
-}
-
-bool PCIeCommSdk::switchBackupPower(quint32 channel, bool on)
-{
-    mMapBackupPower[channel] = on;
-
-    emit reportBackupPowerStatus(channel, on);
-    return true;
-}
-
-bool PCIeCommSdk::switchBackupVoltage(quint32 channel, bool on)
-{
-    mMapBackupVoltage[channel] = on;
-
-    emit reportBackupVoltageStatus(channel, on);
-    return true;
-}
-
-bool PCIeCommSdk::switchBackupChannel(quint32 channel, bool on)
-{
-    mMapChannel[channel] = on;
-
-    emit reportBackupChannelStatus(channel, on);
-    return true;
-}
-
 void PCIeCommSdk::writeDeathTime(quint16 deathTime)
 {
     QByteArray askCurrentCmd = QByteArray::fromHex("12 34 00 0F FA 11 00 00 00 00 AB CD");
@@ -866,7 +826,7 @@ void PCIeCommSdk::initializeDevices()
             || mMapEvent1[cardIndex] == INVALID_HANDLE_VALUE
             || mMapEvent2[cardIndex] == INVALID_HANDLE_VALUE)
         {
-            qWarning() << "打开设备失败 index:" << cardIndex;
+            qWarning() << Q_FUNC_INFO << "打开设备失败 index:" << cardIndex;
             emit reportOpenDeviceFail(cardIndex);
             if (mMapDevice[cardIndex] != INVALID_HANDLE_VALUE)
                 CloseHandle(mMapDevice[cardIndex]);
@@ -890,14 +850,14 @@ void PCIeCommSdk::initializeDevices()
             if (mMapEvent2[cardIndex] >= 0)
                 CloseHandle(mMapEvent2[cardIndex]);
 #endif
+            mMapDevice.remove(cardIndex);
+            mMapUser.remove(cardIndex);
+            mMapBypass.remove(cardIndex);
+            mMapEvent1.remove(cardIndex);
+            mMapEvent2.remove(cardIndex);
+
             continue;
         }
-    }
-
-    for (int cardIndex = 1; cardIndex <= numberOfDevices(); ++cardIndex){
-        mMapPower[cardIndex] = true;
-        mMapVoltage[cardIndex] = true;
-        mMapChannel[cardIndex] = true;
     }
 }
 
@@ -919,6 +879,9 @@ void PCIeCommSdk::initCaptureThreads()
 {
     for (int cardIndex = 1; cardIndex <= numberOfDevices()*2; ++cardIndex)
     {
+        if (!mMapDevice.contains(cardIndex))
+            continue;
+
         CaptureThread *captureThread = new CaptureThread(cardIndex%2==1,
                                                          (cardIndex+1)/2,
                                                          mMapDevice[cardIndex],
@@ -1313,6 +1276,12 @@ void CaptureThread::run()
 
             // 子线程处理能谱数据读取
             {
+                // std::future<bool> task = std::async([=]()->bool{
+                //     QThread::usleep(10000);/// 等待10ms再去读数据
+                //     readSpectrumData(mSpectrumDatas.at(mCapturedRef), isChunkOne ? 0x0 : 0xc800);
+                // });
+                // task.get();// 等待完成并获取结果
+
                 QMutexLocker locker(&irqMetex);
                 irqSignal = true;
                 irqCond.wakeOne();

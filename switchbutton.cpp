@@ -36,8 +36,7 @@ SwitchButton::SwitchButton(QWidget *parent): QWidget(parent)
     timer->setInterval(5);
     connect(timer, SIGNAL(timeout()), this, SLOT(updateValue()));
 
-    setFont(QFont("Microsoft Yahei", 10));
-
+    //setFont(QFont("Microsoft Yahei", 10));
 }
 
 SwitchButton::~SwitchButton()
@@ -46,34 +45,13 @@ SwitchButton::~SwitchButton()
 }
 
 void SwitchButton::mousePressEvent(QMouseEvent *)
-{
+{    
     if (!autoChecked){
-        emit clicked(checked);
+        setToggled(!checked);
         return;
     }
 
-    checked = !checked;
-    emit toggled(checked);
-
-    //每次移动的步长为宽度的 50分之一
-    step = qMax(1, contentsRect().width() / 50);
-
-    //状态切换改变后自动计算终点坐标
-    if (checked) {
-        if (buttonStyle == ButtonStyle_Rect) {
-            endX = contentsRect().left() + contentsRect().width() - contentsRect().width() / 2;
-        } else if (buttonStyle == ButtonStyle_CircleIn) {
-            endX = contentsRect().left() + contentsRect().width() - contentsRect().height();
-        } else if (buttonStyle == ButtonStyle_CircleOut) {
-            endX = contentsRect().left() + contentsRect().width() - contentsRect().height() + space;
-        }
-    } else {
-        endX = contentsRect().left();
-    }
-
-    //timer->start();
-    startX = endX;
-    update();
+    setChecked(!checked);
 }
 
 void SwitchButton::resizeEvent(QResizeEvent *)
@@ -242,13 +220,38 @@ void SwitchButton::setAutoChecked(bool autoChecked)
     }
 }
 
+void SwitchButton::setToggled(bool checked)
+{
+    if (autoChecked)
+        this->setChecked(checked);
+    else
+        emit this->toggled(checked);
+}
+
 void SwitchButton::setChecked(bool checked)
 {
     if (this->checked != checked) {
         this->checked = checked;
 
-        if (!autoChecked)
-            emit toggled(checked);
+        // //每次移动的步长为宽度的 50分之一
+        // step = qMax(1, contentsRect().width() / 50);
+
+        // //状态切换改变后自动计算终点坐标
+        // if (checked) {
+        //     if (buttonStyle == ButtonStyle_Rect) {
+        //         endX = contentsRect().width() - contentsRect().width() / 2;
+        //     } else if (buttonStyle == ButtonStyle_CircleIn) {
+        //         endX = contentsRect().width() - contentsRect().height();
+        //     } else if (buttonStyle == ButtonStyle_CircleOut) {
+        //         endX = contentsRect().width() - contentsRect().height() + space;
+        //     }
+        // } else {
+        //     endX = contentsRect().left();
+        // }
+
+        // startX = endX;
+        // //timer->start();
+        // this->update();
 
         //每次移动的步长为宽度的 50分之一
         step = qMax(1, contentsRect().width() / 50);
@@ -256,19 +259,19 @@ void SwitchButton::setChecked(bool checked)
         //状态切换改变后自动计算终点坐标
         if (checked) {
             if (buttonStyle == ButtonStyle_Rect) {
-                endX = contentsRect().width() - contentsRect().width() / 2;
+                endX = contentsRect().left() + contentsRect().width() - contentsRect().width() / 2;
             } else if (buttonStyle == ButtonStyle_CircleIn) {
-                endX = contentsRect().width() - contentsRect().height();
+                endX = contentsRect().left() + contentsRect().width() - contentsRect().height();
             } else if (buttonStyle == ButtonStyle_CircleOut) {
-                endX = contentsRect().width() - contentsRect().height() + space;
+                endX = contentsRect().left() + contentsRect().width() - contentsRect().height() + space;
             }
         } else {
             endX = contentsRect().left();
         }
 
-        startX = endX;
         //timer->start();
-        this->update();
+        startX = endX;
+        update();
     }
 }
 

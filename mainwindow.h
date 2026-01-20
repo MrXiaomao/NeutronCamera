@@ -44,6 +44,10 @@ public:
     void restoreSettings();
     void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
     void applyColorTheme();
+    void updateTableRowHidden();
+    // void checkTemperatureLimit(quint8 row, quint8 column, float v1, float);
+    // void check29VoltageLimit(quint8 row, quint8 column, float v1, float v2);
+    // void check48VoltageLimit(quint8 row, quint8 column, float v);
 
     qint64 getDiskFreeSpace(const QString& disk = "C:/");
     QPixmap maskPixmap(QPixmap, QSize sz, QColor clrMask);

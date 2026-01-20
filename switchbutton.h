@@ -140,7 +140,8 @@ public slots:
     //设置是否自动选中
     void setAutoChecked(bool autoChecked);
     //设置是否选中
-    void setChecked(bool checked);   
+    void setChecked(bool checked);
+    void setToggled(bool checked);
     //设置风格样式
     void setButtonStyle(ButtonStyle buttonStyle);
 
