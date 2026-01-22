@@ -377,6 +377,7 @@ void MainWindow::initUi()
 
     QTimer* systemClockTimer = new QTimer(this);
     systemClockTimer->setObjectName("systemClockTimer");
+    systemClockTimer->setTimerType(Qt::PreciseTimer);
     connect(systemClockTimer, &QTimer::timeout, this, [=](){
         // 获取当前时间
         QDateTime currentDateTime = QDateTime::currentDateTime();
@@ -1184,8 +1185,8 @@ void MainWindow::on_action_startMeasure_triggered()
 
     //根据实验时长判断磁盘空间是否足够
     {
-        qint32 timeBase = 50;//打包时长基数
-        qint32 onePacketSize = 256*1024*1024;//打包大小基数
+        qint32 timeBase = 40;//打包时长基数
+        qint32 onePacketSize = 120*1000*1000;//打包大小基数
         QString cacheDir = ui->lineEdit_savePath->text();
         QDir dir(cacheDir);
         qint64 diskFreeSpace = getDiskFreeSpace(dir.absoluteFilePath(cacheDir));
@@ -1233,7 +1234,7 @@ void MainWindow::on_action_startMeasure_triggered()
     QFile::copy(CONFIG_FILENAME, fileSaveDir + "/Settings.ini");
 
     // 发送指令集
-    mPCIeCommSdk.writeStartMeasure();
+    //mPCIeCommSdk.writeStartMeasure();
     mPCIeCommSdk.setCaptureParamter(ui->comboBox_horCamera->currentIndex() + 1,
                                     ui->comboBox_verCamera->currentIndex() + 12,
                                     ui->spinBox_time1->value(),
@@ -1252,7 +1253,7 @@ void MainWindow::on_action_startMeasure_triggered()
 void MainWindow::on_action_stopMeasure_triggered()
 {
     // 发送指令集
-    mPCIeCommSdk.writeStopMeasure();
+    //mPCIeCommSdk.writeStopMeasure();
 
     mPCIeCommSdk.stopAllCapture();
 
@@ -2022,6 +2023,9 @@ void MainWindow::on_action_init_triggered()
         ui->pushButton_closeVoltage_2->setEnabled(true);
         ui->pushButton_selChannel1->setEnabled(true);
         ui->pushButton_selChannel2->setEnabled(true);
+
+        QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/pictogram.png"), QSize(36, 36), QColor::fromRgb(0x7c,0xfc,0x00,0xff));
+        ui->action_init->setIcon(QIcon(pixmap));
     }
     else{
         qInfo().noquote() << tr("初始化失败");
