@@ -720,7 +720,7 @@
   <action name="action_choseDir">
    <property name="icon">
     <iconset resource="../3rdParty/resource/resource.qrc">
-     <normaloff>:/openfile.png</normaloff>:/openfile.png</iconset>
+     <normaloff>:/open.png</normaloff>:/open.png</iconset>
    </property>
    <property name="text">
     <string>选择目录</string>

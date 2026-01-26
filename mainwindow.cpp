@@ -694,94 +694,101 @@ void MainWindow::initUi()
     });
 
     connect(mCommHelper, &CommHelper::reportTemperatureAndVoltage, this, [=](quint8 moduleNo, QMap<QString, QPair<double, double>>& pairs){
-        //温度
-        ui->tableWidget_status->item(0, moduleNo+1)->setText(QString::number(pairs["PSD1"].first, 'f', 2));
-        ui->tableWidget_status->item(1, moduleNo+1)->setText(QString::number(pairs["PSD2"].first, 'f', 2));
-        ui->tableWidget_status->item(2, moduleNo+1)->setText(QString::number(pairs["LBD"].first, 'f', 2));
-        ui->tableWidget_status->item(3, moduleNo+1)->setText(QString::number(pairs["LSD"].first, 'f', 2));
-        //29V电压
-        ui->tableWidget_status->item(4, moduleNo+1)->setText(QString::number(pairs["PSD1_29V"].first, 'f', 2));
-        ui->tableWidget_status->item(5, moduleNo+1)->setText(QString::number(pairs["PSD2_29V"].first, 'f', 2));
-        ui->tableWidget_status->item(6, moduleNo+1)->setText(QString::number(pairs["LBD_29V"].first, 'f', 2));
-        ui->tableWidget_status->item(7, moduleNo+1)->setText(QString::number(pairs["LSD_29V"].first, 'f', 2));
-        //29V电流
-        ui->tableWidget_status->item(8, moduleNo+1)->setText(QString::number(pairs["PSD1_29V"].second, 'f', 2));
-        ui->tableWidget_status->item(9, moduleNo+1)->setText(QString::number(pairs["PSD2_29V"].second, 'f', 2));
-        ui->tableWidget_status->item(10, moduleNo+1)->setText(QString::number(pairs["LBD_29V"].second, 'f', 2));
-        ui->tableWidget_status->item(11, moduleNo+1)->setText(QString::number(pairs["LSD_29V"].second, 'f', 2));
-        //48V电压
-        ui->tableWidget_status->item(12, moduleNo+1)->setText(QString::number(pairs["PSD1_48V"].first, 'f', 2));
-        ui->tableWidget_status->item(13, moduleNo+1)->setText(QString::number(pairs["PSD2_48V"].first, 'f', 2));
-        ui->tableWidget_status->item(14, moduleNo+1)->setText(QString::number(pairs["LBD_48V"].first, 'f', 2));
-        ui->tableWidget_status->item(15, moduleNo+1)->setText(QString::number(pairs["LSD_48V"].first, 'f', 2));
-        //48V电流
-        ui->tableWidget_status->item(16, moduleNo+1)->setText(QString::number(pairs["PSD1_48V"].second, 'f', 2));
-        ui->tableWidget_status->item(17, moduleNo+1)->setText(QString::number(pairs["PSD2_48V"].second, 'f', 2));
-        ui->tableWidget_status->item(18, moduleNo+1)->setText(QString::number(pairs["LBD_48V"].second, 'f', 2));
-        ui->tableWidget_status->item(19, moduleNo+1)->setText(QString::number(pairs["LSD_48V"].second, 'f', 2));
-        //运放板电压
-        ui->tableWidget_status->item(20, moduleNo+1)->setText(QString::number(pairs["PSD1-AMP"].first, 'f', 2));
-        ui->tableWidget_status->item(21, moduleNo+1)->setText(QString::number(pairs["PSD2-AMP"].first, 'f', 2));
-        ui->tableWidget_status->item(22, moduleNo+1)->setText(QString::number(pairs["LBD-AMP"].first, 'f', 2));
-        ui->tableWidget_status->item(23, moduleNo+1)->setText(QString::number(pairs["LSD-AMP"].first, 'f', 2));
-        //运放板电流
-        ui->tableWidget_status->item(24, moduleNo+1)->setText(QString::number(pairs["PSD1-AMP"].second, 'f', 2));
-        ui->tableWidget_status->item(25, moduleNo+1)->setText(QString::number(pairs["PSD2-AMP"].second, 'f', 2));
-        ui->tableWidget_status->item(26, moduleNo+1)->setText(QString::number(pairs["LBD-AMP"].second, 'f', 2));
-        ui->tableWidget_status->item(27, moduleNo+1)->setText(QString::number(pairs["LSD-AMP"].second, 'f', 2));
+        if (moduleNo < 1 || moduleNo > 18)
+        {
 
-        //温度设成10~50℃
-        auto checkValueValid = [=](quint8 row, float v, float v1, float v2, QString errMsg){
-            quint8 column = moduleNo + 1;
-            if (v > v2 || v < v1){
-                ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
-                qCritical().noquote() << "模组#" << moduleNo << errMsg << QString::number(v, 'f', 2);
+        }
+        else
+        {
+            //温度
+            ui->tableWidget_status->item(0, moduleNo+1)->setText(QString::number(pairs["PSD1"].first, 'f', 2));
+            ui->tableWidget_status->item(1, moduleNo+1)->setText(QString::number(pairs["PSD2"].first, 'f', 2));
+            ui->tableWidget_status->item(2, moduleNo+1)->setText(QString::number(pairs["LBD"].first, 'f', 2));
+            ui->tableWidget_status->item(3, moduleNo+1)->setText(QString::number(pairs["LSD"].first, 'f', 2));
+            //29V电压
+            ui->tableWidget_status->item(4, moduleNo+1)->setText(QString::number(pairs["PSD1_29V"].first, 'f', 2));
+            ui->tableWidget_status->item(5, moduleNo+1)->setText(QString::number(pairs["PSD2_29V"].first, 'f', 2));
+            ui->tableWidget_status->item(6, moduleNo+1)->setText(QString::number(pairs["LBD_29V"].first, 'f', 2));
+            ui->tableWidget_status->item(7, moduleNo+1)->setText(QString::number(pairs["LSD_29V"].first, 'f', 2));
+            //29V电流
+            ui->tableWidget_status->item(8, moduleNo+1)->setText(QString::number(pairs["PSD1_29V"].second, 'f', 2));
+            ui->tableWidget_status->item(9, moduleNo+1)->setText(QString::number(pairs["PSD2_29V"].second, 'f', 2));
+            ui->tableWidget_status->item(10, moduleNo+1)->setText(QString::number(pairs["LBD_29V"].second, 'f', 2));
+            ui->tableWidget_status->item(11, moduleNo+1)->setText(QString::number(pairs["LSD_29V"].second, 'f', 2));
+            //48V电压
+            ui->tableWidget_status->item(12, moduleNo+1)->setText(QString::number(pairs["PSD1_48V"].first, 'f', 2));
+            ui->tableWidget_status->item(13, moduleNo+1)->setText(QString::number(pairs["PSD2_48V"].first, 'f', 2));
+            ui->tableWidget_status->item(14, moduleNo+1)->setText(QString::number(pairs["LBD_48V"].first, 'f', 2));
+            ui->tableWidget_status->item(15, moduleNo+1)->setText(QString::number(pairs["LSD_48V"].first, 'f', 2));
+            //48V电流
+            ui->tableWidget_status->item(16, moduleNo+1)->setText(QString::number(pairs["PSD1_48V"].second, 'f', 2));
+            ui->tableWidget_status->item(17, moduleNo+1)->setText(QString::number(pairs["PSD2_48V"].second, 'f', 2));
+            ui->tableWidget_status->item(18, moduleNo+1)->setText(QString::number(pairs["LBD_48V"].second, 'f', 2));
+            ui->tableWidget_status->item(19, moduleNo+1)->setText(QString::number(pairs["LSD_48V"].second, 'f', 2));
+            //运放板电压
+            ui->tableWidget_status->item(20, moduleNo+1)->setText(QString::number(pairs["PSD1-AMP"].first, 'f', 2));
+            ui->tableWidget_status->item(21, moduleNo+1)->setText(QString::number(pairs["PSD2-AMP"].first, 'f', 2));
+            ui->tableWidget_status->item(22, moduleNo+1)->setText(QString::number(pairs["LBD-AMP"].first, 'f', 2));
+            ui->tableWidget_status->item(23, moduleNo+1)->setText(QString::number(pairs["LSD-AMP"].first, 'f', 2));
+            //运放板电流
+            ui->tableWidget_status->item(24, moduleNo+1)->setText(QString::number(pairs["PSD1-AMP"].second, 'f', 2));
+            ui->tableWidget_status->item(25, moduleNo+1)->setText(QString::number(pairs["PSD2-AMP"].second, 'f', 2));
+            ui->tableWidget_status->item(26, moduleNo+1)->setText(QString::number(pairs["LBD-AMP"].second, 'f', 2));
+            ui->tableWidget_status->item(27, moduleNo+1)->setText(QString::number(pairs["LSD-AMP"].second, 'f', 2));
 
-                mCommHelper->switchPower(moduleNo, false);
-                mCommHelper->switchVoltage(moduleNo, false);
-                mCommHelper->switchBackupPower(moduleNo, true);
-                mCommHelper->switchBackupVoltage(moduleNo, true);
-                mCommHelper->switchBackupChannel(moduleNo, true);
-            }
-            else{
-                ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
-            }
-        };
+            //温度设成10~50℃
+            auto checkValueValid = [=](quint8 row, float v, float v1, float v2, QString errMsg){
+                quint8 column = moduleNo + 1;
+                if (v > v2 || v < v1){
+                    ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+                    qCritical().noquote() << "模组#" << moduleNo << errMsg << QString::number(v, 'f', 2);
 
-        checkValueValid(0, pairs["PSD1"].first, 10, 50, tr("PSD1温度异常，值："));
-        checkValueValid(1, pairs["PSD2"].first, 10, 50, tr("PSD2温度异常，值："));
-        checkValueValid(2, pairs["LBD"].first, 10, 50, tr("LBD温度异常，值："));
-        checkValueValid(3, pairs["LSD"].first, 10, 50, tr("LSD温度异常，值："));
+                    mCommHelper->switchPower(moduleNo, false);
+                    mCommHelper->switchVoltage(moduleNo, false);
+                    mCommHelper->switchBackupPower(moduleNo, true);
+                    mCommHelper->switchBackupVoltage(moduleNo, true);
+                    mCommHelper->switchBackupChannel(moduleNo, true);
+                }
+                else{
+                    ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+                }
+            };
 
-        checkValueValid(4, pairs["PSD1_29V"].first, 28, 30, tr("PSD1_29V电压异常，值："));
-        checkValueValid(5, pairs["PSD2_29V"].first, 28, 30, tr("PSD2_29V电压异常，值："));
-        checkValueValid(6, pairs["LBD_29V"].first, 28, 30, tr("LBD_29V电压异常，值："));
-        checkValueValid(7, pairs["LSD_29V"].first, 28, 30, tr("LSD_29V电压异常，值："));
+            checkValueValid(0, pairs["PSD1"].first, 10, 50, tr("PSD1温度异常，值："));
+            checkValueValid(1, pairs["PSD2"].first, 10, 50, tr("PSD2温度异常，值："));
+            checkValueValid(2, pairs["LBD"].first, 10, 50, tr("LBD温度异常，值："));
+            checkValueValid(3, pairs["LSD"].first, 10, 50, tr("LSD温度异常，值："));
 
-        checkValueValid(8, pairs["PSD1_29V"].second, 0, 20, tr("PSD1_29V电流异常，值："));
-        checkValueValid(9, pairs["PSD2_29V"].second, 0, 20, tr("PSD2_29V电流异常，值："));
-        checkValueValid(10, pairs["LBD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
-        checkValueValid(11, pairs["LSD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
+            checkValueValid(4, pairs["PSD1_29V"].first, 28, 30, tr("PSD1_29V电压异常，值："));
+            checkValueValid(5, pairs["PSD2_29V"].first, 28, 30, tr("PSD2_29V电压异常，值："));
+            checkValueValid(6, pairs["LBD_29V"].first, 28, 30, tr("LBD_29V电压异常，值："));
+            checkValueValid(7, pairs["LSD_29V"].first, 28, 30, tr("LSD_29V电压异常，值："));
 
-        checkValueValid(12, pairs["PSD1_48V"].first, 45, 50, tr("PSD1_48V电压异常，值："));
-        checkValueValid(13, pairs["PSD2_48V"].first, 45, 50, tr("PSD2_48V电压异常，值："));
-        checkValueValid(14, pairs["LBD_48V"].first, 45, 50, tr("LBD_48V电压异常，值："));
-        checkValueValid(15, pairs["LSD_48V"].first, 45, 50, tr("LSD_48V电压异常，值："));
+            checkValueValid(8, pairs["PSD1_29V"].second, 0, 20, tr("PSD1_29V电流异常，值："));
+            checkValueValid(9, pairs["PSD2_29V"].second, 0, 20, tr("PSD2_29V电流异常，值："));
+            checkValueValid(10, pairs["LBD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
+            checkValueValid(11, pairs["LSD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
 
-        checkValueValid(16, pairs["PSD1_48V"].second, 0, 20, tr("PSD1_48V电流异常，值："));
-        checkValueValid(17, pairs["PSD2_48V"].second, 0, 20, tr("PSD2_48V电流异常，值："));
-        checkValueValid(18, pairs["LBD_48V"].second, 0, 20, tr("LBD_48V电流异常，值："));
-        checkValueValid(19, pairs["LSD_48V"].second, 0, 20, tr("LSD_48V电流异常，值："));
+            checkValueValid(12, pairs["PSD1_48V"].first, 45, 50, tr("PSD1_48V电压异常，值："));
+            checkValueValid(13, pairs["PSD2_48V"].first, 45, 50, tr("PSD2_48V电压异常，值："));
+            checkValueValid(14, pairs["LBD_48V"].first, 45, 50, tr("LBD_48V电压异常，值："));
+            checkValueValid(15, pairs["LSD_48V"].first, 45, 50, tr("LSD_48V电压异常，值："));
 
-        checkValueValid(20, pairs["PSD1-AMP"].first, 45, 50, tr("PSD1运放板电压异常，值："));
-        checkValueValid(21, pairs["PSD2-AMP"].first, 45, 50, tr("PSD2运放板电压异常，值："));
-        checkValueValid(22, pairs["LBD-AMP"].first, 45, 50, tr("LBD运放板电压异常，值："));
-        checkValueValid(23, pairs["LSD-AMP"].first, 45, 50, tr("LSD运放板电压异常，值："));
+            checkValueValid(16, pairs["PSD1_48V"].second, 0, 20, tr("PSD1_48V电流异常，值："));
+            checkValueValid(17, pairs["PSD2_48V"].second, 0, 20, tr("PSD2_48V电流异常，值："));
+            checkValueValid(18, pairs["LBD_48V"].second, 0, 20, tr("LBD_48V电流异常，值："));
+            checkValueValid(19, pairs["LSD_48V"].second, 0, 20, tr("LSD_48V电流异常，值："));
 
-        checkValueValid(24, pairs["PSD1-AMP"].second, 0, 20, tr("PSD1运放板电流异常，值："));
-        checkValueValid(25, pairs["PSD2-AMP"].second, 0, 20, tr("PSD2运放板电流异常，值："));
-        checkValueValid(26, pairs["LBD-AMP"].second, 0, 20, tr("LBD运放板电流异常，值："));
-        checkValueValid(27, pairs["LSD-AMP"].second, 0, 20, tr("LSD运放板电流异常，值："));
+            checkValueValid(20, pairs["PSD1-AMP"].first, 45, 50, tr("PSD1运放板电压异常，值："));
+            checkValueValid(21, pairs["PSD2-AMP"].first, 45, 50, tr("PSD2运放板电压异常，值："));
+            checkValueValid(22, pairs["LBD-AMP"].first, 45, 50, tr("LBD运放板电压异常，值："));
+            checkValueValid(23, pairs["LSD-AMP"].first, 45, 50, tr("LSD运放板电压异常，值："));
+
+            checkValueValid(24, pairs["PSD1-AMP"].second, 0, 20, tr("PSD1运放板电流异常，值："));
+            checkValueValid(25, pairs["PSD2-AMP"].second, 0, 20, tr("PSD2运放板电流异常，值："));
+            checkValueValid(26, pairs["LBD-AMP"].second, 0, 20, tr("LBD运放板电流异常，值："));
+            checkValueValid(27, pairs["LSD-AMP"].second, 0, 20, tr("LSD运放板电流异常，值："));
+        }
     });
 
     connect(mCommHelper, &CommHelper::reportTemperature, this, [=](quint8 moduleNo, QVector<float>& pairs){
@@ -1241,6 +1248,7 @@ void MainWindow::on_action_startMeasure_triggered()
                                     ui->spinBox_time2->value(),
                                     ui->spinBox_time3->value());
 
+    mPCIeCommSdk.test();
     mPCIeCommSdk.startAllCapture(fileSaveDir,
                              ui->spinBox_timeLength->value(),
                              ui->lineEdit_shotNum->text());

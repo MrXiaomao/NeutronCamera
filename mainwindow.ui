@@ -1710,7 +1710,7 @@
   </widget>
   <action name="action_data_compress">
    <property name="icon">
-    <iconset>
+    <iconset resource="lresource.qrc">
      <normaloff>:/resource/image/compress.png</normaloff>:/resource/image/compress.png</iconset>
    </property>
    <property name="text">
@@ -1729,7 +1729,7 @@
   <action name="action_open">
    <property name="icon">
     <iconset resource="../3rdParty/resource/resource.qrc">
-     <normaloff>:/openfile.png</normaloff>:/openfile.png</iconset>
+     <normaloff>:/open.png</normaloff>:/open.png</iconset>
    </property>
    <property name="text">
     <string>离线数据分析(&amp;O)...</string>
@@ -1909,7 +1909,7 @@
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset>
+    <iconset resource="lresource.qrc">
      <normaloff>:/resource/image/clock.png</normaloff>:/resource/image/clock.png</iconset>
    </property>
    <property name="text">
@@ -1924,7 +1924,7 @@
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset>
+    <iconset resource="lresource.qrc">
      <normaloff>:/resource/image/shotNum.png</normaloff>:/resource/image/shotNum.png</iconset>
    </property>
    <property name="text">
@@ -1939,7 +1939,7 @@
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset>
+    <iconset resource="lresource.qrc">
      <normaloff>:/resource/image/stop.png</normaloff>:/resource/image/stop.png</iconset>
    </property>
    <property name="text">
@@ -1996,7 +1996,7 @@
   </action>
   <action name="action_init">
    <property name="icon">
-    <iconset>
+    <iconset resource="lresource.qrc">
      <normaloff>:/resource/image/pictogram.png</normaloff>:/resource/image/pictogram.png</iconset>
    </property>
    <property name="text">
@@ -2011,7 +2011,7 @@
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset>
+    <iconset resource="lresource.qrc">
      <normaloff>:/resource/image/status.png</normaloff>:/resource/image/status.png</iconset>
    </property>
    <property name="text">
@@ -2043,6 +2043,7 @@
   </customwidget>
  </customwidgets>
  <resources>
+  <include location="lresource.qrc"/>
   <include location="../3rdParty/resource/resource.qrc"/>
   <include location="../3rdParty/resource/resource.qrc"/>
  </resources>

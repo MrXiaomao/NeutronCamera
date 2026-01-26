@@ -199,6 +199,7 @@ private:
     quint32 mCaptureCount = 1;
     quint32 mTimeout = 5000;//超时微秒
 
+    std::atomic<quint32> mTaskingRef = 0;
     std::atomic<quint32> mCapturedRef = 0;
     QVector<QByteArray> mWaveformDatas;
     QVector<QByteArray> mSpectrumDatas;
@@ -216,6 +217,7 @@ private:
 #define CAMNUMBER_DDR_PER   4   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define DETNUMBER_PCIE_PER  8   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define DETNUMBER_MAX       18  // 探测器有效数只用到了18路（11路水平+7路垂直）
+#define PACKET_TIMELENGTH   40 // 每个文件对应采集时间40ms
 class PCIeCommSdk : public QObject
 {
     Q_OBJECT
@@ -259,6 +261,7 @@ public:
 
     Q_SLOT void init(); /* 初始化 */
     Q_SLOT void reset();/* 重置 */
+    Q_SLOT void test();
 
     /*获取设备数量*/
     quint32 numberOfDevices();

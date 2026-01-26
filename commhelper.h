@@ -58,10 +58,12 @@ public:
     Q_SLOT void readyRead();
     Q_SLOT void connected();
 
+    Q_SLOT void DoReadyRead(QByteArray&);
+
 private:
     QTcpSocket *mTcpClient = nullptr;
     QUdpSocket *mUdpServer = nullptr;
-    QUdpSocket *mUdpStatusServer = nullptr;// 设备电压/电流状态检测
+    QUdpSocket *mUdpStatusClient1 = nullptr;// 设备电压/电流状态检测
     QLiteThread* mRequestCmdThread = nullptr;
     QByteArray mRawData;
 

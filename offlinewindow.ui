@@ -299,13 +299,10 @@
     <item>
      <widget class="QStackedWidget" name="centralVboxStackedWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
-       <layout class="QVBoxLayout" name="verticalLayout_3">
-        <property name="spacing">
-         <number>0</number>
-        </property>
+       <layout class="QGridLayout" name="gridLayout_4">
         <property name="leftMargin">
          <number>0</number>
         </property>
@@ -318,37 +315,82 @@
         <property name="bottomMargin">
          <number>0</number>
         </property>
-        <item>
-         <widget class="QCustomPlot" name="spectroMeter_waveform_LSD" native="true"/>
-        </item>
-        <item>
-         <widget class="QCustomPlot" name="spectroMeter_spectrum_LSD" native="true"/>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_3">
-          <property name="spacing">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QCustomPlot" name="spectroMeter_horCamera_PSD" native="true"/>
-          </item>
-          <item>
-           <widget class="QCustomPlot" name="spectroMeter_horCamera_FOM" native="true"/>
-          </item>
-         </layout>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_4">
-          <property name="spacing">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QCustomPlot" name="spectroMeter_verCamera_PSD" native="true"/>
-          </item>
-          <item>
-           <widget class="QCustomPlot" name="spectroMeter_verCamera_FOM" native="true"/>
-          </item>
-         </layout>
+        <property name="horizontalSpacing">
+         <number>0</number>
+        </property>
+        <item row="0" column="0">
+         <widget class="QStackedWidget" name="spectroMeterPageInfoWidget">
+          <widget class="QWidget" name="spectroMeterPageInfoWidget_page_1">
+           <layout class="QVBoxLayout" name="verticalLayout_3">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QCustomPlot" name="spectroMeter_spectrum_LSD" native="true"/>
+            </item>
+            <item>
+             <widget class="QCustomPlot" name="spectroMeter_waveform_LSD" native="true"/>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="spectroMeterPageInfoWidget_page_2">
+           <layout class="QVBoxLayout" name="verticalLayout_12">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_3">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QCustomPlot" name="spectroMeter_horCamera_PSD" native="true"/>
+              </item>
+              <item>
+               <widget class="QCustomPlot" name="spectroMeter_horCamera_FOM" native="true"/>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_4">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <item>
+               <widget class="QCustomPlot" name="spectroMeter_verCamera_PSD" native="true"/>
+              </item>
+              <item>
+               <widget class="QCustomPlot" name="spectroMeter_verCamera_FOM" native="true"/>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -587,6 +629,9 @@
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
+            <property name="currentIndex">
+             <number>2</number>
+            </property>
             <item>
              <property name="text">
               <string>66ms</string>
@@ -595,6 +640,11 @@
             <item>
              <property name="text">
               <string>50ms</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>40ms</string>
              </property>
             </item>
            </widget>
@@ -965,7 +1015,7 @@
                 <number>10000</number>
                </property>
                <property name="value">
-                <number>66</number>
+                <number>40</number>
                </property>
               </widget>
              </item>
@@ -1123,7 +1173,7 @@
            </layout>
           </item>
           <item>
-           <widget class="QWidget" name="" native="true">
+           <widget class="QWidget" name="widget" native="true">
             <layout class="QHBoxLayout" name="horizontalLayout_9">
              <property name="leftMargin">
               <number>0</number>
@@ -1283,7 +1333,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>21</height>
+     <height>22</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -1345,11 +1395,8 @@
    </attribute>
    <addaction name="action_openfile"/>
    <addaction name="action_analyze"/>
-   <addaction name="separator"/>
    <addaction name="action_waveform"/>
    <addaction name="action_ngamma"/>
-   <addaction name="action_linear"/>
-   <addaction name="action_logarithm"/>
    <addaction name="separator"/>
    <addaction name="action_exit"/>
   </widget>
@@ -1446,7 +1493,7 @@
   <action name="action_openfile">
    <property name="icon">
     <iconset resource="../3rdParty/resource/resource.qrc">
-     <normaloff>:/openfile.png</normaloff>:/openfile.png</iconset>
+     <normaloff>:/open.png</normaloff>:/open.png</iconset>
    </property>
    <property name="text">
     <string>选择目录</string>
@@ -1462,45 +1509,6 @@
    </property>
    <property name="text">
     <string>开始解析</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
-  <action name="action_linear">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../3rdParty/resource/resource.qrc">
-     <normaloff>:/line.png</normaloff>:/line.png</iconset>
-   </property>
-   <property name="text">
-    <string>线性图像</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
-  <action name="action_logarithm">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>false</bool>
-   </property>
-   <property name="enabled">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../3rdParty/resource/resource.qrc">
-     <normaloff>:/mathlog.png</normaloff>:/mathlog.png</iconset>
-   </property>
-   <property name="text">
-    <string>对数图像</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

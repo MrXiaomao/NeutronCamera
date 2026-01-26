@@ -67,11 +67,9 @@ void CommHelper::initSocket()
     connect(mTcpClient, SIGNAL(connected()), this, SLOT(connected()));
 
     // 初始化UDP
-    this->mUdpStatusServer = new QUdpSocket();
-    this->mUdpStatusServer->setSocketOption(QAbstractSocket::MulticastLoopbackOption, true);
-    connect(mUdpStatusServer, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
-    if (this->mUdpStatusServer->bind(QHostAddress::Any, 8000, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)){
-        this->mUdpStatusServer->joinMulticastGroup(QHostAddress::LocalHost);
+    this->mUdpStatusClient1 = new QUdpSocket();
+    if (this->mUdpStatusClient1->bind(QHostAddress("192.168.1.100"), 1000, QUdpSocket::ShareAddress)){
+        connect(mUdpStatusClient1, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
     }
 
     //炮号接收器
@@ -186,18 +184,29 @@ QMap<QString, QPair<double, double>> parseKeyValuePairsWithDefault(const QString
 #include <QtEndian>
 void CommHelper::readyRead()
 {
-    // while (mUdpStatusServer->hasPendingDatagrams()) {
-    //     QByteArray datagram;
-    //     datagram.resize(int(mUdpServer->pendingDatagramSize()));
-    //     QHostAddress sender;
-    //     quint16 senderPort;
-    //     mUdpServer->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
-    //     //+PLS_12345
-    // }
+    QByteArray datagram;
+    do {
+        datagram.resize(int(mUdpStatusClient1->pendingDatagramSize()));
+        QHostAddress sender;
+        quint16 senderPort;
+        mUdpStatusClient1->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
+
+        //+PLS_12345
+        // if (datagram.size() > 0)
+        //     DoReadyRead(datagram);
+        // else
+        //     break;
+    } while (mUdpStatusClient1->hasPendingDatagrams());
 
     //读取新的数据
-    QByteArray tempData = mTcpClient->readAll();
-    qDebug() << tempData;
+    //QByteArray tempData = mTcpClient->readAll();
+    // QByteArray tempData = mTcpClient->readAll();
+    // qDebug() << tempData;
+    DoReadyRead(datagram);
+}
+
+void CommHelper::DoReadyRead(QByteArray& tempData)
+{
     if (tempData.at(0) == 0x5A){
         // 选通器状态返回
         //5A 03 FF FF
@@ -351,7 +360,7 @@ void CommHelper::readyRead()
 
 void CommHelper::connected()
 {
-    mTcpClient->write("start");//stop
+    //mTcpClient->write("start");//stop
 }
 
 /*
@@ -359,6 +368,13 @@ void CommHelper::connected()
 */
 bool CommHelper::connectServer()
 {
+    quint32 data = 0x000000A5;
+    mUdpStatusClient1->writeDatagram((const char*)&data, 4, QHostAddress("192.168.1.212"), 8000);
+
+    // QByteArray datagram("start");
+    // int ret = mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 8000);
+    //qDebug() << ret;
+    return true;
     GlobalSettings settings(CONFIG_FILENAME);
     QString ip = settings.value("Net/ip", "192.168.1.100").toString();
     quint32 port = settings.value("Net/port", 6000).toUInt();
@@ -377,6 +393,8 @@ bool CommHelper::connectServer()
 */
 void CommHelper::disconnectServer()
 {
+    mUdpStatusClient1->writeDatagram("stop", 4, QHostAddress("192.168.1.212"), 8000);
+    return ;
     if (mTcpClient->isOpen())
         mTcpClient->write("stop");
     this->mTcpClient->close();
@@ -432,8 +450,11 @@ bool CommHelper::switchBackupChannel(quint32 channel, bool on)
 
     quint32 v = bits.to_ulong();
     v = qbswap(v);
-    mUdpStatusServer->write((const char*)&v, 4);
-    mTcpClient->write((const char*)&v, 4);
+    QByteArray datagram = QByteArray::fromHex("A5 03 ff ff");
+    quint32 data = 0x000000A5;
+    mUdpStatusClient1->writeDatagram((const char*)&data, 4, QHostAddress("192.168.1.212"), 8000);
+    //mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 1000);
+    //mTcpClient->write((const char*)&v, 4);
 
     //emit reportBackupChannelStatus(channel, on);
     return true;
@@ -455,8 +476,10 @@ bool CommHelper::switchAllBackupChannel(bool on)
 
     quint32 v = bits.to_ulong();
     v = qbswap(v);
-    mUdpStatusServer->write((const char*)&v, 4);
-    mTcpClient->write((const char*)&v, 4);
+    QByteArray datagram = QByteArray::fromHex("A5 03 ff ff");
+    mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 8000);
+    //mUdpStatusClient1->writeDatagram((const char*)&v, 4, QHostAddress("192.168.1.212"), 1000);
+    //mTcpClient->write((const char*)&v, 4);
 
     //emit reportBackupChannelStatus(channel, on);
     return true;

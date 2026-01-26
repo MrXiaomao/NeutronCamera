@@ -58,6 +58,18 @@ public:
                                 QVector<qint16>& ch3,
                                 bool littleEndian = true);
 
+    static bool readBin3Ch_fast(const QString& path,
+                                QVector<qint16>& ch0,
+                                QVector<qint16>& ch1,
+                                QVector<qint16>& ch2,
+                                bool littleEndian = true);
+
+    static bool readBin3Ch_fast(QByteArray& fileData,
+                                QVector<qint16>& ch0,
+                                QVector<qint16>& ch1,
+                                QVector<qint16>& ch2,
+                                bool littleEndian = true);
+
     // 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
     // 当波形信号过多时，该方法明显会出现问题（暂时采用该方法）
     static qint16 calculateBaseline(const QVector<qint16>& data_ch);
@@ -169,7 +181,7 @@ private:
     bool mStopped = false;
 };
 
-// ====== 解析/提取任务：从内存 data 解析 4 通道并提取波形 ======
+// ====== 解析/提取任务：从内存 data 解析 3 通道并提取波形 ======
 class ExtractValidWaveformFromBufferTask : public QObject, public QRunnable {
     Q_OBJECT
 public:
@@ -195,8 +207,8 @@ public:
 
     void run() override {
         // 1) 从 buffer 解交织出 4 通道
-        QVector<qint16> ch0, ch1, ch2, ch3;
-        if (!DataAnalysisWorker::readBin4Ch_fast(mJob.data, ch0, ch1, ch2, ch3, true)) {
+        QVector<qint16> ch0, ch1, ch2;
+        if (!DataAnalysisWorker::readBin3Ch_fast(mJob.data, ch0, ch1, ch2, true)) {
             if (mOnFinished) mOnFinished();
             return;
         }
@@ -205,8 +217,8 @@ public:
         quint8 deviceIndex = mJob.deviceIndex;
         int channelIndex = 0;
         if (mCameraIndex != 0) {
-            deviceIndex = (mCameraIndex - 1) / 4 + 1;
-            channelIndex = (mCameraIndex - 1) % 4 + 1; // 1..4
+            deviceIndex = (mCameraIndex - 1) / 3 + 1;
+            channelIndex = (mCameraIndex - 1) % 3 + 1; // 1..3
         }
 
         quint32 packerCurrentTime = mJob.packerStartTime;
@@ -229,12 +241,6 @@ public:
             DataAnalysisWorker::adjustDataWithBaseline(ch2, b, deviceIndex, 3);
             auto wave = DataAnalysisWorker::overThreshold(ch2, 3, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 3, wave);
-        }
-        if (channelIndex == 4 || mCameraIndex == 0) {
-            qint16 b = DataAnalysisWorker::calculateBaseline(ch3);
-            DataAnalysisWorker::adjustDataWithBaseline(ch3, b, deviceIndex, 4);
-            auto wave = DataAnalysisWorker::overThreshold(ch3, 4, mThreshold, mPre, mPost);
-            mCallback(packerCurrentTime, 4, wave);
         }
 
         if (mOnFinished) mOnFinished();

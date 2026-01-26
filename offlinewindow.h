@@ -41,8 +41,6 @@ public:
 
     void initUi();
     void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
-    void setCheckBoxHelper(QCustomPlot* customPlot);
-
     void loadRelatedFiles(const QString& src);
 
     QPixmap maskPixmap(QPixmap, QSize sz, QColor clrMask);
@@ -74,10 +72,6 @@ private slots:
     void on_action_openfile_triggered();
 
     void on_action_analyze_triggered();
-
-    void on_action_linear_triggered();
-
-    void on_action_logarithm_triggered();
 
     void on_action_exit_triggered();
 
