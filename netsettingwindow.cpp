@@ -1,4 +1,4 @@
-#include "netsettingwindow.h"
+﻿#include "netsettingwindow.h"
 #include "ui_netsettingwindow.h"
 #include "globalsettings.h"
 
@@ -9,8 +9,9 @@ NetSettingWindow::NetSettingWindow(QWidget *parent)
     ui->setupUi(this);
 
     GlobalSettings settings(CONFIG_FILENAME);
-    ui->lineEdit_ip->setText(settings.value("Net/ip", "192.168.1.100").toString());
-    ui->spinBox_port->setValue(settings.value("Net/port", 6000).toUInt());
+    ui->lineEdit_ipRemote->setText(settings.value("Net/ipRemote", "192.168.1.212").toString());
+    ui->spinBox_portRemote->setValue(settings.value("Net/portRemote", 8000).toUInt());
+    ui->spinBox_portLocal->setValue(settings.value("Net/portLocal", 1000).toUInt());
     ui->spinBox_broadcastPort->setValue(settings.value("Net/broadcastPort", 12100).toUInt());
 }
 
@@ -22,8 +23,9 @@ NetSettingWindow::~NetSettingWindow()
 void NetSettingWindow::on_pushButton_save_clicked()
 {
     GlobalSettings settings(CONFIG_FILENAME);
-    settings.setValue("Net/ip", ui->lineEdit_ip->text());
-    settings.setValue("Net/port", ui->spinBox_port->value());
+    settings.setValue("Net/ipRemote", ui->lineEdit_ipRemote->text());
+    settings.setValue("Net/portRemote", ui->spinBox_portRemote->value());
+    settings.setValue("Net/portLocal", ui->spinBox_portLocal->value());
     settings.setValue("Net/broadcastPort", ui->spinBox_broadcastPort->value());
     this->close();
 }

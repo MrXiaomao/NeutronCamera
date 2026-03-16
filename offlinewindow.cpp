@@ -16,6 +16,8 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     ui->setupUi(this);
 
     initUi();
+    //init3DSurface();
+    init3DCurve();
 
     //QStringList args = QCoreApplication::arguments();
     //this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
@@ -62,6 +64,7 @@ void OfflineWindow::initUi()
         QActionGroup *actionGrp = new QActionGroup(this);
         actionGrp->addAction(ui->action_waveform);
         actionGrp->addAction(ui->action_ngamma);
+        actionGrp->addAction(ui->action_3dSurface);
         emit ui->action_waveform->triggered(true);
     }
 
@@ -1649,3 +1652,227 @@ void OfflineWindow::validateTime1Range()
     }
 }
 
+
+void OfflineWindow::on_action_3dSurface_triggered(bool checked)
+{
+    if (checked){
+        ui->centralVboxStackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_3D);
+    }
+}
+
+#include <QRandomGenerator>
+void OfflineWindow::init3DCurve()
+{
+    const int channelCount = 18; // 通道总数
+
+    // 1. 创建3D曲面视图
+    surface = new CustomSurface();//QtDataVisualization::Q3DSurface();
+    surface->setShadowQuality(QtDataVisualization::QAbstract3DGraph::ShadowQualityNone); //禁用阴影以提升性能
+    surface->setSelectionMode(QtDataVisualization::QAbstract3DGraph::SelectionNone); //禁用选中
+
+    QWidget *container = QWidget::createWindowContainer(surface);
+    container->setMinimumSize(800, 600);  // 强制设置容器大小（Qt 5.15.2 必须）
+    QVBoxLayout* vLayout = new QVBoxLayout(ui->spectroMeterPageInfoWidget_3D);
+    vLayout->addWidget(container);
+    ui->spectroMeterPageInfoWidget_3D->setLayout(vLayout);
+
+    surface->activeTheme()->setGridEnabled(true);  // 显示网格
+    surface->activeTheme()->setLabelBorderEnabled(false);  // 关闭标签边框
+
+    // QList<QLinearGradient> stops;
+    // stops << QLinearGradient(0.0, Qt::blue);   // 最小值对应蓝色
+    // stops << QLinearGradient(0.5, Qt::green);  // 中间值对应绿色
+    // stops << QLinearGradient(1.0, Qt::red);    // 最大值对应红色
+    // surface->activeTheme()->setBaseGradients(stops);
+
+    // 2. 设置基础颜色与渐变
+    // surface->activeTheme()->setGridLineColor(QColor(80, 80, 80)); // 深灰色网格线
+    // surface->activeTheme()->setLightColor(QColor(255, 255, 245)); // 暖白色光源
+
+    // 3. 设置高亮效果
+    // surface->activeTheme()->setSingleHighlightColor(QColor(255, 90, 90)); // 单元素高亮红
+    // surface->activeTheme()->setMultiHighlightColor(QColor(90, 255, 90));  // 多元素高亮绿
+
+    // 4. 配置光照强度
+    surface->activeTheme()->setLightStrength(1.0);          // 主光强度
+    surface->activeTheme()->setAmbientLightStrength(1.0);   // 环境光强度
+    surface->activeTheme()->setHighlightLightStrength(1.0); // 高亮光强度
+
+    // 2. 配置坐标轴（X:通道, Y:计数率, Z:时间）
+    QtDataVisualization::QValue3DAxis *xAxis = new QtDataVisualization::QValue3DAxis();
+    xAxis->setTitle("通道号");
+    xAxis->setTitleVisible(true);
+    xAxis->setRange(0, channelCount*10 + 10); // CH1-CH18
+    xAxis->setLabelFormat("CH%.0f"); // 显示CH1-CH18
+    xAxis->setSegmentCount(channelCount + 1); // 设置刻度数量（确保每个通道都有刻度）
+    xAxis->setFormatter(new QValue3DAxisFormatterX());
+
+    QtDataVisualization::QValue3DAxis *yAxis = new QtDataVisualization::QValue3DAxis();
+    yAxis->setTitle("计数率");
+    yAxis->setTitleVisible(true);
+    yAxis->setRange(0, 200); // 示例计数率范围0-100
+
+    QtDataVisualization::QValue3DAxis *zAxis = new QtDataVisualization::QValue3DAxis();
+    zAxis->setTitle("时间 (μs)");
+    zAxis->setTitleVisible(true);
+    zAxis->setRange(200, 300); // 示例时间范围200-300μs
+
+    surface->setAxisX(xAxis);
+    surface->setAxisY(yAxis);
+    surface->setAxisZ(zAxis);
+
+    // 3. 生成18个通道的平面数据
+
+    // 预定义18种颜色（区分通道）
+    QList<QColor> channelColors = {
+        QColor(230, 243, 233, 100), QColor(229, 239, 248, 100), QColor(251, 238, 221, 100), QColor(248, 224, 222, 100), Qt::cyan, Qt::magenta,
+        Qt::darkRed, Qt::darkGreen, Qt::darkBlue, Qt::darkYellow, Qt::darkCyan, Qt::darkMagenta,
+        Qt::lightGray, Qt::gray, Qt::darkGray, Qt::black, Qt::white, Qt::red
+    };
+
+    // 随机生成浅色系颜色
+    auto generateLightColor1=[]()->QColor {
+        // HSL 模式：色相(0-359)随机，饱和度(50-80)适中，亮度(80-95)高（浅色核心）
+        int hue = QRandomGenerator64::global()->bounded(0, 359);          // 随机色相（全色系覆盖）
+        int saturation = 50 + QRandomGenerator64::global()->bounded(0, 30); // 饱和度 50-80（避免过灰或过艳）
+        int lightness = 80 + QRandomGenerator64::global()->bounded(0, 15);  // 亮度 80-95（确保浅色）
+        return QColor::fromHsl(hue, saturation, lightness);
+    };
+    auto generateLightColor2=[]()->QColor {
+        // RGB 每个通道取 180-255（高亮度区间），随机组合
+        int r = 180 + QRandomGenerator64::global()->bounded(0, 75); // 180-255
+        int g = 180 + QRandomGenerator64::global()->bounded(0, 75);
+        int b = 180 + QRandomGenerator64::global()->bounded(0, 75);
+        return QColor(r, g, b);
+    };
+    auto generateLightColor3=[]()->QColor {
+        // HSV 模式：色相随机，饱和度(30-60)偏低，明度(90-98)极高
+        int hue = QRandomGenerator64::global()->bounded(0, 359);
+        int saturation = 30 + QRandomGenerator64::global()->bounded(0, 30); // 30-60（柔和不刺眼）
+        int value = 90 + QRandomGenerator64::global()->bounded(0, 8);       // 90-98（接近白色但保留色彩）
+        return QColor::fromHsv(hue, saturation, value);
+    };
+
+    // 随机生成深色系颜色
+    auto generateDarkColor1=[]()->QColor {
+        // HSV 模式：色相随机，饱和度(80-100)极高，明度(20-40)低
+        int hue = QRandomGenerator64::global()->bounded(0, 359);
+        int saturation = 80 + QRandomGenerator64::global()->bounded(0, 20); // 80-100（色彩浓郁）
+        int value = 20 + QRandomGenerator64::global()->bounded(0, 20);      // 20-40（深色但不发黑）
+        return QColor::fromHsv(hue, saturation, value);
+    };
+    auto generateDarkColor2=[]()->QColor {
+        // RGB 每个通道取 0-100（低亮度区间），随机组合
+        int r = QRandomGenerator64::global()->bounded(0, 100); // 0-100
+        int g = QRandomGenerator64::global()->bounded(0, 100);
+        int b = QRandomGenerator64::global()->bounded(0, 100);
+        return QColor(r, g, b);
+    };
+    auto generateDarkColor3=[]()->QColor {
+        // HSV 模式：色相随机，饱和度(80-100)极高，明度(20-40)低
+        int hue = QRandomGenerator64::global()->bounded(0, 359);
+        int saturation = 80 + QRandomGenerator64::global()->bounded(0, 20); // 80-100（色彩浓郁）
+        int value = 20 + QRandomGenerator64::global()->bounded(0, 20);      // 20-40（深色但不发黑）
+        return QColor::fromHsv(hue, saturation, value);
+    };
+
+    for (int ch = 1; ch <= channelCount; ++ch) {
+        // 3.1. 固定X值（平面垂直于X轴，如X=10）
+        float fixedX = ch*10.0f; // 每个通道对应一个不同的X值，间隔100单位
+
+        // 3.2. 定义Z范围（底边和上边的Z坐标一致）
+        int zMin = 201, zMax = 300;  // Z∈[200,300]（101个点）
+        int zCount = zMax - zMin + 1;  // Z轴点数：101
+
+        // 3.3. 定义上边的Y值（折线函数，示例：Y随Z分段变化）
+        QVector<float> upperY(zCount);
+        for (int zIdx = 0; zIdx < zCount; ++zIdx) {
+            int z = zMin + zIdx;
+            // 折线逻辑：Z≤250时Y=50，250<Z≤280时Y=80，Z>280时Y=30
+            if (z <= 250) upperY[zIdx] = 50.0f;
+            else if (z <= 280) upperY[zIdx] = 80.0f;
+            else upperY[zIdx] = 30.0f;
+
+            upperY[zIdx] = 100.0f + QRandomGenerator::global()->bounded(-5, 5); // 添加随机波动
+        }
+
+        // 3.7. 配置曲面系列
+        if (1){
+            QtDataVisualization::QSurfaceDataRow *upperRow = new QtDataVisualization::QSurfaceDataRow(zCount);
+            for (int zIdx = 0; zIdx < zCount; ++zIdx) {
+                int z = zMin + zIdx;
+                (*upperRow)[zIdx] = QVector3D(fixedX, upperY[zIdx], z);  // Y=折线值
+            }
+            QtDataVisualization::QSurfaceDataRow *bottomRow = new QtDataVisualization::QSurfaceDataRow(zCount);
+            for (int zIdx = 0; zIdx < zCount; ++zIdx) {
+                int z = zMin + zIdx;
+                (*bottomRow)[zIdx] = QVector3D(fixedX, -10.0f, z);  // Y=0，贴合XZ平面
+            }
+
+            QtDataVisualization::QSurfaceDataProxy *proxy = new QtDataVisualization::QSurfaceDataProxy();
+            QtDataVisualization::QSurface3DSeries *series = new QtDataVisualization::QSurface3DSeries(proxy);
+            series->setBaseColor(channelColors[ch-1]);  // 半透蓝色
+            series->setDrawMode(QtDataVisualization::QSurface3DSeries::DrawSurface);
+            series->setMeshSmooth(true); // 启用网格平滑
+
+            QLinearGradient gradient;//generateDarkColor1
+            gradient.setColorAt(0.0, generateLightColor1());    // 最低高度
+            gradient.setColorAt(0.5, generateLightColor2());   // 中间高度
+            gradient.setColorAt(1.0, channelColors[ch-1]);     // 最高高度
+            gradient.setStart(QPointF(0, 0));     // 渐变起始坐标（相对系列）
+            gradient.setFinalStop(QPointF(1, 1)); // 渐变结束坐标
+            series->setBaseGradient(gradient);
+            series->setColorStyle(QtDataVisualization::Q3DTheme::ColorStyleRangeGradient); // 启用渐变着色
+            series->setProperty("fixedColorStyle", false);
+
+            QtDataVisualization::QSurfaceDataArray *dataArray = new QtDataVisualization::QSurfaceDataArray();
+            dataArray->reserve(2);
+            dataArray->append(bottomRow);
+            dataArray->append(upperRow);
+
+            series->dataProxy()->resetArray(dataArray);
+            series->setFlatShadingEnabled(false);// 启用平面着色
+
+            // 添加到视图并调整视角
+            surface->addSeries(series);
+        }
+
+        // 3.8. 配置窄曲面表示曲线系列
+        if (1){
+            QtDataVisualization::QSurfaceDataRow *upperRow = new QtDataVisualization::QSurfaceDataRow(zCount);
+            QtDataVisualization::QSurfaceDataRow *bottomRow = new QtDataVisualization::QSurfaceDataRow(zCount);
+            for (int zIdx = 0; zIdx < zCount; ++zIdx) {
+                int z = zMin + zIdx;
+                (*upperRow)[zIdx] = QVector3D(fixedX, upperY[zIdx], z);  // Y=折线值
+                (*bottomRow)[zIdx] = QVector3D(fixedX, upperY[zIdx]+0.5, z);  // Y=0
+            }
+
+            QtDataVisualization::QSurfaceDataProxy *proxy = new QtDataVisualization::QSurfaceDataProxy();
+            QtDataVisualization::QSurface3DSeries *series = new QtDataVisualization::QSurface3DSeries(proxy);
+            series->setBaseColor(channelColors[ch-1]);
+            series->setDrawMode(QtDataVisualization::QSurface3DSeries::DrawSurface); // 线框模式，仅显示曲线
+            series->setMeshSmooth(true); // 启用网格平滑
+            series->setColorStyle(QtDataVisualization::Q3DTheme::ColorStyleUniform); // 启用渐变着色
+            series->setProperty("fixedColorStyle", true);
+
+            QtDataVisualization::QSurfaceDataArray *dataArray = new QtDataVisualization::QSurfaceDataArray();
+            dataArray->reserve(2);
+            dataArray->append(upperRow);
+            dataArray->append(bottomRow); // 仅添加上边数据，底边数据不添加（Y=0，贴合XZ平面，不显示）
+            series->dataProxy()->resetArray(dataArray);
+            series->setFlatShadingEnabled(false);// 启用平面着色
+
+            surface->addSeries(series);
+        }
+    }
+
+    // 4. 调整视角
+    // 沿X轴正方向观察（平面垂直于X轴，需从侧面看）
+    surface->scene()->activeCamera()->setCameraPosition(
+        -45.0f,   // 方位角（Azimuth）：沿Y轴旋转90°，正对X轴
+        45.0f,   // 仰角（Elevation）：45°俯视
+        100.0f   // 距离（Distance）：拉远视角，确保平面在视场内
+        );
+
+    surface->show();
+}

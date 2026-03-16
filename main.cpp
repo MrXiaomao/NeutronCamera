@@ -71,6 +71,9 @@ int main(int argc, char *argv[])
     QApplication::setApplicationVersion(APP_VERSION);
     QApplication::setStyle(QStyleFactory::create("fusion"));//WindowsVista fusion windows
 
+    // 强制软件渲染（性能较低，但兼容性更好）
+    //QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
+
     GlobalSettings settings;
     if(settings.value("Global/Options/enableNativeUI",false).toBool()) {
         QApplication::setAttribute(Qt::AA_DontUseNativeDialogs,false);

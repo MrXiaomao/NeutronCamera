@@ -2039,7 +2039,7 @@ void MainWindow::on_action_init_triggered()
         qInfo().noquote() << tr("初始化失败");
     }
 
-    emit mPCIeCommSdk.replySettingFinished();
+    //emit mPCIeCommSdk.replySettingFinished();
 }
 
 void MainWindow::on_action_clock_triggered(bool checked)

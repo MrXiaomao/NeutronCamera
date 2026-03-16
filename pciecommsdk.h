@@ -66,6 +66,31 @@ private:
     QByteArray mData;
 };
 
+#include <functional>
+typedef std::function<void(void/*HANDLE fd, quint64 offset, const QByteArray& data*/)> task_cb;
+class ReadFileTask : public QObject, public QRunnable{
+    Q_OBJECT
+public:
+    explicit ReadFileTask()
+    {
+        this->setAutoDelete(true);
+    }
+
+    void run() override{
+        if (call){
+            call();
+        }
+    }
+
+    void setCallback(task_cb cb)
+    {
+        call = cb;
+    }
+
+private:
+    task_cb call;
+};
+
 class DataCachPoolThread : public QThread {
     Q_OBJECT
 public:
@@ -126,12 +151,8 @@ public:
     * @param[out]
     * @return
     */
-    explicit CaptureThread(bool isDDR1, const quint32 cardIndex,
-                           HANDLE hFile,
-                           HANDLE hUser,
-                           HANDLE hBypass,
-                           HANDLE hEvent1,
-                           HANDLE hEvent2);
+    explicit CaptureThread(const quint32 cardIndex, const QString& devPath, bool isDDR1 = true);
+    ~CaptureThread();
 
     void run() override;
     void delay(quint32 us);
@@ -166,7 +187,7 @@ public:
     * @param[out]       data
     * @return           void
     */
-    bool readWaveformData(const QByteArray& data, const int offset = 0);
+    bool readWaveformData(quint8 index, const QByteArray& data, const int offset = 0);
 
     /**
     * @function name:readSpectrumData
@@ -175,7 +196,11 @@ public:
     * @param[out]       data
     * @return           bool
     */
-    bool readSpectrumData(const QByteArray& data, const int offset = 0);
+    bool readSpectrumData(quint8 index, const QByteArray& data, const int offset = 0);
+
+    HANDLE userHandle() const{
+        return mUserHandle;
+    };
 
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
     Q_SIGNAL void reportThreadExit(quint32);
@@ -187,13 +212,12 @@ public:
     Q_SIGNAL void reportCaptureFinished(quint32);
 
 private:
-    std::atomic<bool> mIsDDR1 = true;
     DataCachPoolThread* mDataCachPoolThread = nullptr;
+    quint32 mIsDDR1 = true;//设备名称
     quint32 mCardIndex;//设备名称
-    HANDLE mDeviceHandle;//设备句柄
+    HANDLE mDDRHandle[4];//设备句柄
+    HANDLE mRAMHandle[4];//RAM句柄
     HANDLE mUserHandle;//用户句柄
-    HANDLE mBypassHandle;//RAM句柄
-    HANDLE mEventHandle[2];//中断句柄
 
     QString mSaveFilePath;//保存路径
     quint32 mCaptureCount = 1;
@@ -201,8 +225,8 @@ private:
 
     std::atomic<quint32> mTaskingRef = 0;
     std::atomic<quint32> mCapturedRef = 0;
-    QVector<QByteArray> mWaveformDatas;
-    QVector<QByteArray> mSpectrumDatas;
+    QVector<QByteArray> mDDRWaveformDatas;
+    QVector<QByteArray> mRAMSpectrumDatas;
 
     QMutex mMutex;
     QWaitCondition mCondition;
@@ -270,7 +294,6 @@ public:
     QStringList enumDevices();
 
     /*初始化*/
-    void initializeDevices();
     void initCaptureThreads();
 
     /*设置采集参数，离线*/
@@ -333,17 +356,16 @@ public:
     inline static bool writeData(HANDLE hFile, quint64 offset, const QByteArray& data);
     inline static bool readData(HANDLE hFile, quint64 offset, const QByteArray& data);
 
-    HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE);//O_RDWR
+    HANDLE getHandle(quint8 cardIndex, quint32 flags = GENERIC_READ | GENERIC_WRITE);//O_RDWR
+    static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE);//O_RDWR
 signals:
 
 
 private:
     QMap<quint32, CaptureThread*> mMapCaptureThread;
-    QMap<quint32, HANDLE> mMapDevice;//访问数据设备句柄
-    QMap<quint32, HANDLE> mMapUser;//设备用户句柄
-    QMap<quint32, HANDLE> mMapBypass;//设备控制句柄
-    QMap<quint32, HANDLE> mMapEvent1;//设备中断句柄
-    QMap<quint32, HANDLE> mMapEvent2;//设备中断句柄
+    // QMap<quint32, HANDLE> mMapDevice;//DDR句柄
+    // QMap<quint32, HANDLE> mMapUser;//设备控制句柄
+    // QMap<quint32, HANDLE> mMapBypass;//RAM句柄
 
     QStringList mDevices;
     QMap<quint32, bool> mThreadRunning;

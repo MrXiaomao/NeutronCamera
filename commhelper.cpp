@@ -67,10 +67,11 @@ void CommHelper::initSocket()
     connect(mTcpClient, SIGNAL(connected()), this, SLOT(connected()));
 
     // 初始化UDP
+    GlobalSettings settings(CONFIG_FILENAME);
+    quint32 port = settings.value("Net/portLocal", 1000).toUInt();
+
     this->mUdpStatusClient1 = new QUdpSocket();
-    if (this->mUdpStatusClient1->bind(QHostAddress("192.168.1.100"), 1000, QUdpSocket::ShareAddress)){
-        connect(mUdpStatusClient1, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
-    }
+    connect(mUdpStatusClient1, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
 
     //炮号接收器
     this->mUdpServer = new QUdpSocket();
@@ -225,7 +226,7 @@ void CommHelper::DoReadyRead(QByteArray& tempData)
         return;
     }
 
-    mRawData.append(tempData);
+    mRawData .append(tempData);
     while (mRawData.contains('@') && mRawData.contains('#')){
         quint32 start = mRawData.indexOf('@');
         quint32 end = mRawData.indexOf('#', start);
@@ -290,7 +291,7 @@ void CommHelper::DoReadyRead(QByteArray& tempData)
             for (int i=0; i<18; ++i){
                 if (mMapChannel[i+1] != bits.test(i))
                 {
-                    mMapChannel[i+1] = bits.test(i);
+                     mMapChannel[i+1] = bits.test(i);
                     emit reportBackupChannelStatus(i+1, mMapChannel[i+1]);
                 }
             }
@@ -368,16 +369,21 @@ void CommHelper::connected()
 */
 bool CommHelper::connectServer()
 {
-    quint32 data = 0x000000A5;
-    mUdpStatusClient1->writeDatagram((const char*)&data, 4, QHostAddress("192.168.1.212"), 8000);
-
-    // QByteArray datagram("start");
-    // int ret = mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 8000);
-    //qDebug() << ret;
-    return true;
     GlobalSettings settings(CONFIG_FILENAME);
-    QString ip = settings.value("Net/ip", "192.168.1.100").toString();
-    quint32 port = settings.value("Net/port", 6000).toUInt();
+    QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
+    quint32 port = settings.value("Net/portRemote", 8000).toUInt();
+    quint32 portLocal = settings.value("Net/portLocal", 1000).toUInt();
+
+    this->mUdpStatusClient1->close();
+    if (this->mUdpStatusClient1->bind(QHostAddress::Any, portLocal, QUdpSocket::ShareAddress)){
+        QByteArray datagram("start");
+        int ret = mUdpStatusClient1->writeDatagram(datagram, QHostAddress(ip), port);
+        return ret > 0;
+    }
+    else{
+        return false;
+    }
+
     mTcpClient->connectToHost(ip, port);
     mTcpClient->waitForConnected();
     if (mTcpClient->state() == QAbstractSocket::ConnectedState){
@@ -393,8 +399,14 @@ bool CommHelper::connectServer()
 */
 void CommHelper::disconnectServer()
 {
-    mUdpStatusClient1->writeDatagram("stop", 4, QHostAddress("192.168.1.212"), 8000);
+    GlobalSettings settings(CONFIG_FILENAME);
+    QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
+    quint32 port = settings.value("Net/portRemote", 8000).toUInt();
+    QByteArray datagram("stop");
+    mUdpStatusClient1->writeDatagram(datagram, QHostAddress(ip), port);
+    mUdpStatusClient1->close();
     return ;
+
     if (mTcpClient->isOpen())
         mTcpClient->write("stop");
     this->mTcpClient->close();
@@ -449,14 +461,17 @@ bool CommHelper::switchBackupChannel(quint32 channel, bool on)
     }
 
     quint32 v = bits.to_ulong();
-    v = qbswap(v);
-    QByteArray datagram = QByteArray::fromHex("A5 03 ff ff");
-    quint32 data = 0x000000A5;
-    mUdpStatusClient1->writeDatagram((const char*)&data, 4, QHostAddress("192.168.1.212"), 8000);
-    //mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 1000);
-    //mTcpClient->write((const char*)&v, 4);
+    v = qbswap(v);//转为网络大端字节顺序
+    // QByteArray datagram = QByteArray::fromHex("A5 03 ff ff");
+    // quint32 data = 0xffff03A5;
 
-    //emit reportBackupChannelStatus(channel, on);
+    GlobalSettings settings(CONFIG_FILENAME);
+    QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
+    quint32 port = settings.value("Net/portRemote", 8000).toUInt();
+    mUdpStatusClient1->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
+    //mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 1000);
+    //mTcpClient->write((const char*)&v, sizeof(quint32));
+
     return true;
 }
 
@@ -475,12 +490,13 @@ bool CommHelper::switchAllBackupChannel(bool on)
     }
 
     quint32 v = bits.to_ulong();
-    v = qbswap(v);
-    QByteArray datagram = QByteArray::fromHex("A5 03 ff ff");
-    mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 8000);
-    //mUdpStatusClient1->writeDatagram((const char*)&v, 4, QHostAddress("192.168.1.212"), 1000);
-    //mTcpClient->write((const char*)&v, 4);
+    v = qbswap(v);//转为网络大端字节顺序
 
-    //emit reportBackupChannelStatus(channel, on);
+    GlobalSettings settings(CONFIG_FILENAME);
+    QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
+    quint32 port = settings.value("Net/portRemote", 8000).toUInt();
+    mUdpStatusClient1->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
+    //mTcpClient->write((const char*)&v, sizeof(quint32));
+
     return true;
 }

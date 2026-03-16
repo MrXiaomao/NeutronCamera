@@ -11,5 +11,6 @@
         <file>resource/image/waveform.png</file>
         <file>resource/image/status.png</file>
         <file>resource/image/compress.png</file>
+        <file>resource/image/3Dsurface.png</file>
     </qresource>
 </RCC>

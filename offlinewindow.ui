@@ -299,7 +299,7 @@
     <item>
      <widget class="QStackedWidget" name="centralVboxStackedWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
        <layout class="QGridLayout" name="gridLayout_4">
@@ -419,6 +419,7 @@
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="spectroMeterPageInfoWidget_3D"/>
       <widget class="QWidget" name="spectroMeterPageInfoWidget_LBD">
        <layout class="QVBoxLayout" name="verticalLayout_11">
         <property name="spacing">
@@ -537,7 +538,7 @@
            </widget>
           </item>
           <item row="5" column="0" colspan="2">
-           <widget class="QWidget" name="widget" native="true">
+           <widget class="QWidget" name="widget_3" native="true">
             <property name="minimumSize">
              <size>
               <width>0</width>
@@ -1333,7 +1334,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>22</height>
+     <height>18</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -1397,6 +1398,7 @@
    <addaction name="action_analyze"/>
    <addaction name="action_waveform"/>
    <addaction name="action_ngamma"/>
+   <addaction name="action_3dSurface"/>
    <addaction name="separator"/>
    <addaction name="action_exit"/>
   </widget>
@@ -1584,6 +1586,21 @@
    </property>
    <property name="toolTip">
     <string>n-γ甄别数据处理</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_3dSurface">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="lresource.qrc">
+     <normaloff>:/resource/image/3Dsurface.png</normaloff>:/resource/image/3Dsurface.png</iconset>
+   </property>
+   <property name="text">
+    <string>3D平面图</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

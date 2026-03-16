@@ -1,4 +1,4 @@
-QT       += core gui sql network concurrent
+QT       += core gui sql network concurrent datavisualization 3dextras
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -7,8 +7,9 @@ CONFIG += c++17
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
-DEFINES += _TEST
 DEFINES += _VER_2_0
+DEFINES += _VER_2_1=1
+DEFINES += ENABLE_DDR2=1
 
 SOURCES += \
     commhelper.cpp \
@@ -158,3 +159,12 @@ include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
 # PRECOMPILED_HEADER += stable.h
 
 win32: LIBS += -lsetupapi
+
+#qwt3D
+#指定Qwt3D库的位置
+win32: LIBS += -L$$PWD/../3rdParty/qwtplot3d/lib/ -lqwtplot3d
+#添加包含路径与依赖路径
+INCLUDEPATH += $$PWD/../3rdParty/qwtplot3d/include
+DEPENDPATH += $$PWD/../3rdParty/qwtplot3d/include
+#链接OpenGL库
+LIBS += -lopengl32 -lglu32
