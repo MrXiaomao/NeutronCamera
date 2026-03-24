@@ -10,7 +10,7 @@ DetSettingWindow::DetSettingWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
-    GlobalSettings settings(CONFIG_FILENAME);
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
     ui->spinBox_deathTime->setValue(settings.value("Base/deathTime", 30).toUInt());
     ui->spinBox_triggerThold->setValue(settings.value("Base/triggerThold", 100).toUInt());
 
@@ -27,7 +27,7 @@ DetSettingWindow::~DetSettingWindow()
 
 void DetSettingWindow::on_pushButton_save_clicked()
 {
-    GlobalSettings settings(CONFIG_FILENAME);
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
     settings.setValue("Base/deathTime", ui->spinBox_deathTime->value());
     settings.setValue("Base/triggerThold", ui->spinBox_triggerThold->value());
 

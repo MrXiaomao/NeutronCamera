@@ -4,6 +4,26 @@
 #include "globalsettings.h"
 #include "switchbutton.h"
 
+// 对尾缀_1等数字进行加1操作。一定要有下划线
+QString increaseShotNumSuffix(QString shotNumStr)
+{
+    QRegularExpression  rx(R"(^(.*?_)(\d+)$)"); // 匹配以数字结尾的字符串
+    auto m = rx.match(shotNumStr);
+    if (m.hasMatch()) {
+        QString prefix = m.captured(1); // "20251121_"
+        QString digits = m.captured(2); // "002"
+        int numberLength = digits.length(); // 数字部分的长度
+        int number = digits.toInt(); // 转换为整数
+        number++; // 自增1
+        QString newNumberStr = QString::number(number).rightJustified(numberLength, '0'); // 保持原有长度，前面补0
+        return prefix + newNumberStr; // 返回新的发次字符串
+    }
+    else {
+        // 如果没有下划线+数字结尾，直接在后面加上1
+        return shotNumStr + "_1";
+    }
+}
+
 MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -69,6 +89,12 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportCaptureFinished, this, [=](){
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
+
+        if (ui->checkBox_autoIncrease->isChecked()){
+            ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text().trimmed()));
+            GlobalSettings settings(DEVICE_CONFIG_FILE);
+            settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
+        }
     });
     connect(&mPCIeCommSdk, SIGNAL(reportNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
     connect(&mPCIeCommSdk, SIGNAL(reportGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
@@ -583,7 +609,7 @@ void MainWindow::initUi()
     connect(button, &QToolButton::pressed, this, [=](){
         QString cacheDir = QFileDialog::getExistingDirectory(this);
         if (!cacheDir.isEmpty()){
-            GlobalSettings settings(CONFIG_FILENAME);
+            GlobalSettings settings(DEVICE_CONFIG_FILE);
             settings.setValue("Global/CacheDir", cacheDir);
             ui->lineEdit_savePath->setText(cacheDir);
         }
@@ -591,14 +617,14 @@ void MainWindow::initUi()
 
     // 数据保存路径
     {
-        GlobalSettings settings(CONFIG_FILENAME);
+        GlobalSettings settings(DEVICE_CONFIG_FILE);
         QString cacheDir = settings.value("Global/CacheDir").toString();
         if (cacheDir.isEmpty())
             cacheDir = QApplication::applicationDirPath() + "/cache/";
         ui->lineEdit_savePath->setText(cacheDir);
 
         // 发次
-        ui->lineEdit_shotNum->setText(settings.value("Global/ShotNum", "00001").toString());
+        ui->lineEdit_shotNum->setText(settings.value("Global/ShotNumStr", "shotNum_1").toString());
         ui->checkBox_autoIncrease->setChecked(settings.value("Global/ShotNumIsAutoIncrease", false).toBool());
     }
 
@@ -648,7 +674,7 @@ void MainWindow::initUi()
         actionType->addAction(ui->action_typePSD);
         actionType->addAction(ui->action_typeLBD);
         {
-            GlobalSettings settings(CONFIG_FILENAME);
+            GlobalSettings settings(DEVICE_CONFIG_FILE);
             if (settings.value("Global/DetType", "PSD").toString() == "LSD"){
                 ui->action_typeLSD->setChecked(true);
                 emit ui->action_typeLSD->triggered(true);
@@ -1232,13 +1258,12 @@ void MainWindow::on_action_startMeasure_triggered()
     else if (ui->action_typeLBD->isChecked())
         mCurrentDetectorType = dtLBD;
 
-    GlobalSettings settings(CONFIG_FILENAME);
-    settings.setValue("Global/ShotNum", ui->lineEdit_shotNum->text());
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
+    settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
     settings.setValue("Global/ShotNumIsAutoIncrease", ui->checkBox_autoIncrease->isChecked());
     settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
-    settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
     settings.setValue("Global/DetectType", mCurrentDetectorType);
-    QFile::copy(CONFIG_FILENAME, fileSaveDir + "/Settings.ini");
+    QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
 
     // 发送指令集
     //mPCIeCommSdk.writeStartMeasure();
@@ -1670,7 +1695,7 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LSD);//spectroMeterPageInfoWidget_LSD
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
-        GlobalSettings settings(CONFIG_FILENAME);
+        GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetType", "LSD");
 
         updateTableRowHidden();
@@ -1702,7 +1727,7 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_PSD);
         this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
-        GlobalSettings settings(CONFIG_FILENAME);
+        GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetType", "PSD");
 
         updateTableRowHidden();
@@ -1734,7 +1759,7 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget_LBD);
         this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
-        GlobalSettings settings(CONFIG_FILENAME);
+        GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetType", "LBD");
 
         updateTableRowHidden();

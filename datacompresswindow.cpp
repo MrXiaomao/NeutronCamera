@@ -1392,12 +1392,12 @@ void DataCompressWindow::on_action_choseDir_triggered()
 
     settings.setValue("Global/Offline/LastFileDir", filePath);
     ui->textBrowser_filepath->setText(filePath);
-    if (!QFileInfo::exists(filePath+"/Settings.ini")){
-        QMessageBox::information(this, tr("提示"), tr("路径无效，缺失\"Settings.ini\"文件！"));
+    if (!QFileInfo::exists(filePath+"/device_config.ini")){
+        QMessageBox::information(this, tr("提示"), tr("路径无效，缺失\"device_config.ini\"文件！"));
         return;
     }
     else {
-        GlobalSettings settings(filePath+"/Settings.ini");
+        GlobalSettings settings(filePath+"/device_config.ini");
         mShotNum = settings.value("Global/ShotNum", "00000").toString();
         emit reporWriteLog("炮号：" + mShotNum);
     }

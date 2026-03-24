@@ -7,6 +7,16 @@
 #include "qcustomplothelper.h"
 #include <QElapsedTimer>
 
+// 高斯函数：y = A * exp(-(x-μ)²/(2σ²))
+double gaussian(double x, double amplitude, double mean, double sigma) {
+    return amplitude * exp(-pow(x - mean, 2) / (2 * pow(sigma, 2)));
+}
+
+// 高斯函数：y = A * exp(-(x-μ)²/(2σ²)) + baseline（基线偏移）
+double gaussian(double x, double amplitude, double mean, double sigma, double baseline) {
+    return amplitude * exp(-pow(x - mean, 2) / (2 * pow(sigma, 2))) + baseline;
+}
+
 OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::OfflineWindow)
@@ -16,8 +26,8 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     ui->setupUi(this);
 
     initUi();
-    //init3DSurface();
-    init3DCurve();
+    //init3DCurve();
+    initHeatmap(); // 热度图
 
     //QStringList args = QCoreApplication::arguments();
     //this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
@@ -257,7 +267,7 @@ void OfflineWindow::initUi()
         actionType->addAction(ui->action_typePSD);
         actionType->addAction(ui->action_typeLBD);
         {
-            GlobalSettings settings(CONFIG_FILENAME);
+            GlobalSettings settings(DEVICE_CONFIG_FILE);
             if (settings.value("Global/DetType", "PSD").toString() == "LSD"){
                 ui->action_typeLSD->setChecked(true);
                 emit ui->action_typeLSD->triggered(true);
@@ -511,12 +521,12 @@ void OfflineWindow::on_action_openfile_triggered()
 
     settings.setValue("Global/Offline/LastFileDir", dirPath);
     ui->textBrowser_filepath->setText(dirPath);
-    if (!QFileInfo::exists(dirPath+"/Settings.ini")){
-        QMessageBox::information(this, tr("提示"), tr("路径无效，缺失\"Settings.ini\"文件！"));
+    if (!QFileInfo::exists(dirPath+"/device_config.ini")){
+        QMessageBox::information(this, tr("提示"), tr("路径无效，缺失\"device_config.ini\"文件！"));
         return;
     }
     else {
-        GlobalSettings settings(dirPath+"/Settings.ini");
+        GlobalSettings settings(dirPath+"/device_config.ini");
         mShotNum = settings.value("Global/ShotNum", "00000").toString();
         mCurrentDetectorType = (DetectorType)settings.value("Global/DetectType", 0).toUInt();
 
@@ -1555,7 +1565,7 @@ void OfflineWindow::on_action_typeLSD_triggered(bool checked)
 
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
-        GlobalSettings settings(CONFIG_FILENAME);
+        GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetType", "LSD");
 
         ui->action_waveform->setVisible(true);
@@ -1572,7 +1582,7 @@ void OfflineWindow::on_action_typePSD_triggered(bool checked)
 
         this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
-        GlobalSettings settings(CONFIG_FILENAME);
+        GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetType", "PSD");
 
         ui->action_waveform->setVisible(false);
@@ -1589,7 +1599,7 @@ void OfflineWindow::on_action_typeLBD_triggered(bool checked)
 
         this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
-        GlobalSettings settings(CONFIG_FILENAME);
+        GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetType", "LBD");
 
         ui->action_waveform->setVisible(false);
@@ -1875,4 +1885,375 @@ void OfflineWindow::init3DCurve()
         );
 
     surface->show();
+}
+
+void OfflineWindow::initHeatmap()
+{
+    mGraphisColor.push_back(QColor::fromRgb(0,47,167));
+    mGraphisColor.push_back(QColor::fromRgb(255,0,77));
+    mGraphisColor.push_back(QColor::fromRgb(255,204,51));
+    mGraphisColor.push_back(QColor::fromRgb(10,186,181));
+    mGraphisColor.push_back(QColor::fromRgb(5,75,58));
+    mGraphisColor.push_back(QColor::fromRgb(129,216,208));
+    mGraphisColor.push_back(QColor::fromRgb(0,140,141));
+    mGraphisColor.push_back(QColor::fromRgb(128,0,32));
+    mGraphisColor.push_back(QColor::fromRgb(142,76,41));
+    mGraphisColor.push_back(QColor::fromRgb(205,0,0));
+    mGraphisColor.push_back(QColor::fromRgb(0,102,128));
+    mGraphisColor.push_back(QColor::fromRgb(32,88,39));
+    mGraphisColor.push_back(QColor::fromRgb(132,88,39));
+    mGraphisColor.push_back(QColor::fromRgb(32,188,39));
+    mGraphisColor.push_back(QColor::fromRgb(32,88,139));
+    mGraphisColor.push_back(QColor::fromRgb(92,188,139));
+    mGraphisColor.push_back(QColor::fromRgb(62,108,179));
+    mGraphisColor.push_back(QColor::fromRgb(232,88,39));
+
+    const int channelCount = 18; // 通道总数
+    QCustomPlot *customPlot = new QCustomPlot(this);
+    QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
+    // customPlot->setInteraction(QCP::iRangeDrag, true);
+    // customPlot->setInteraction(QCP::iRangeZoom, true);
+    // customPlot->setInteraction(QCP::iSelectPlottables, true);
+    customPlot->legend->setVisible(true);
+    customPlot->legend->setWrap(9);
+    customPlot->setNoAntialiasingOnDrag(false);
+    customPlot->plotLayout()->clear();
+
+    connect(customPlot, &QCustomPlot::plottableClick, this, [&](QCPAbstractPlottable* plottable, int dataIndex, QMouseEvent* event) {
+        // std::unique_lock<std::mutex> lock(mutex_music_tone);
+        // QStringList nameList = plottable->name().split(" ");
+        // if (nameList.count() > 0)	{
+        //     for (int i = 0; i < musicTone.size(); i++) {
+        //         if (i != dataIndex)
+        //             musicTone[i].active = false;
+        //         else {
+        //             musicTone[i].active = !musicTone[i].active;
+        //             if (musicTone[i].active) {
+        //                 currentMusicToneName = musicTone[i].name;
+        //             }
+        //             else {
+        //                 currentMusicToneName.clear();
+        //             }
+        //         }
+        //     }
+        // }
+    });
+
+    // 随机生成深色系颜色
+    auto generateSoftBrightColor=[]()->QColor {
+        // 随机色相（0-360）
+        int hue = QRandomGenerator::global()->bounded(0, 360);
+        // 低饱和度（30-50%）
+        int saturation = QRandomGenerator::global()->bounded(30, 51);
+        // 高明度（90-100%）
+        int value = QRandomGenerator::global()->bounded(150, 206);
+        return QColor::fromHsv(hue, saturation, value);
+    };
+
+    // 时间计数曲线
+    QCPAxisRect *timeCountsAxisRect = new QCPAxisRect(customPlot);
+    timeCountsAxisRect->setObjectName("timeCountsAxisRect");
+    {
+        timeCountsAxisRect->setupFullAxesBox();
+        timeCountsAxisRect->setMinimumMargins(QMargins(0,0,0,0));
+        timeCountsAxisRect->setMargins(QMargins(0,0,0,0));
+        timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
+        timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Counts"));
+        timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Time/ms"));
+        timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 2000);
+        timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 1200);
+
+        // 左上角添加图例
+        QCPLegend *legend = new QCPLegend();
+        legend->setWrap(9);
+        timeCountsAxisRect->insetLayout()->addElement(legend, Qt::AlignLeft | Qt::AlignTop); // 清空默认布局
+
+        QCPAxis *keyAxis = timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
+        QCPAxis *valueAxis = timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft);
+
+        for (int i=1; i<=18; ++i){
+            QCPGraph *graph = customPlot->addGraph(keyAxis, valueAxis);
+            graph->setLineStyle(QCPGraph::lsLine);
+            if (i<12){
+                graph->setName(QStringLiteral("HC %1").arg(i));
+                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
+            }
+            else{
+                graph->setName(QStringLiteral("VC %1").arg(i));
+                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
+            }
+
+            // QVector<double> keys;
+            // QVector<double> values;
+            // for (int key = 0; key <= 20; ++key){
+            //     keys << key * 100;
+            //     values << QRandomGenerator64::global()->bounded(0, 1200);
+            // }
+            // graph->setData(keys, values);
+        }
+    }
+
+    // 时间探测器计数曲线
+    QCPAxisRect *timeChannelCountsAxisRect = new QCPAxisRect(customPlot);
+    timeChannelCountsAxisRect->setObjectName("timeChannelCountsAxisRect");
+    timeChannelCountsAxisRect->setRangeZoomFactor(1, 1);//禁止轴缩放
+    timeChannelCountsAxisRect->setRangeDragAxes(nullptr, nullptr);// 禁止轴拖拽
+    QCPColorScale *timeChannelCountsColorScale = nullptr;
+    {
+        timeChannelCountsAxisRect->setupFullAxesBox();
+        timeChannelCountsAxisRect->setMinimumMargins(QMargins(0,0,0,0));
+        timeChannelCountsAxisRect->setMargins(QMargins(0,0,0,0));
+        timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Channel#"));
+        timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Time/ms"));
+
+        QCPAxis *keyAxis = timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
+        QCPAxis *valueAxis = timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atLeft);
+        // 禁止坐标轴缩放
+        keyAxis->setRange(-50.0, 2050.0);// 数据量是20个，每个间隔是100ms，所以总时间是2000，+/-50是为了让标签名称正好显示在中间位置
+        valueAxis->setRange(0.5, 18.5);// +0.5是为了让名称正好显示在中间位置
+        {
+            QSharedPointer<QCPAxisTickerText> textTicker(new QCPAxisTickerText);
+            QVector<QString> labels;
+            QVector<double> positions;
+            for (int i = 0; i <= 18; ++i) {
+                positions << (double)(i);
+                labels << QString::number(i);
+            }
+            textTicker->setTicks(positions, labels);
+            valueAxis->setTicker(textTicker);
+        }
+
+        QCPColorMap *colorMap = new QCPColorMap(keyAxis, valueAxis);
+        colorMap->setName("colorMap");
+        colorMap->setInterpolate(false);
+        timeChannelCountsColorScale = new QCPColorScale(customPlot);
+        timeChannelCountsColorScale->setType(QCPAxis::atRight);
+        timeChannelCountsColorScale->setRangeDrag(false);
+        timeChannelCountsColorScale->setRangeZoom(false);
+        colorMap->setColorScale(timeChannelCountsColorScale);
+
+        QCPMarginGroup *marginGroup = new QCPMarginGroup(customPlot);
+        timeChannelCountsAxisRect->setMarginGroup(QCP::msBottom|QCP::msTop, marginGroup);
+        timeChannelCountsColorScale->setMarginGroup(QCP::msBottom|QCP::msTop, marginGroup);
+
+        // int nx = 20;// 总时长是2000ms，每隔对应的是100ms，所以对应的数据量是20个
+        // int ny = 18;// 18路探测器
+        // colorMap->data()->setSize(nx, ny);
+        // colorMap->data()->setRange(QCPRange(0, 2000), QCPRange(1, 18));
+        // double x, y, z;
+        // for (int xIndex=0; xIndex<nx; ++xIndex)
+        // {
+        //     for (int yIndex=0; yIndex<ny; ++yIndex)
+        //     {
+        //         colorMap->data()->cellToCoord(xIndex, yIndex, &x, &y);
+        //         z = QRandomGenerator64::global()->bounded(100, 2000);
+        //         colorMap->data()->setCell(xIndex, yIndex, z);
+        //     }
+        // }
+
+        colorMap->setGradient(QCPColorGradient::gpRainbow);
+        colorMap->rescaleDataRange();
+        customPlot->legend->removeItem(customPlot->legend->itemWithPlottable(colorMap)); // 移除与graph关联的图例项，从而隐藏图例
+    }
+
+    // 计数叠加柱状图
+    QCPAxisRect *channelCountsAxisRect = new QCPAxisRect(customPlot);
+    channelCountsAxisRect->setRangeZoomFactor(1, 1.2);//禁止X轴缩放
+    channelCountsAxisRect->setRangeDragAxes(nullptr, nullptr);// 禁止轴拖拽
+    channelCountsAxisRect->setObjectName("channelCountsAxisRect");
+    {
+        channelCountsAxisRect->setupFullAxesBox();
+        channelCountsAxisRect->setMinimumMargins(QMargins(0,0,0,0));
+        channelCountsAxisRect->setMargins(QMargins(0,0,0,0));
+        channelCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
+        channelCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Counts(summed)"));
+        channelCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Channel#"));
+        channelCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 19);
+        channelCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 12000);
+        //countsAxisRect->axis(QCPAxis::AxisType::atBottom)->grid()->setZeroLinePen(Qt::NoPen);
+
+        QCPAxis *keyAxis = channelCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
+        QCPAxis *valueAxis = channelCountsAxisRect->axis(QCPAxis::AxisType::atLeft);
+        valueAxis->setRangeLower(0);// 设置Y轴最小值
+        QCPBars *cpBars = new QCPBars(keyAxis, valueAxis);
+        cpBars->setName("cpBars");
+        cpBars->setAntialiased(false);
+        cpBars->setWidth(1);
+        cpBars->setWidthType(QCPBars::WidthType::wtPlotCoords);
+        cpBars->setSelectable(QCP::stNone);
+
+        // QVector<double> keys;
+        QVector<QString> labels;
+        // QVector<double> values;
+        // QVector<QPen> barPen;
+        // QVector<QBrush> barBrush;
+        QVector<double> positions;
+        // QCPColorGradient colorGradient(QCPColorGradient::gpRainbow);
+        for (int i = 1; i < 19; ++i) {
+        //     double value = QRandomGenerator64::global()->bounded(1, 12000.0);
+        //     QColor color = generateSoftBrightColor();
+        //     //QColor color = colorGradient.color(value * 100 / 1200, QCPRange(0, 100));
+
+        //     keys << (double)(i);
+             positions << (double)(i);
+             labels << QString::number(i);
+        //     values << value;
+
+        //     barPen << QPen(Qt::black );
+        //     barBrush << QBrush(mGraphisColor[i-1]);
+        }
+        // cpBars->setData(keys, values, barPen, barBrush);
+
+        QSharedPointer<QCPAxisTickerText> textTicker(new QCPAxisTickerText);
+        textTicker->setTicks(positions, labels);
+        keyAxis->setTicker(textTicker);
+        keyAxis->setRange(0.5, 18.5);
+        valueAxis->setRange(0.0, 12000.0);
+
+        customPlot->legend->removeItem(customPlot->legend->itemWithPlottable(cpBars)); // 移除与graph关联的图例项，从而隐藏图例
+    }
+
+    // 设置左边边界联动对齐
+    {
+        QCPMarginGroup* timeCountMarginGroup = new QCPMarginGroup(customPlot);
+        timeChannelCountsAxisRect->setMarginGroup(QCP::msLeft | QCP::msRight, timeCountMarginGroup);
+        timeCountsAxisRect->setMarginGroup(QCP::msLeft | QCP::msRight, timeCountMarginGroup);
+    }
+
+    // 关联信号槽函数
+    {
+        connect(timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom), SIGNAL(rangeChanged(QCPRange)), timeCountsAxisRect->axis(QCPAxis::AxisType::atTop), SLOT(setRange(QCPRange)));
+        connect(timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft), SIGNAL(rangeChanged(QCPRange)), timeCountsAxisRect->axis(QCPAxis::AxisType::atRight), SLOT(setRange(QCPRange)));
+        connect(channelCountsAxisRect->axis(QCPAxis::AxisType::atBottom), SIGNAL(rangeChanged(QCPRange)), channelCountsAxisRect->axis(QCPAxis::AxisType::atTop), SLOT(setRange(QCPRange)));
+        connect(channelCountsAxisRect->axis(QCPAxis::AxisType::atLeft), SIGNAL(rangeChanged(QCPRange)), channelCountsAxisRect->axis(QCPAxis::AxisType::atRight), SLOT(setRange(QCPRange)));
+    }
+
+    QList<QCPAxis*> allAxes;
+    allAxes << timeCountsAxisRect->axes() << channelCountsAxisRect->axes() <<  channelCountsAxisRect->axes();
+    foreach (QCPAxis *axis, allAxes)
+    {
+        axis->setLayer("axes");
+        axis->grid()->setLayer("grid");
+    }
+
+    // 布局
+    QCPLayoutGrid *leftLayout = new QCPLayoutGrid;
+    {
+        leftLayout->addElement(0, 0, timeCountsAxisRect);//上面
+        leftLayout->addElement(1, 0, timeChannelCountsAxisRect);//下面
+        leftLayout->addElement(1, 1, timeChannelCountsColorScale);//下面
+    }
+
+    customPlot->plotLayout()->clear();
+    customPlot->plotLayout()->addElement(0, 0, leftLayout);//左边
+    customPlot->plotLayout()->addElement(0, 1, channelCountsAxisRect);//右边
+    customPlot->plotLayout()->setColumnStretchFactor(0, 2);
+    customPlot->plotLayout()->setColumnStretchFactor(1, 1);
+    customPlot->replot(QCustomPlot::rpQueuedReplot);
+
+    // 右键菜单项
+    customPlotHelper->onContextMenu = [=](const QCPAxisRect* axisRect, bool& allow){
+        if (axisRect == timeCountsAxisRect)
+            allow = true;
+        else
+            allow = false;
+    };
+
+    connect(customPlotHelper, &QCustomPlotHelper::selectRangeChanged, this, [=](const QCPAxisRect *axisRect, const QCPRange& range){
+        if (axisRect == timeCountsAxisRect){
+            Q_UNUSED(range);
+            QCPBars *cpBars = qobject_cast<QCPBars*>(customPlot->plottable("cpBars"));
+            QVector<double> keys, values;
+            QVector<QPen> barPen;
+            QVector<QBrush> barBrush;
+            values.resize(18);
+            for (int group=0; group<18; ++group){
+                QCPGraph *graph = nullptr;
+                if (group < 11)
+                    graph = customPlot->graph(QStringLiteral("HC %1").arg(group+1));
+                else
+                    graph = customPlot->graph(QStringLiteral("VC %1").arg(group+1));
+
+                keys << (double)(group + 1);
+                barPen << QPen(Qt::black );
+                barBrush << QBrush(generateSoftBrightColor());
+
+                for (int i=0; i<graph->data()->size(); ++i){
+                    if (graph->data()->at(i)->key>=range.lower && graph->data()->at(i)->key<=range.upper){
+                        values[group] += (double)graph->data()->at(i)->value;
+                    }
+                }
+            }
+
+            cpBars->setData(keys, values, barPen, barBrush);
+            customPlot->replot(QCustomPlot::rpQueuedReplot);
+        }
+    });
+
+    // 绘制数据
+    {
+        // 生成18组高斯峰数据
+        const int numGroups = 18;
+        const int pointsPerGroup = 20;
+        const double xMin = 0, xMax = 20;
+        const double step = (xMax - xMin) / (pointsPerGroup - 1);  // 20个点的步长
+
+        QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
+        colorMap->data()->setSize(pointsPerGroup, numGroups);
+        colorMap->data()->setRange(QCPRange(0, pointsPerGroup*100), QCPRange(1, numGroups));
+
+        QCPBars *cpBars = qobject_cast<QCPBars*>(customPlot->plottable("cpBars"));
+
+        QVector<double> keys;
+        QVector<double> values;
+        QVector<QPen> barPen;
+        QVector<QBrush> barBrush;
+        for (int group = 0; group < numGroups; ++group) {
+            // 随机生成当前组的高斯参数
+            double amplitude = QRandomGenerator::global()->bounded(600, 1200);  // 峰值100~1200
+            double mean = QRandomGenerator::global()->bounded(6, 12);          // 中心位置2~18
+            double sigma = (double)QRandomGenerator::global()->bounded(5, 20)/10;          // 宽度0.5~2.0
+            double baseline = group * 20.0;  // 垂直偏移：每组间隔100（可调整）
+
+            keys << (double)(group + 1);
+            values << 0;
+            barPen << QPen(Qt::black );
+            barBrush << QBrush(generateSoftBrightColor());
+
+            // 计算当前组的x和y数据
+            QVector<double> xData, yData;
+            for (int i = 0; i < pointsPerGroup; ++i) {
+                double key = xMin + i * step;
+                double value = gaussian(key, amplitude, mean, sigma, baseline);
+                xData.append(key*100);
+                yData.append(value);
+
+                double x, y;
+                colorMap->data()->cellToCoord(i, group, &x, &y);
+                colorMap->data()->setCell(i, group, value);
+                values[group] += value;
+            }
+
+            // 时间+计数率曲线
+            QCPGraph *graph = nullptr;
+            if (group < 11)
+                graph = customPlot->graph(QStringLiteral("HC %1").arg(group+1));
+            else
+                graph = customPlot->graph(QStringLiteral("VC %1").arg(group+1));
+            graph->setData(xData, yData);
+        }
+
+        // 时间+通道+计数率热度图
+        colorMap->rescaleDataRange();
+
+        // 通道+计数率总和柱状图
+        cpBars->setData(keys, values, barPen, barBrush);
+    }
+    customPlot->replot(QCustomPlot::rpQueuedReplot);
+
+    QVBoxLayout* vLayout = new QVBoxLayout(ui->spectroMeterPageInfoWidget_3D);
+    vLayout->addWidget(customPlot);
+    ui->spectroMeterPageInfoWidget_3D->setLayout(vLayout);
 }

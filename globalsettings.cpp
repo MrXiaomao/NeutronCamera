@@ -5,7 +5,7 @@
 
 /*#########################################################*/
 GlobalSettings::GlobalSettings(QObject *parent)
-    : QSettings(GLOBAL_CONFIG_FILENAME, QSettings::IniFormat, parent)
+    : QSettings(SYSTEM_CONFIG_FILE, QSettings::IniFormat, parent)
 {
     this->setIniCodec(QTextCodec::codecForName("utf-8"));
 }

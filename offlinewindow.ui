@@ -1600,7 +1600,7 @@
      <normaloff>:/resource/image/3Dsurface.png</normaloff>:/resource/image/3Dsurface.png</iconset>
    </property>
    <property name="text">
-    <string>3D平面图</string>
+    <string>计数率统计</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

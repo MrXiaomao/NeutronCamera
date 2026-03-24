@@ -644,7 +644,7 @@ void PCIeCommSdk::analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLen
 #include "globalsettings.h"
 void PCIeCommSdk::replySettingFinished()
 {
-    GlobalSettings settings(CONFIG_FILENAME);
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
     quint16 deathTime = settings.value("Base/deathTime", 30).toUInt();
     writeDeathTime(deathTime);
 

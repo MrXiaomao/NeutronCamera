@@ -67,7 +67,7 @@ void CommHelper::initSocket()
     connect(mTcpClient, SIGNAL(connected()), this, SLOT(connected()));
 
     // 初始化UDP
-    GlobalSettings settings(CONFIG_FILENAME);
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
     quint32 port = settings.value("Net/portLocal", 1000).toUInt();
 
     this->mUdpStatusClient1 = new QUdpSocket();
@@ -369,7 +369,7 @@ void CommHelper::connected()
 */
 bool CommHelper::connectServer()
 {
-    GlobalSettings settings(CONFIG_FILENAME);
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
     QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
     quint32 port = settings.value("Net/portRemote", 8000).toUInt();
     quint32 portLocal = settings.value("Net/portLocal", 1000).toUInt();
@@ -399,7 +399,7 @@ bool CommHelper::connectServer()
 */
 void CommHelper::disconnectServer()
 {
-    GlobalSettings settings(CONFIG_FILENAME);
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
     QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
     quint32 port = settings.value("Net/portRemote", 8000).toUInt();
     QByteArray datagram("stop");
@@ -465,7 +465,7 @@ bool CommHelper::switchBackupChannel(quint32 channel, bool on)
     // QByteArray datagram = QByteArray::fromHex("A5 03 ff ff");
     // quint32 data = 0xffff03A5;
 
-    GlobalSettings settings(CONFIG_FILENAME);
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
     QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
     quint32 port = settings.value("Net/portRemote", 8000).toUInt();
     mUdpStatusClient1->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
@@ -492,7 +492,7 @@ bool CommHelper::switchAllBackupChannel(bool on)
     quint32 v = bits.to_ulong();
     v = qbswap(v);//转为网络大端字节顺序
 
-    GlobalSettings settings(CONFIG_FILENAME);
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
     QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
     quint32 port = settings.value("Net/portRemote", 8000).toUInt();
     mUdpStatusClient1->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);

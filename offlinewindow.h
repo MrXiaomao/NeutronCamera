@@ -249,12 +249,14 @@ private:
     PCIeCommSdk mPCIeCommSdk;
     QString mShotNum;
     DetectorType mCurrentDetectorType;
+    QVector<QColor> mGraphisColor;
 
     QProgressIndicator *mProgressIndicator = nullptr;
     QStringList mfileList;
     void applyColorTheme();
 
     void init3DCurve(); // 3维曲线图
+    void initHeatmap(); // 热度图
 };
 
 #endif // OFFLINEWINDOW_H
