@@ -8,87 +8,87 @@
 #include "datacompresswindow.h"
 
 // 3D平面图头文件添加
-#include <QtDataVisualization>
-#include <QSurface>
-using namespace QtDataVisualization;
+//#include <QtDataVisualization>
+//#include <QSurface>
+//using namespace QtDataVisualization;
 
-#include <QtDataVisualization/Q3DInputHandler>
-#include <QtDataVisualization/Q3DSurface>
-#include <QMouseEvent>
+//#include <QtDataVisualization/Q3DInputHandler>
+//#include <QtDataVisualization/Q3DSurface>
+//#include <QMouseEvent>
 
-class CustomInputHandler : public QtDataVisualization::Q3DInputHandler {
-    Q_OBJECT
-public:
-    explicit CustomInputHandler(QObject *parent = nullptr)
-        : Q3DInputHandler(parent), m_isDragging(false) {}
+//class CustomInputHandler : public QtDataVisualization::Q3DInputHandler {
+//    Q_OBJECT
+//public:
+//    explicit CustomInputHandler(QObject *parent = nullptr)
+//        : Q3DInputHandler(parent), m_isDragging(false) {}
 
-protected:
-    // 鼠标按下事件：记录初始状态
-    void mousePressEvent(QMouseEvent *event, const QPoint &mousePos) override {
-        if (event->button() == Qt::LeftButton) {
-            m_isDragging = true;
-            m_lastMousePos = mousePos;
-            event->accept(); // 拦截事件，避免默认处理
-        } else {
-            Q3DInputHandler::mousePressEvent(event, mousePos); // 其他按键沿用默认逻辑
-        }
-    }
+//protected:
+//    // 鼠标按下事件：记录初始状态
+//    void mousePressEvent(QMouseEvent *event, const QPoint &mousePos) override {
+//        if (event->button() == Qt::LeftButton) {
+//            m_isDragging = true;
+//            m_lastMousePos = mousePos;
+//            event->accept(); // 拦截事件，避免默认处理
+//        } else {
+//            Q3DInputHandler::mousePressEvent(event, mousePos); // 其他按键沿用默认逻辑
+//        }
+//    }
 
-    // 鼠标移动事件：判断操作类型（旋转/平移）
-    // 鼠标移动事件：修正旋转/平移逻辑
-    void mouseMoveEvent(QMouseEvent *event, const QPoint &mousePos) override {
-        if (!m_isDragging) return;
+//    // 鼠标移动事件：判断操作类型（旋转/平移）
+//    // 鼠标移动事件：修正旋转/平移逻辑
+//    void mouseMoveEvent(QMouseEvent *event, const QPoint &mousePos) override {
+//        if (!m_isDragging) return;
 
-        QPoint delta = mousePos - m_lastMousePos;
-        Q3DCamera *camera = scene()->activeCamera(); // 获取当前相机
+//        QPoint delta = mousePos - m_lastMousePos;
+//        Q3DCamera *camera = scene()->activeCamera(); // 获取当前相机
 
-        if (event->modifiers() & Qt::ControlModifier) {
-            // 修正：左键+Ctrl → 平移（通过调整水平/垂直角度实现伪平移）
-            // 原理：平移等价于相机围绕场景中心旋转（模拟平移效果）
-            float currentHorizontal = camera->yRotation(); // 当前水平角度（Y轴）
-            float currentVertical = camera->xRotation();   // 当前垂直角度（X轴）
-            float currentZoom = camera->zoomLevel();       // 当前缩放级别
+//        if (event->modifiers() & Qt::ControlModifier) {
+//            // 修正：左键+Ctrl → 平移（通过调整水平/垂直角度实现伪平移）
+//            // 原理：平移等价于相机围绕场景中心旋转（模拟平移效果）
+//            float currentHorizontal = camera->yRotation(); // 当前水平角度（Y轴）
+//            float currentVertical = camera->xRotation();   // 当前垂直角度（X轴）
+//            float currentZoom = camera->zoomLevel();       // 当前缩放级别
 
-            // 计算平移后的水平/垂直角度（灵敏度可调整）
-            float newHorizontal = currentHorizontal + delta.x() * 0.1f;
-            float newVertical = currentVertical - delta.y() * 0.1f;
+//            // 计算平移后的水平/垂直角度（灵敏度可调整）
+//            float newHorizontal = currentHorizontal + delta.x() * 0.1f;
+//            float newVertical = currentVertical - delta.y() * 0.1f;
 
-            // 应用新位置（保持缩放不变）
-            camera->setCameraPosition(newHorizontal, newVertical, currentZoom);
-        } else {
-            // 修正：左键 → 旋转（直接调整X/Y轴角度）
-            float currentXRot = camera->xRotation();
-            float currentYRot = camera->yRotation();
+//            // 应用新位置（保持缩放不变）
+//            camera->setCameraPosition(newHorizontal, newVertical, currentZoom);
+//        } else {
+//            // 修正：左键 → 旋转（直接调整X/Y轴角度）
+//            float currentXRot = camera->xRotation();
+//            float currentYRot = camera->yRotation();
 
-            // 鼠标Y轴移动 → 相机X轴旋转（上下视角），鼠标X轴移动 → 相机Y轴旋转（左右视角）
-            float newXRot = currentXRot - delta.y() * 0.5f; // 反转Y轴方向（符合直觉）
-            float newYRot = currentYRot + delta.x() * 0.5f;
+//            // 鼠标Y轴移动 → 相机X轴旋转（上下视角），鼠标X轴移动 → 相机Y轴旋转（左右视角）
+//            float newXRot = currentXRot - delta.y() * 0.5f; // 反转Y轴方向（符合直觉）
+//            float newYRot = currentYRot + delta.x() * 0.5f;
 
-            // 限制X轴旋转范围（避免过度翻转，可根据需求调整）
-            newXRot = qBound(-90.0f, newXRot, 90.0f); // 垂直角度限制在±90°
+//            // 限制X轴旋转范围（避免过度翻转，可根据需求调整）
+//            newXRot = qBound(-90.0f, newXRot, 90.0f); // 垂直角度限制在±90°
 
-            camera->setXRotation(newXRot);
-            camera->setYRotation(newYRot);
-        }
+//            camera->setXRotation(newXRot);
+//            camera->setYRotation(newYRot);
+//        }
 
-        m_lastMousePos = mousePos;
-        event->accept();
-    }
+//        m_lastMousePos = mousePos;
+//        event->accept();
+//    }
 
-    // 鼠标释放事件：结束拖动
-    void mouseReleaseEvent(QMouseEvent *event, const QPoint &mousePos) override {
-        if (event->button() == Qt::LeftButton) {
-            m_isDragging = false;
-            event->accept();
-        } else {
-            Q3DInputHandler::mouseReleaseEvent(event, mousePos);
-        }
-    }
+//    // 鼠标释放事件：结束拖动
+//    void mouseReleaseEvent(QMouseEvent *event, const QPoint &mousePos) override {
+//        if (event->button() == Qt::LeftButton) {
+//            m_isDragging = false;
+//            event->accept();
+//        } else {
+//            Q3DInputHandler::mouseReleaseEvent(event, mousePos);
+//        }
+//    }
 
-private:
-    bool m_isDragging;       // 是否处于拖动状态
-    QPoint m_lastMousePos;   // 上一帧鼠标位置
-};
+//private:
+//    bool m_isDragging;       // 是否处于拖动状态
+//    QPoint m_lastMousePos;   // 上一帧鼠标位置
+//};
 
 namespace Ui {
 class OfflineWindow;
@@ -102,67 +102,67 @@ struct FOM_CurvePoint {
     double y3;         // 曲线3的y值
     
     // 构造函数（可选，方便使用）
-    FOM_CurvePoint(double x_ = 0, double y1_ = 0, double y2_ = 0, double y3_ = 0) 
+    FOM_CurvePoint(double x_ = 0, double y1_ = 0, double y2_ = 0, double y3_ = 0)
         : x(x_), y1(y1_), y2(y2_), y3(y3_) {}
 };
 
-/// 自定义X轴格式化器：将数值转换为CH1-CH18的标签
-class QValue3DAxisFormatterX: public QtDataVisualization::QValue3DAxisFormatter
-{
-    Q_OBJECT
-public:
-    explicit QValue3DAxisFormatterX(QObject *parent = nullptr) : QValue3DAxisFormatter(parent) {}
+///// 自定义X轴格式化器：将数值转换为CH1-CH18的标签
+//class QValue3DAxisFormatterX: public QtDataVisualization::QValue3DAxisFormatter
+//{
+//    Q_OBJECT
+//public:
+//    explicit QValue3DAxisFormatterX(QObject *parent = nullptr) : QValue3DAxisFormatter(parent) {}
 
-    virtual QString stringForValue(qreal value, const QString &/*format*/) const override
-    {
-        if (value >= 10 && value <= 180)
-            return QString("CH %1").arg(QString::number(value / 10, 'f', 0));
-        else
-            return QString();
-    }
-};
+//    virtual QString stringForValue(qreal value, const QString &/*format*/) const override
+//    {
+//        if (value >= 10 && value <= 180)
+//            return QString("CH %1").arg(QString::number(value / 10, 'f', 0));
+//        else
+//            return QString();
+//    }
+//};
 
-#include <QtDataVisualization/Q3DSurface>
-#include <QMouseEvent>
+//#include <QtDataVisualization/Q3DSurface>
+//#include <QMouseEvent>
 
-class CustomSurface : public QtDataVisualization::Q3DSurface {
-    Q_OBJECT
-public:
-    explicit CustomSurface(const QSurfaceFormat *format = nullptr, QWindow *parent = nullptr) : QtDataVisualization::Q3DSurface(format, parent) {}
+//class CustomSurface : public QtDataVisualization::Q3DSurface {
+//    Q_OBJECT
+//public:
+//    explicit CustomSurface(const QSurfaceFormat *format = nullptr, QWindow *parent = nullptr) : QtDataVisualization::Q3DSurface(format, parent) {}
 
-protected:
-    void mousePressEvent(QMouseEvent *event) override {
-        // 交换左右键的按下状态
-        if (event->button() == Qt::LeftButton) {
-            // 模拟右键按下（触发旋转）
-            QMouseEvent fakeRightPress(event->type(), event->pos(),
-                                       Qt::RightButton, Qt::RightButton, event->modifiers());
-            Q3DSurface::mousePressEvent(&fakeRightPress);
-        } else if (event->button() == Qt::RightButton) {
-            // 模拟左键按下（默认是选择/平移，此处改为旋转）
-            QMouseEvent fakeLeftPress(event->type(), event->pos(),
-                                      Qt::LeftButton, Qt::LeftButton, event->modifiers());
-            Q3DSurface::mousePressEvent(&fakeLeftPress);
-        } else {
-            Q3DSurface::mousePressEvent(event);
-        }
-    }
+//protected:
+//    void mousePressEvent(QMouseEvent *event) override {
+//        // 交换左右键的按下状态
+//        if (event->button() == Qt::LeftButton) {
+//            // 模拟右键按下（触发旋转）
+//            QMouseEvent fakeRightPress(event->type(), event->pos(),
+//                                       Qt::RightButton, Qt::RightButton, event->modifiers());
+//            Q3DSurface::mousePressEvent(&fakeRightPress);
+//        } else if (event->button() == Qt::RightButton) {
+//            // 模拟左键按下（默认是选择/平移，此处改为旋转）
+//            QMouseEvent fakeLeftPress(event->type(), event->pos(),
+//                                      Qt::LeftButton, Qt::LeftButton, event->modifiers());
+//            Q3DSurface::mousePressEvent(&fakeLeftPress);
+//        } else {
+//            Q3DSurface::mousePressEvent(event);
+//        }
+//    }
 
-    void mouseMoveEvent(QMouseEvent *event) override {
-        // 移动时保持交换后的按键逻辑
-        if (event->buttons() & Qt::LeftButton) {
-            QMouseEvent fakeRightMove(event->type(), event->pos(),
-                                      Qt::RightButton, Qt::RightButton, event->modifiers());
-            Q3DSurface::mouseMoveEvent(&fakeRightMove);
-        } else if (event->buttons() & Qt::RightButton) {
-            QMouseEvent fakeLeftMove(event->type(), event->pos(),
-                                     Qt::LeftButton, Qt::LeftButton, event->modifiers());
-            Q3DSurface::mouseMoveEvent(&fakeLeftMove);
-        } else {
-            Q3DSurface::mouseMoveEvent(event);
-        }
-    }
-};
+//    void mouseMoveEvent(QMouseEvent *event) override {
+//        // 移动时保持交换后的按键逻辑
+//        if (event->buttons() & Qt::LeftButton) {
+//            QMouseEvent fakeRightMove(event->type(), event->pos(),
+//                                      Qt::RightButton, Qt::RightButton, event->modifiers());
+//            Q3DSurface::mouseMoveEvent(&fakeRightMove);
+//        } else if (event->buttons() & Qt::RightButton) {
+//            QMouseEvent fakeLeftMove(event->type(), event->pos(),
+//                                     Qt::LeftButton, Qt::LeftButton, event->modifiers());
+//            Q3DSurface::mouseMoveEvent(&fakeLeftMove);
+//        } else {
+//            Q3DSurface::mouseMoveEvent(event);
+//        }
+//    }
+//};
 
 class QCustomPlot;
 class QProgressIndicator;
@@ -200,6 +200,8 @@ public slots:
     void replyPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图绘制
     void replyFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&);// FoM图绘制
 
+    void replyCpsPlot(QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>>);
+
 signals:
     void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
     void reportWaveform(quint8, quint8, QVector<QPair<double,double>>&);
@@ -208,6 +210,8 @@ signals:
     void reportSpectrum(quint8, quint8, const QVector<QPair<double,double>>&);
     void reportPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图
     void reportFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&);// FoM拟合
+
+    void reportCpsPlot(QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>>);
 
 private slots:
     void on_action_openfile_triggered();
@@ -237,11 +241,18 @@ private slots:
     // 验证时间范围输入
     void validateTime1Range();
 
-    void on_action_3dSurface_triggered(bool checked);
+    void on_action_cps_triggered(bool checked);
+
+    // 波形显示
+    void wafeformShow();
+    // n-γ甄别
+    void ngammaFilter();
+    // 计数率统计
+    void cpsStatistics();
 
 private:
     Ui::OfflineWindow *ui;
-    CustomSurface *surface;
+    //CustomSurface *surface;
     bool mIsDarkTheme = true;
     bool mThemeColorEnable = true;
     QColor mThemeColor = QColor(255,255,255);
@@ -255,8 +266,13 @@ private:
     QStringList mfileList;
     void applyColorTheme();
 
-    void init3DCurve(); // 3维曲线图
+    //void init3DCurve(); // 3维曲线图
+    QCustomPlot* mCpsPlot; //计数率
+    QVector<QColor> mBarColor;
+
     void initHeatmap(); // 热度图
+
+    QString joinFilename(const int& cameraIndex); // 拼接文件名
 };
 
 #endif // OFFLINEWINDOW_H

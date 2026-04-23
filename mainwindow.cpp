@@ -3,6 +3,7 @@
 #include "qcustomplothelper.h"
 #include "globalsettings.h"
 #include "switchbutton.h"
+#include "offlinewindow.h"
 
 // 对尾缀_1等数字进行加1操作。一定要有下划线
 QString increaseShotNumSuffix(QString shotNumStr)
@@ -89,11 +90,33 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportCaptureFinished, this, [=](){
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
+        bool testOk = mPCIeCommSdk.test();
+        if (!testOk){
+            mPCIeCommSdk.printDataError();
+            ++mContinueMeasuerFailCount;
+        }
 
         if (ui->checkBox_autoIncrease->isChecked()){
-            ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text().trimmed()));
-            GlobalSettings settings(DEVICE_CONFIG_FILE);
-            settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
+            ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
+        }
+
+        if (mEnableContinueMeasuer){
+            reporWriteLog(QString("已完成自动测量次数：%1，异常次数:%2").arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
+            if (testOk){
+                QTimer::singleShot(ui->spinBox_intervalSeconds->value() * 1000, this, [=](){
+                    mPCIeCommSdk.reset();
+                    QTimer::singleShot(3000, this, [=](){
+                        emit ui->action_startMeasure->trigger();
+                    });
+                });
+            } else {
+                mEnableContinueMeasuer = false;
+                ui->pushButton->setEnabled(true);
+                ui->pushButton_2->setEnabled(false);
+            }
+        } else {
+            ui->pushButton->setEnabled(true);
+            ui->pushButton_2->setEnabled(false);
         }
     });
     connect(&mPCIeCommSdk, SIGNAL(reportNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
@@ -675,15 +698,15 @@ void MainWindow::initUi()
         actionType->addAction(ui->action_typeLBD);
         {
             GlobalSettings settings(DEVICE_CONFIG_FILE);
-            if (settings.value("Global/DetType", "PSD").toString() == "LSD"){
+            if (settings.value("Global/DetectType").toUInt() == OfflineWindow::dtLSD){
                 ui->action_typeLSD->setChecked(true);
                 emit ui->action_typeLSD->triggered(true);
             }
-            else if (settings.value("Global/DetType", "PSD").toString() == "PSD"){
+            else if (settings.value("Global/DetectType").toUInt() == OfflineWindow::dtPSD){
                 ui->action_typePSD->setChecked(true);
                 emit ui->action_typePSD->triggered(true);
             }
-            else if (settings.value("Global/DetType", "PSD").toString() == "LBD"){
+            else if (settings.value("Global/DetectType").toUInt() == OfflineWindow::dtLBD){
                 ui->action_typeLBD->setChecked(true);
                 emit ui->action_typeLBD->triggered(true);
             }
@@ -966,6 +989,13 @@ void MainWindow::initUi()
             }
         }
     });
+
+    connect(ui->comboBox_horCamera, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int){
+        emit ui->pushButton_preview->clicked();
+    });
+    connect(ui->comboBox_verCamera, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int){
+        emit ui->pushButton_preview->clicked();
+    });
 }
 
 
@@ -1164,7 +1194,7 @@ void MainWindow::replyWriteLog(const QString &msg, QtMsgType msgType)
         QTextCursor cursor = QTextCursor(document); // 创建光标对象
         cursor.movePosition(QTextCursor::Start); //移动到开头，就是TXT文件开头
 
-        for (int var = 0; var < rowCount - maxRowNumber; ++var) {
+        for (int var = 0; var < rowCount - 500; ++var) {
             cursor.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor); // 向下移动并选中当前行
         }
         cursor.removeSelectedText();//删除选择的文本
@@ -1238,7 +1268,8 @@ void MainWindow::on_action_startMeasure_triggered()
     }
 
     QDateTime now = QDateTime::currentDateTime();
-    QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
+    //QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
+    QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyyMMddHHmmss"));
     QDir dir(fileSaveDir);
     if (!dir.exists()) {
         if (!dir.mkpath(".")){
@@ -1265,18 +1296,17 @@ void MainWindow::on_action_startMeasure_triggered()
     settings.setValue("Global/DetectType", mCurrentDetectorType);
     QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
 
+    mPCIeCommSdk.setMeasureMode(mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle);
+
     // 发送指令集
     //mPCIeCommSdk.writeStartMeasure();
     mPCIeCommSdk.setCaptureParamter(ui->comboBox_horCamera->currentIndex() + 1,
                                     ui->comboBox_verCamera->currentIndex() + 12,
-                                    ui->spinBox_time1->value(),
-                                    ui->spinBox_time2->value(),
-                                    ui->spinBox_time3->value());
+                                    QVector<quint32>() <<ui->spinBox_time1->value() << ui->spinBox_time2->value() << ui->spinBox_time3->value());
 
-    mPCIeCommSdk.test();
     mPCIeCommSdk.startAllCapture(fileSaveDir,
-                             ui->spinBox_timeLength->value(),
-                             ui->lineEdit_shotNum->text());
+                            ui->spinBox_timeLength->value(),
+                            ui->lineEdit_shotNum->text());
 
     ui->action_startMeasure->setEnabled(false);
     ui->action_stopMeasure->setEnabled(true);
@@ -1696,7 +1726,7 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
-        settings.setValue("Global/DetType", "LSD");
+        settings.setValue("Global/DetectType", OfflineWindow::dtLSD);
 
         updateTableRowHidden();
     }
@@ -1728,7 +1758,7 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
         this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
-        settings.setValue("Global/DetType", "PSD");
+        settings.setValue("Global/DetectType", OfflineWindow::dtPSD);
 
         updateTableRowHidden();
     }
@@ -1760,7 +1790,7 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
         this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
-        settings.setValue("Global/DetType", "LBD");
+        settings.setValue("Global/DetectType", OfflineWindow::dtLBD);
 
         updateTableRowHidden();
     }
@@ -1871,35 +1901,62 @@ void MainWindow::replyGammaSpectrum(quint8 timestampIndex, quint8 cameraIndex , 
 
 void MainWindow::on_pushButton_preview_clicked()
 {
+    auto joinFilename = [=](const int& cameraIndex)->QString
     {
+        QString filename;
+
+        switch (cameraIndex){
+        case 1: filename = "1A"; break;
+        case 2: filename = "1A"; break;
+        case 3: filename = "1A"; break;
+        case 4: filename = "1B"; break;
+        case 5: filename = "1B"; break;
+        case 6: filename = "1B"; break;
+
+        case 7: filename = "2A"; break;
+        case 8: filename = "2A"; break;
+        case 9: filename = "2A"; break;
+        case 10: filename = "2B"; break;
+        case 11: filename = "2B"; break;
+        case 12: filename = "2B"; break;
+
+        case 13: filename = "3A"; break;
+        case 14: filename = "3A"; break;
+        case 15: filename = "3A"; break;
+        case 16: filename = "3B"; break;
+        case 17: filename = "3B"; break;
+        case 18: filename = "3B"; break;
+        }
+
+        return filename;
+    };
+
+
+    {
+        QVector<quint32> tmMeasure = QVector<quint32>() << ui->spinBox_time1->value() << ui->spinBox_time2->value() << ui->spinBox_time3->value();
         // 发送指令集
         mPCIeCommSdk.setCaptureParamter(ui->comboBox_horCamera->currentIndex() + 1,
                                         ui->comboBox_verCamera->currentIndex() + 12,
-                                        ui->spinBox_time1->value(),
-                                        ui->spinBox_time2->value(),
-                                        ui->spinBox_time3->value());
+                                        tmMeasure);
 
-        qint32 mTimestampMs[] = {ui->spinBox_time1->value(),
-                                  ui->spinBox_time2->value(),
-                                  ui->spinBox_time3->value()};
-        for (int i=0; i<=2; ++i){
-            quint32 fileIndex = (float)(mTimestampMs[i] + 50-1)/ 50;
+        for (int i=0; i<tmMeasure.size(); ++i){
+            quint32 fileIndex = (float)(tmMeasure[i] + PACKET_TIMELENGTH-1)/ PACKET_TIMELENGTH;
 
             //t1-水平相机
             {
                 //每个文件里面对应的是4个通道，根据通道号判断是第几个文件
                 quint32 cameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
                 quint32 deviceIndex = (cameraIndex + 3) / 4;
-                QString filePath = QString("%1/%2data%3.bin").arg(this->mCurrentSavePath).arg(deviceIndex).arg(fileIndex);
-                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, i+1, mTimestampMs[i]%50, filePath);
+                QString filePath = QString("%1/%2spec%3.bin").arg(this->mCurrentSavePath).arg(joinFilename(cameraIndex)).arg(fileIndex);
+                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, i+1, tmMeasure[i]%PACKET_TIMELENGTH, filePath);
             }
 
             //t1-垂直相机
             {
                 quint32 cameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
                 quint32 deviceIndex = (ui->comboBox_verCamera->currentIndex() + 12) / 4;
-                QString filePath = QString("%1/%2data%3.bin").arg(this->mCurrentSavePath).arg(deviceIndex).arg(fileIndex);
-                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, i+1, mTimestampMs[i]%50, filePath);
+                QString filePath = QString("%1/%2spec%3.bin").arg(this->mCurrentSavePath).arg(joinFilename(cameraIndex)).arg(fileIndex);
+                mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex, i+1, tmMeasure[i]%PACKET_TIMELENGTH, filePath);
             }
         }
     }
@@ -2124,3 +2181,21 @@ void MainWindow::on_action_reset_triggered()
     mPCIeCommSdk.reset();
 }
 
+
+void MainWindow::on_pushButton_clicked()
+{
+    //mPCIeCommSdk.test();
+    mPCIeCommSdk.setMeasureMode(PCIeCommSdk::mmContinue);
+    mContinueMeasuerCount = 0;
+    mContinueMeasuerFailCount = 0;
+    mEnableContinueMeasuer = true;
+    ui->pushButton->setEnabled(false);
+    ui->pushButton_2->setEnabled(true);
+    emit ui->action_startMeasure->trigger();
+}
+
+
+void MainWindow::on_pushButton_2_clicked()
+{
+    mEnableContinueMeasuer = false;
+}

@@ -133,6 +133,10 @@ private slots:
 
     void on_action_reset_triggered();
 
+    void on_pushButton_clicked();
+
+    void on_pushButton_2_clicked();
+
 private:
     Ui::MainWindow *ui;
     CommHelper* mCommHelper = nullptr;
@@ -154,6 +158,9 @@ private:
     QColor mThemeColor = QColor(255,255,255);
 
     class QGoodWindowHelper *mainWindow = nullptr;
+    bool mEnableContinueMeasuer = false;
+    int mContinueMeasuerCount = 0;
+    int mContinueMeasuerFailCount = 0;
 };
 
 #endif // MAINWINDOW_H

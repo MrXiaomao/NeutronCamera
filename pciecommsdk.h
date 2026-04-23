@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QDebug>
+#include "pcieiocpreader.h"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -102,19 +103,19 @@ public:
 
     Q_SIGNAL void reportFileWriteElapsedtime(quint32,quint32);
     Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
-    Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,const QByteArray& data);
+    Q_SIGNAL void reportCaptureSpectrumData(quint8,bool,quint32,const QByteArray& data);
 
     Q_SLOT void replyThreadExit();
-    Q_SLOT void replyCaptureData(const QByteArray& waveformData, const QByteArray& spectrumData);
+    Q_SLOT void replyCaptureData(bool isDDR1, quint8 packref, const QByteArray& waveformData, const QByteArray& spectrumData);
 
     /**
     * @function name: reverseArray
-    * @brief 对数据每16字节做个反转
+    * @brief 对数据每12字节做个反转
     * @param[in]        data
     * @param[out]       data
     * @return           void
     */
-    QByteArray reverseArray(const QByteArray& data);
+    static QByteArray reverseArray(const QByteArray& data, quint8 offset = 12);
 
 private:
     quint32 mCardIndex;//设备名称
@@ -129,6 +130,7 @@ private:
     QWaitCondition mCondition;
 };
 
+#include <cstring>
 class CaptureThread : public QThread {
     Q_OBJECT
 public:
@@ -156,6 +158,9 @@ public:
 
     void run() override;
     void delay(quint32 us);
+    bool checkDataError();
+    void printDataError();
+    bool dataExistError();
 
     void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds);
 
@@ -187,7 +192,7 @@ public:
     * @param[out]       data
     * @return           void
     */
-    bool readWaveformData(quint8 index, const QByteArray& data, const int offset = 0);
+    bool readWaveformData(quint8 index, const QByteArray& data, const quint64 offset);
 
     /**
     * @function name:readSpectrumData
@@ -196,7 +201,9 @@ public:
     * @param[out]       data
     * @return           bool
     */
-    bool readSpectrumData(quint8 index, const QByteArray& data, const int offset = 0);
+    bool readSpectrumData(quint8 index, const QByteArray& data, const quint64 offset);
+
+    bool readDataAsync(HANDLE fd, quint64 offset, const QByteArray& data);
 
     HANDLE userHandle() const{
         return mUserHandle;
@@ -204,42 +211,49 @@ public:
 
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
     Q_SIGNAL void reportThreadExit(quint32);
-    Q_SIGNAL void reportCaptureData(const QByteArray& waveformData, const QByteArray& spectrumData);
+    Q_SIGNAL void reportCaptureData(bool isDDR1, quint8 packref, const QByteArray& waveformData, const QByteArray& spectrumData);
     Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
-    Q_SIGNAL void reportCaptureSpectrumData(quint8,quint32,const QByteArray& data);
+    Q_SIGNAL void reportCaptureSpectrumData(quint8,bool,quint32,const QByteArray& data);
     Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
     Q_SIGNAL void reportFileWriteElapsedtime(quint32, quint32);
-    Q_SIGNAL void reportCaptureFinished(quint32);
+    Q_SIGNAL void reportCaptureFinished(quint32, bool);
 
 private:
     DataCachPoolThread* mDataCachPoolThread = nullptr;
     quint32 mIsDDR1 = true;//设备名称
     quint32 mCardIndex;//设备名称
+#if ENABLE_IOCP
+    PcieIocpReader* mPcieReader = nullptr;
+#else
     HANDLE mDDRHandle[4];//设备句柄
+#endif // ENABLE_IOCP
     HANDLE mRAMHandle[4];//RAM句柄
     HANDLE mUserHandle;//用户句柄
 
     QString mSaveFilePath;//保存路径
-    quint32 mCaptureCount = 1;
+    quint32 mCaptureCount = 1;//需要采集的总包数据
+    quint32 mCapturedRef = 1;//已经采集的包数
     quint32 mTimeout = 5000;//超时微秒
-
+    bool mIsException = false;
     std::atomic<quint32> mTaskingRef = 0;
-    std::atomic<quint32> mCapturedRef = 0;
     QVector<QByteArray> mDDRWaveformDatas;
     QVector<QByteArray> mRAMSpectrumDatas;
 
     QMutex mMutex;
     QWaitCondition mCondition;
-    std::atomic<bool> mIsPaused = false;
+    std::atomic<bool> mIsPaused = true;
     std::atomic<bool> mIsStopped = false;
     QMutex mEventMutex[2];
     QWaitCondition mInterruptEvent[2];
 
     SharedData mIrq1Trigger, mIrq2Trigger;
+    bool mDataError = false;
+    qint8 mErrorStart = 0;
+    QMutex mReadLocker;    
 };
 
-#define CAMNUMBER_DDR_PER   4   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
-#define DETNUMBER_PCIE_PER  8   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
+#define CAMNUMBER_DDR_PER   3   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
+#define DETNUMBER_PCIE_PER  6   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define DETNUMBER_MAX       18  // 探测器有效数只用到了18路（11路水平+7路垂直）
 #define PACKET_TIMELENGTH   40 // 每个文件对应采集时间40ms
 class PCIeCommSdk : public QObject
@@ -255,8 +269,8 @@ public:
     };
 
     enum CaptureTime {
-        oldCaptureTime = 50,//50ms 单个文件对应采集时间，旧版数据采集协议
-        newCaptureTime = 66,//66ms 单个文件对应采集时间，新版数据采集协议
+        oldCaptureTime = 66,//66ms 单个文件对应采集时间，旧版数据采集协议
+        newCaptureTime = 40,//40ms 单个文件对应采集时间，新版数据采集协议
     };
 
     enum SpectrumType {
@@ -274,8 +288,8 @@ public:
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
 
-    Q_SLOT void replyCaptureWaveformData(quint8, quint32, const QByteArray&);
-    Q_SLOT void replyCaptureSpectrumData(quint8, quint32, const  QByteArray&);
+    Q_SLOT void replyCaptureWaveformData(quint8, bool, quint32, const QByteArray&);
+    Q_SLOT void replyCaptureSpectrumData(quint8, bool, quint32, const  QByteArray&);
     Q_SLOT void replySettingFinished();
 
     Q_SLOT void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
@@ -285,7 +299,8 @@ public:
 
     Q_SLOT void init(); /* 初始化 */
     Q_SLOT void reset();/* 重置 */
-    Q_SLOT void test();
+    Q_SLOT bool test();
+    Q_SLOT void printDataError();
 
     /*获取设备数量*/
     quint32 numberOfDevices();
@@ -297,15 +312,17 @@ public:
     void initCaptureThreads();
 
     /*设置采集参数，离线*/
-    void setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex, quint32 timeLength, quint32 time1);
-    /*设置采集参数，在线线*/
-    void setCaptureParamter(quint8 horCameraIndex, quint8 verCameraIndex, quint32 time1, quint32 time2, quint32 time3);
+    void setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex, quint32 timeLength, quint32 tmMeasure);
+    /*设置采集参数，在线*/
+    void setCaptureParamter(quint8 horCameraIndex, quint8 verCameraIndex, QVector<quint32> tmMeasure);
 
     bool openHistoryFile(QString filename);
     
-    void analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLength, quint32 remainTime, QString filePath);
+    bool analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLength, quint32 remainTime, QString filePath);
     
     void analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
+
+    bool analyzeHistoryCpsData(quint32 timeLength, quint32 remainTime, QString filePath, std::function<void(QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>>)> callback);
 
     /*指令集*/
     //死时间
@@ -353,11 +370,18 @@ public:
 
     void writeCommand(QByteArray& data);
 
-    inline static bool writeData(HANDLE hFile, quint64 offset, const QByteArray& data);
+    inline static bool writeData(quint8 cardIndex, HANDLE hFile, quint64 offset, const QByteArray& data);
     inline static bool readData(HANDLE hFile, quint64 offset, const QByteArray& data);
 
-    HANDLE getHandle(quint8 cardIndex, quint32 flags = GENERIC_READ | GENERIC_WRITE);//O_RDWR
-    static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE);//O_RDWR
+    HANDLE getHandle(quint8 cardIndex, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
+    static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
+
+    enum MeasureMode{
+        mmContinue,
+        mmSingle,
+    };
+    void setMeasureMode(MeasureMode mm = mmSingle){mMeasureMode = mm;};
+
 signals:
 
 
@@ -372,12 +396,11 @@ private:
     quint8 mCameraIndex = 1;/*相机序号*/
     quint8 mHorCameraIndex = 1;/*在线分析-水平相机序号*/
     quint8 mVerCameraIndex = 12;/*在线分析-垂直相机序号*/
-    quint32 mTimestampMs1 = 10;/*分析时刻，单位ms*/
-    quint32 mTimestampMs2 = 20;/*分析时刻，单位ms*/
-    quint32 mTimestampMs3 = 30;/*分析时刻，单位ms*/
+    QVector<quint32> mTimestampMs;/*分析时刻，单位ms*/
     quint32 mRemainTime = 0;/*剩余时间,单位ms*/
     CaptureTime mCaptureTime = oldCaptureTime;/*采集时间，单位ms*/
     quint32 mTimeLength = 1; /*要提取的波形时间长度，单位ms，默认1ms*/
+    MeasureMode mMeasureMode = mmSingle;
 };
 
 #endif // PCIECOMMSDK_H

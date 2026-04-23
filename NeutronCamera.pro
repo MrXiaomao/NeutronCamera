@@ -1,4 +1,5 @@
-QT       += core gui sql network concurrent datavisualization 3dextras
+QT       += core gui sql network concurrent
+#QT       += datavisualization 3dextras
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -10,9 +11,13 @@ CONFIG += c++17
 DEFINES += _VER_2_0
 DEFINES += _VER_2_1=1
 DEFINES += ENABLE_DDR2=1
+#DEFINES += NORAM=1
+DEFINES += NO_READ_REGISTER=0   #不读寄存器值
+DEFINES += ENABLE_IOCP=0   #启用IO完成端口
 
 SOURCES += \
     commhelper.cpp \
+    dataanalysisworker.cpp \
     datacompresswindow.cpp \
     detsettingwindow.cpp \
     globalsettings.cpp \
@@ -22,18 +27,21 @@ SOURCES += \
     netsettingwindow.cpp \
     offlinewindow.cpp \
     pciecommsdk.cpp \
+    pcieiocpreader.cpp \
     qgaugepanel.cpp \
     qprogressindicator.cpp \
     switchbutton.cpp
 
 HEADERS += \
     commhelper.h \
+    dataanalysisworker.h \
     datacompresswindow.h \
     detsettingwindow.h \
     n_gamma.h \
     netsettingwindow.h \
     offlinewindow.h \
     pciecommsdk.h \
+    pcieiocpreader.h \
     qgaugepanel.h \
     qlitethread.h \
     globalsettings.h \
@@ -158,7 +166,7 @@ include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
 # 指定要使用的预编译头文件
 # PRECOMPILED_HEADER += stable.h
 
-win32: LIBS += -lsetupapi
+win32: LIBS += -lsetupapi -lwinmm
 
 #qwt3D
 #指定Qwt3D库的位置

@@ -163,21 +163,37 @@
           <string>文件基本信息</string>
          </property>
          <layout class="QGridLayout" name="gridLayout_2">
-          <item row="4" column="1">
-           <widget class="QLineEdit" name="lineEdit_fileSize">
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="label_2">
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_12">
             <property name="text">
-             <string>压缩后文件数据大小（GB）：</string>
+             <string>二进制文件数目：</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
             </property>
            </widget>
           </item>
-          <item row="6" column="0" colspan="2">
+          <item row="3" column="0">
+           <widget class="QLabel" name="label_3">
+            <property name="text">
+             <string>压缩前文件数据大小（GB）：</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_5">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>文件来源：</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0" colspan="2">
            <widget class="QWidget" name="widget" native="true">
             <layout class="QHBoxLayout" name="horizontalLayout_3">
              <property name="topMargin">
@@ -227,43 +243,6 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="0">
-           <widget class="QLabel" name="label_3">
-            <property name="text">
-             <string>压缩前文件数据大小（GB）：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="3" column="1">
-           <widget class="QLineEdit" name="lineEdit_binTotal">
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="label_12">
-            <property name="text">
-             <string>二进制文件数目：</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="0">
-           <widget class="QLabel" name="label_5">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>文件来源：</string>
-            </property>
-           </widget>
-          </item>
           <item row="1" column="0" colspan="2">
            <widget class="QTextBrowser" name="textBrowser_filepath">
             <property name="sizePolicy">
@@ -292,23 +271,24 @@
             </property>
            </widget>
           </item>
-          <item row="5" column="0">
-           <widget class="QLabel" name="label_16">
-            <property name="text">
-             <string>单个文件对应测量时长(ms)：</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+          <item row="4" column="1">
+           <widget class="QLineEdit" name="lineEdit_fileSize">
+            <property name="readOnly">
+             <bool>true</bool>
             </property>
            </widget>
           </item>
-          <item row="5" column="1">
-           <widget class="QSpinBox" name="spinBox_oneFileTime">
-            <property name="maximum">
-             <number>100</number>
+          <item row="4" column="0">
+           <widget class="QLabel" name="label_2">
+            <property name="text">
+             <string>压缩后文件数据大小（GB）：</string>
             </property>
-            <property name="value">
-             <number>66</number>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QLineEdit" name="lineEdit_binTotal">
+            <property name="readOnly">
+             <bool>true</bool>
             </property>
            </widget>
           </item>
@@ -364,7 +344,7 @@
           <item row="1" column="0">
            <widget class="QLabel" name="label_10">
             <property name="text">
-             <string>时间起点(ms)：</string>
+             <string>时间终点(ms)：</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -571,7 +551,7 @@
      <x>0</x>
      <y>0</y>
      <width>966</width>
-     <height>22</height>
+     <height>17</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">

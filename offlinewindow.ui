@@ -299,7 +299,7 @@
     <item>
      <widget class="QStackedWidget" name="centralVboxStackedWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
        <layout class="QGridLayout" name="gridLayout_4">
@@ -390,6 +390,7 @@
             </item>
            </layout>
           </widget>
+          <widget class="QWidget" name="spectroMeterPageInfoWidget_3"/>
          </widget>
         </item>
        </layout>
@@ -419,7 +420,6 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="spectroMeterPageInfoWidget_3D"/>
       <widget class="QWidget" name="spectroMeterPageInfoWidget_LBD">
        <layout class="QVBoxLayout" name="verticalLayout_11">
         <property name="spacing">
@@ -474,70 +474,7 @@
           <string>基本信息</string>
          </property>
          <layout class="QGridLayout" name="gridLayout_2">
-          <item row="0" column="0">
-           <widget class="QLabel" name="label_5">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="text">
-             <string>文件来源：</string>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="0">
-           <widget class="QLabel" name="label">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>157</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="text">
-             <string>单个文件对应测量时长：</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0" colspan="2">
-           <widget class="QTextBrowser" name="textBrowser_filepath">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>60</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>16777215</width>
-              <height>80</height>
-             </size>
-            </property>
-            <property name="verticalScrollBarPolicy">
-             <enum>Qt::ScrollBarAlwaysOff</enum>
-            </property>
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item row="5" column="0" colspan="2">
+          <item row="4" column="0" colspan="2">
            <widget class="QWidget" name="widget_3" native="true">
             <property name="minimumSize">
              <size>
@@ -622,32 +559,45 @@
             </layout>
            </widget>
           </item>
-          <item row="2" column="1">
-           <widget class="QComboBox" name="cmb_fileTime">
+          <item row="1" column="0" colspan="2">
+           <widget class="QTextBrowser" name="textBrowser_filepath">
             <property name="sizePolicy">
-             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+             <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
             </property>
-            <property name="currentIndex">
-             <number>2</number>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>60</height>
+             </size>
             </property>
-            <item>
-             <property name="text">
-              <string>66ms</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>50ms</string>
-             </property>
-            </item>
-            <item>
-             <property name="text">
-              <string>40ms</string>
-             </property>
-            </item>
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>80</height>
+             </size>
+            </property>
+            <property name="verticalScrollBarPolicy">
+             <enum>Qt::ScrollBarAlwaysOff</enum>
+            </property>
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_5">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>文件来源：</string>
+            </property>
            </widget>
           </item>
          </layout>
@@ -1334,7 +1284,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>18</height>
+     <height>17</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -1398,7 +1348,7 @@
    <addaction name="action_analyze"/>
    <addaction name="action_waveform"/>
    <addaction name="action_ngamma"/>
-   <addaction name="action_3dSurface"/>
+   <addaction name="action_cps"/>
    <addaction name="separator"/>
    <addaction name="action_exit"/>
   </widget>
@@ -1591,7 +1541,7 @@
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_3dSurface">
+  <action name="action_cps">
    <property name="checkable">
     <bool>true</bool>
    </property>

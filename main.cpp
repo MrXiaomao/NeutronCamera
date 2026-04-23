@@ -59,9 +59,9 @@ int main(int argc, char *argv[])
     // QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps); // 使用高DPI位图
     // QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QGoodWindow::setup();
-    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
-    QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
-    QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
+    //QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
+    //QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar);
+    //QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
     QApplication a(argc, argv);
@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     //QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
 
     GlobalSettings settings;
-    if(settings.value("Global/Options/enableNativeUI",false).toBool()) {
+    if(settings.value("Global/Options/enableNativeUI",true).toBool()) {
         QApplication::setAttribute(Qt::AA_DontUseNativeDialogs,false);
         QApplication::setAttribute(Qt::AA_DontUseNativeMenuBar,false);
         QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings,false);
