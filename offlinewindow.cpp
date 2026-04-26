@@ -683,7 +683,7 @@ void OfflineWindow::ngammaFilter()
     qint64 totalWaveExtractTime = 0;
     int processedFileCount = 0;
 
-    QVector<std::array<qint16, 512>> ch_all_valid_wave;
+    QVector<std::array<qint16, 516>> ch_all_valid_wave;
 
     // === 读盘-计算流水线：尽量让磁盘持续顺序读 ===
     QThreadPool* pool = QThreadPool::globalInstance();
@@ -771,7 +771,7 @@ void OfflineWindow::ngammaFilter()
 
         auto cb = [&](quint32 /*packerCurrentTime*/,
                     quint8 /*channelIdx*/,
-                      QVector<std::array<qint16, 512>>& wave_ch) {
+                      QVector<std::array<qint16, 516>>& wave_ch) {
             QMutexLocker locker(&mergeMutex);
             ch_all_valid_wave.append(wave_ch);
         };
@@ -826,13 +826,13 @@ void OfflineWindow::ngammaFilter()
             .arg(totalWaveExtractTime / 1000.0, 0, 'f', 2),
         QtInfoMsg
     );
-    emit reporWriteLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()),QtInfoMsg);
+    emit reporWriteLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
 
     n_gamma neutron;
     //计算PSD
     QElapsedTimer psdTimer;
     psdTimer.start();
-    emit reporWriteLog(QString("开始计算PSD，有效波形数量：%1").arg(ch_all_valid_wave.size()),QtInfoMsg);
+    emit reporWriteLog(QString("开始计算PSD，有效波形数量：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
     QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);
     qint64 psdTime = psdTimer.elapsed();
     emit reporWriteLog(QString("PSD计算耗时：%1 ms (%2 秒)，得到 %2 个数据点").arg(psdTime).arg(psdTime / 1000.0, 0, 'f', 2).arg(data.size()),QtInfoMsg);
@@ -995,42 +995,22 @@ void OfflineWindow::wafeformShow()
 // 计数率统计
 void OfflineWindow::cpsStatistics()
 {
-    // 从 RadioButton 提取单个文件包对应的时间长度（单位ms）
-    // radioButton 对应 1ms, radioButton_2 对应 10ms
     //提取有效波形参数
-    int threshold = ui->spinBox_threshold->value();
-    int timeLength = 1; // 默认值 1ms
-    if (ui->radioButton_2->isChecked()) {
-        timeLength = 10; // radioButton_2 选中时使用 10ms
-    } else if (ui->radioButton->isChecked()) {
-        timeLength = 1; // radioButton 选中时使用 1ms
-    }
+    int timeLength = ui->spinBox_time1->value(); // 默认值 1ms
+    int timeStart = ui->spinBox_startT->value(); // 开始时刻
+    int timeStop = ui->spinBox_endT->value(); // 截止时刻
 
-    // 从 Co单个文件包对应的时间长度（单位ms）
-    int time_per = 40;
-
-    //由于每个文件的能谱时长是固定的，所有这里需要根据时刻计算出对应的是第几个文件
-    qint32 time1 =ui->spinBox_time1->value();
-    quint32 start_fileIndex = (float)(ui->spinBox_time1->value() + time_per)/ time_per;
-    quint32 end_fileIndex = (float)(ui->spinBox_endT->value() + time_per)/ time_per;
-
-    QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>> mapPairs;
-    for (int fileIndex = start_fileIndex; fileIndex < end_fileIndex; ++fileIndex){
-        //每个文件里面对应的是3个通道，根据通道号判断是第几个文件
-        for (quint32 cameraIndex = 1; cameraIndex <= 18; ++cameraIndex){
-            QString filePath = QString("%1/%2data%3.bin").arg(ui->textBrowser_filepath->toPlainText()).arg(joinFilename(cameraIndex)).arg(fileIndex);
-            if (QFileInfo::exists(filePath) && !mPCIeCommSdk.analyzeHistoryCpsData(timeLength, time1 / time_per, filePath, [&](QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>> mapPair){
-                    for (auto iter = mapPair.begin(); iter!=mapPair.end(); ++iter){
-                        mapPairs[iter.key()].append(iter.value());
-                    }
-                }))
-            {
-                QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
+    // 查找目录下的h5文件
+    QString h5FilePath = "D:/data/中子相机样本数据（新）/2data27a/waveform_data.h5";
+    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs;
+    if (QFileInfo::exists(h5FilePath) && !mPCIeCommSdk.analyzeHistoryCpsData(timeLength, timeStart, timeStop, h5FilePath, [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPair){
+            for (auto iter = mapPair.begin(); iter!=mapPair.end(); ++iter){
+                mapPairs[iter.key()] = iter.value();
             }
-        }
+        }))
+    {
+        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
     }
-
-
 }
 
 void OfflineWindow::on_action_exit_triggered()

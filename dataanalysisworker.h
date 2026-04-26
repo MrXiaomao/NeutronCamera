@@ -90,7 +90,7 @@ public:
     // pre_points: 触发点之前的点数
     // post_points: 触发点之后的点数
     // 返回: 所有提取的波形，每个波形是固定长度512的数组（优化内存使用）
-    static QVector<std::array<qint16, 512>>/*波形数据*/ overThreshold(const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points);
+    static QVector<std::array<qint16, 516>>/*波形数据*/ overThreshold(quint32 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points);
 
     void getValidWave();
 
@@ -100,9 +100,14 @@ public:
     // wave_ch0, wave_ch1, wave_ch2, wave_ch3: 4个通道的波形数据
     // 返回: 是否成功写入
     static bool writeWaveformToHDF5(const QString& filePath, int boardNum,
-                                    const QVector<std::array<qint16, 512>>& wave_ch0,
-                                    const QVector<std::array<qint16, 512>>& wave_ch1,
-                                    const QVector<std::array<qint16, 512>>& wave_ch2);
+                                    const QVector<std::array<qint16, 516>>& wave_ch0,
+                                    const QVector<std::array<qint16, 516>>& wave_ch1,
+                                    const QVector<std::array<qint16, 516>>& wave_ch2);
+
+    // 波形文件头部信息(开始时刻、结束时刻、阈值)
+    static bool writeWaveformHeadToHDF5(const QString& filePath, quint32 packerStartTime, quint32 packerEndTime, quint32 threshold);
+    static bool readWaveformHeadFromHDF5(const QString& filePath, quint32& packerStartTime, quint32& packerEndTime, quint32& threshold);
+
 public slots:
     void startAnalysis();
     void cancelAnalysis();
@@ -182,7 +187,7 @@ public:
                                        int post_points,
                                        std::function<void(quint32 packerCurrentTime,
                                                           quint8 channelIndex,
-                                                          QVector<std::array<qint16, 512>>&)> cb,
+                                                          QVector<std::array<qint16, 516>>&)> cb,
                                        std::function<void()> onFinished = {})
         : mJob(std::move(job))
         , mCameraIndex(cameraIndex)
@@ -217,19 +222,19 @@ public:
         if (channelIndex == 1 || mCameraIndex == 0) {
             qint16 b = DataAnalysisWorker::calculateBaseline(ch0);
             DataAnalysisWorker::adjustDataWithBaseline(ch0, b, deviceIndex, 1);
-            auto wave = DataAnalysisWorker::overThreshold(ch0, 1, mThreshold, mPre, mPost);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch0, 1, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 1, wave);
         }
         if (channelIndex == 2 || mCameraIndex == 0) {
             qint16 b = DataAnalysisWorker::calculateBaseline(ch1);
             DataAnalysisWorker::adjustDataWithBaseline(ch1, b, deviceIndex, 2);
-            auto wave = DataAnalysisWorker::overThreshold(ch1, 2, mThreshold, mPre, mPost);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch1, 2, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 2, wave);
         }
         if (channelIndex == 3 || mCameraIndex == 0) {
             qint16 b = DataAnalysisWorker::calculateBaseline(ch2);
             DataAnalysisWorker::adjustDataWithBaseline(ch2, b, deviceIndex, 3);
-            auto wave = DataAnalysisWorker::overThreshold(ch2, 3, mThreshold, mPre, mPost);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch2, 3, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 3, wave);
         }
 
@@ -242,7 +247,7 @@ private:
     int mThreshold = 0;
     int mPre = 20;
     int mPost = 491;
-    std::function<void(quint32, quint8, QVector<std::array<qint16, 512>>&)> mCallback;
+    std::function<void(quint32, quint8, QVector<std::array<qint16, 516>>&)> mCallback;
     std::function<void()> mOnFinished;
 };
 

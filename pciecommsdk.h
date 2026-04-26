@@ -322,7 +322,7 @@ public:
     
     void analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
 
-    bool analyzeHistoryCpsData(quint32 timeLength, quint32 remainTime, QString filePath, std::function<void(QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>>)> callback);
+    bool analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms*/, quint32 timeStart/*开始时刻ms*/, quint32 timeStop/*结束时刻ms*/, QString filePath/*H5文件路径*/, std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)> callback);
 
     /*指令集*/
     //死时间

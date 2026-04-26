@@ -1660,7 +1660,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>17</height>
+     <height>18</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -1670,6 +1670,7 @@
     <addaction name="action_open"/>
     <addaction name="separator"/>
     <addaction name="action_data_compress"/>
+    <addaction name="action_cps_statistics"/>
     <addaction name="separator"/>
     <addaction name="action_exit"/>
    </widget>
@@ -1757,13 +1758,13 @@
      <normaloff>:/resource/image/compress.png</normaloff>:/resource/image/compress.png</iconset>
    </property>
    <property name="text">
-    <string>压缩数据(&amp;C)...</string>
+    <string>离线版-压缩数据</string>
    </property>
    <property name="iconText">
-    <string>压缩数据</string>
+    <string>离线版-压缩数据</string>
    </property>
    <property name="toolTip">
-    <string>压缩数据</string>
+    <string>离线版-压缩数据</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
@@ -1775,13 +1776,13 @@
      <normaloff>:/open.png</normaloff>:/open.png</iconset>
    </property>
    <property name="text">
-    <string>离线数据分析(&amp;O)...</string>
+    <string>离线版-波形数据分析</string>
    </property>
    <property name="iconText">
-    <string>离线数据分析</string>
+    <string>离线版-波形数据分析</string>
    </property>
    <property name="toolTip">
-    <string>离线数据分析</string>
+    <string>离线版-波形数据分析</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
@@ -2071,6 +2072,18 @@
    </property>
    <property name="text">
     <string>复  位</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_cps_statistics">
+   <property name="icon">
+    <iconset resource="lresource.qrc">
+     <normaloff>:/resource/image/3Dsurface.png</normaloff>:/resource/image/3Dsurface.png</iconset>
+   </property>
+   <property name="text">
+    <string>数据分析-计数率统计</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

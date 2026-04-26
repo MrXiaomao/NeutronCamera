@@ -615,62 +615,126 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLen
     return true;
 }
 
-bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength,
-                                        quint32 remainTime,
-                                        QString filePath,
-                                        std::function<void(QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>>)> callback)
+#include "globalsettings.h"
+bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms*/,
+                                        quint32 timeStart/*开始时刻ms*/,
+                                        quint32 timeStop/*结束时刻ms*/,
+                                        QString filePath/*H5文件路径*/,
+                                        std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)> callback)
 {
     //根据通道号计算对应采集卡的第几通道
-    QVector<QVector<qint16>> ch;
-    ch.resize(3);
-    QVector<qint16> targetdata;
-    if (!DataAnalysisWorker::readBin3Ch_fast(filePath, ch[0], ch[1], ch[2], true)) {
-        // emit logMessage(QString("文件%1: 读取失败或文件不存在").arg(filePath), QtWarningMsg);
-        qDebug() << "文件" << filePath << "读取失败或文件不存在";
+    QTextCodec* gbk_codec = QTextCodec::codecForName("GBK");
+    QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
+    try {
+        H5::H5File file(filePathBytes.toStdString(), H5F_ACC_RDONLY);
+
+        for (int boardNum=1; boardNum<=6; ++boardNum){
+            // 创建或打开板卡组
+            QString boardGroupName = QString("Board%1").arg(boardNum);
+
+            H5::Group boardGroup;
+            htri_t existsGroup = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
+
+            if (existsGroup > 0) {
+                boardGroup = file.openGroup(boardGroupName.toStdString());
+
+                // 辅助函数：写入单个通道的数据集
+                auto readChannel = [&](const QString& datasetName, QVector<quint64>& timeTrigger) {
+                    htri_t existsDataset = H5Lexists(boardGroup.getId(), datasetName.toStdString().c_str(), H5P_DEFAULT);
+                    if (existsDataset){
+                        std::string ds = datasetName.toUtf8().constData();
+                        H5::DataSet dataset = boardGroup.openDataSet(ds);
+                        H5::DataSpace fileSpace = dataset.getSpace();
+
+                        // 校验维度
+                        int rank = fileSpace.getSimpleExtentNdims();
+                        if (rank != 2) return false;
+                        hsize_t dims[2];
+                        fileSpace.getSimpleExtentDims(dims, nullptr);
+                        const hsize_t totalRows = dims[0];
+
+                        std::vector<std::vector<int16_t>> outData;
+                        outData.resize(4);
+                        // 逐列选切片读取：每次选所有行 + 当前1列
+                        for (int colIdx = 0; colIdx < 4; colIdx++) {
+                            hsize_t offset[2] = {0, (hsize_t)colIdx};
+                            hsize_t count[2]  = {totalRows, 1}; // 一次读1列
+                            fileSpace.selectHyperslab(H5S_SELECT_SET, count, offset);
+
+                            H5::DataSpace memSpace(1, &totalRows); // 内存空间是一维，长度为总行数
+                            outData[colIdx].resize(totalRows);
+
+                            dataset.read(outData[colIdx].data(), H5::PredType::NATIVE_INT16, memSpace, fileSpace);
+                        }
+
+                        for (int rowIdx = 0; rowIdx < totalRows; ++rowIdx){
+                            quint64 timeMs = (static_cast<quint16>(outData[0][rowIdx])<<16 | static_cast<quint16>(outData[1][rowIdx]));
+                            quint64 timeNs = (static_cast<quint16>(outData[2][rowIdx])<<16 | static_cast<quint16>(outData[3][rowIdx]));
+                            timeTrigger.push_back((timeMs*1e6+timeNs)/1e6);
+                        }
+
+                        dataset.close();
+                    }
+                };
+
+                // 写入3个通道的数据
+                QVector<quint64> timeTrigger_ch[3];
+                readChannel("wave_ch0", timeTrigger_ch[0]);
+                readChannel("wave_ch1", timeTrigger_ch[1]);
+                readChannel("wave_ch2", timeTrigger_ch[2]);
+
+                //根据时间段统计计数率
+                QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair;
+                for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
+                    quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
+
+                    // 1.按照时间段和点位时间间隔分配计数点数组长度
+                    quint32 cpsTotal = (timeStop-timeStart)/timeLength;
+                    //cpsMapPair[cameraIndex]. reserve(cpsTotal);
+                    //初始化每个时间段内计数率为0
+                    for (quint16 intervalNo = 0; intervalNo < cpsTotal; ++intervalNo) {
+                        cpsMapPair[cameraIndex][timeStart + intervalNo * timeLength] = quint32(0);
+                    }
+
+                    // 2. 遍历所有输入数据，分桶统计
+                    for (qint32 x : timeTrigger_ch[cameraNo]) {
+                        cpsMapPair[cameraIndex][timeStart + (x-timeStart) / timeLength * timeLength] += 1;
+                        // int intervalIndex = (x - timeStart) / timeLength;
+                        // // 对应区间计数+1
+                        // if (intervalIndex<cpsTotal)
+                        //     cpsMapPair[cameraIndex][timeStart + intervalIndex * timeLength].second += 1;
+                        // else
+                        //     qDebug();
+                    }
+
+                }
+                boardGroup.close();
+                callback(cpsMapPair);
+            }
+        }
+
+        //emit reportCps(cameraIndex, cpsMapPair);
+
+        file.close();
+
+        return true;
+    } catch (H5::FileIException& error) {
+        // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
+        qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSetIException& error) {
+        qDebug() << "HDF5 DataSet Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSpaceIException& error) {
+        qDebug() << "HDF5 DataSpace Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::GroupIException& error) {
+        qDebug() << "HDF5 Group Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (...) {
+        qDebug() << "Unknown HDF5 Exception";
         return false;
     }
-
-    QString baseName = QFileInfo(filePath).baseName();
-    quint8 cardIndex = baseName.left(1).toShort();
-    bool isDDR1 = baseName.mid(1, 1) == "A" ? true : false;
-    quint8 fileIndex = baseName.mid(baseName.indexOf("data")+4).toInt();
-
-    //计算出是当前文件波形的第几个数据点
-    int index = remainTime * 1000 * 1000/ 2;
-    int point_num = timeLength * 1000 * 1000 / 2;
-    quint8 cameraFrom = (cardIndex==1 ? 1 : (cardIndex == 2 ? 7 : 13));
-    cameraFrom += (isDDR1 ? 0 : CAMNUMBER_DDR_PER);
-
-    //提取通道号的数据cameraNo
-    QVector<qint16> waveform;
-    QVector<quint32> cps;
-    quint16 threshold = 200;
-    QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>> cpsMapPair;
-    for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
-        quint8 cameraIndex = cameraFrom + cameraNo;
-
-        if (cameraNo == 0) {
-            //扣基线，调整数据
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
-            //根据相机序号计算出是第几块光纤卡
-            int board_index = (cameraIndex-1)/CAMNUMBER_DDR_PER+1;
-            DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, board_index, 1);
-        }
-
-        //统计计数率(40ms一个点）
-        quint32 cps_count = 0;
-        for (int i=0; i<ch[cameraNo].size(); ++i){
-            if (ch[cameraNo][i] > threshold)
-                cps_count++;
-        }
-
-        cpsMapPair[cameraIndex].push_back(qMakePair(40, cps_count));
-    }
-
-    callback(cpsMapPair);
-    //emit reportCps(cameraIndex, cpsMapPair);
-
-    return true;
 }
 
 #include "globalsettings.h"

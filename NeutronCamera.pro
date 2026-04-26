@@ -17,6 +17,7 @@ DEFINES += ENABLE_IOCP=0   #启用IO完成端口
 
 SOURCES += \
     commhelper.cpp \
+    cpsstatisticswindow.cpp \
     dataanalysisworker.cpp \
     datacompresswindow.cpp \
     detsettingwindow.cpp \
@@ -34,6 +35,7 @@ SOURCES += \
 
 HEADERS += \
     commhelper.h \
+    cpsstatisticswindow.h \
     dataanalysisworker.h \
     datacompresswindow.h \
     detsettingwindow.h \
@@ -50,6 +52,7 @@ HEADERS += \
     switchbutton.h
 
 FORMS += \
+    cpsstatisticswindow.ui \
     datacompresswindow.ui \
     detsettingwindow.ui \
     mainwindow.ui \
@@ -167,12 +170,3 @@ include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
 # PRECOMPILED_HEADER += stable.h
 
 win32: LIBS += -lsetupapi -lwinmm
-
-#qwt3D
-#指定Qwt3D库的位置
-win32: LIBS += -L$$PWD/../3rdParty/qwtplot3d/lib/ -lqwtplot3d
-#添加包含路径与依赖路径
-INCLUDEPATH += $$PWD/../3rdParty/qwtplot3d/include
-DEPENDPATH += $$PWD/../3rdParty/qwtplot3d/include
-#链接OpenGL库
-LIBS += -lopengl32 -lglu32

@@ -89,14 +89,14 @@ QVector<std::array<qint16, 512>> n_gamma::readWave(const std::string &fileName,
  * @param wave_CH1 输入的波形, 这个波形是经过过阈触发筛选后的波形，wave_CH1[pulseIndex][sampleIndex]：numPulses x 512
  * @return data[i] = (标定后能量, PSD 值)，每个元素是一个 QPair<float, float>，first 是能量，second 是 PSD 值
  */
-QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16, 512>> &wave_CH1)
+QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16, 516>> &wave_CH1)
 {
     if (wave_CH1.isEmpty())
         return {};
 
     const int numSamples = 512;    // 固定为 512
 
-    using Pulse = std::array<qint16, 512>;
+    using Pulse = std::array<qint16, 516>;
     // 后续要修改波形（baseline 扣除、筛选），拷贝一份
     QVector<Pulse> pulses = wave_CH1;
 
@@ -113,7 +113,7 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         QVector<Pulse> filtered;
         filtered.reserve(pulses.size());
 
-        for (int idx = 0; idx < pulses.size(); ++idx) {
+        for (int idx = 4/*前4个数据给触发时刻预留的，真实数据从第5个开始*/; idx < pulses.size(); ++idx) {
             const Pulse &p = pulses[idx];
 
             float peak = p[0];

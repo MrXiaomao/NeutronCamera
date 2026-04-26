@@ -552,9 +552,9 @@ void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16
 }
 
 // 提取超过阈值的有效波形数据
-QVector<std::array<qint16, 512>> DataAnalysisWorker::overThreshold(const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
+QVector<std::array<qint16, 516>> DataAnalysisWorker::overThreshold(quint32 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
 {
-    QVector<std::array<qint16, 512>> wave_ch;
+    QVector<std::array<qint16, 516>> wave_ch;
     QVector<int> cross_indices;
 
     // 丢弃可能不完整的包（比如半个波形）
@@ -597,15 +597,33 @@ QVector<std::array<qint16, 512>> DataAnalysisWorker::overThreshold(const QVector
             }
 
             // 创建固定大小的波形数组
-            std::array<qint16, 512> segment_data;
+            std::array<qint16, 516> segment_data;
+
+            // 前4个数据预留给波形触发时刻，0-1表示ms，2-3表示ns，正式数据从第5个开始
+            quint64 currentPackerTime = (quint64)packerStartTime*1e6/*ms转ns*/ + start_idx * 2/*每个点表示2ns*/;
+            segment_data[0] = (packerStartTime >> 16) & 0xFFFF;
+            segment_data[1] = packerStartTime & 0xFFFF;
+            segment_data[2] = ((start_idx*2) >> 16) & 0xFFFF;
+            segment_data[3] = (start_idx*2) & 0xFFFF;
+//            // 小端序拆分
+//            for (int i = 0; i < 4; ++i) {
+//                // 每次提取对应位置的16位，掩码0xFFFF保留低16位
+//                segment_data[i] = static_cast<qint16>((currentPackerTime >> (i * 16)) & 0xFFFF);
+//            }
+            /*
+                for (int i = 0; i < 4; ++i) {
+                    // 1. 先把有符号qint16转成无符号quint16，截断保留低16位，清除符号位影响
+                    quint16 unsigned16 = static_cast<quint16>(segment_data[i]);
+                    // 2. 再转成quint64后左移对应位数，拼接到结果上
+                    currentPackerTime |= static_cast<quint64>(unsigned16) << (i * 16);
+                }
+            */
 
             // 提取波形段（正好512点）
             for (int i = 0; i < 512; ++i) {
-                segment_data[2+i] = data[start_idx + i];//前2位给触发时刻预留的
+                segment_data[4+i] = data[start_idx + i];//前2位给触发时刻预留的
             }
 
-            segment_data[0] = start_idx >> 16;
-            segment_data[1] = start_idx & 0xFFFF;
             wave_ch.append(segment_data);
         }
         catch (...) {
@@ -668,6 +686,23 @@ void DataAnalysisWorker::getValidWave()
     int totalBoards = 6;
     int processedBoards = 0;
 
+    QStringList tempFileList[6];
+    for (auto& file : fileList){
+        if (file.startsWith("1A"))
+            tempFileList[0].append(file);
+        else if (file.startsWith("1B"))
+            tempFileList[0].append(file);
+        else if (file.startsWith("2A"))
+            tempFileList[0].append(file);
+        else if (file.startsWith("2B"))
+            tempFileList[0].append(file);
+        else if (file.startsWith("3A"))
+            tempFileList[0].append(file);
+        else if (file.startsWith("3B"))
+            tempFileList[0].append(file);
+    }
+
+    writeWaveformHeadToHDF5(hdf5FilePath, startTime, endTime, mThreshold);
     for(int deviceIndex=1; deviceIndex<=6; ++deviceIndex) {
         {
             QMutexLocker locker(&mMutex);
@@ -678,17 +713,26 @@ void DataAnalysisWorker::getValidWave()
             }
         }
 
+        // 这里需要判断对应的板卡是否存在数据
+        if (tempFileList[deviceIndex-1].size() == 0){
+            const int totalProgress = 1;
+            const int currentProgress = 1;
+            emit progressUpdated(currentProgress, totalProgress);
+            processedBoards++;
+            emit logMessage(QString("板卡%1无数据...").arg(deviceIndex), QtInfoMsg);
+            continue;
+        }
+
         emit logMessage(QString("开始处理板卡%1的数据...").arg(deviceIndex), QtInfoMsg);
 
         //对每个通道的有效波形数据进行合并
-        QVector<std::array<qint16, 512>> wave_ch0_all;
-        QVector<std::array<qint16, 512>> wave_ch1_all;
-        QVector<std::array<qint16, 512>> wave_ch2_all;
+        QVector<std::array<qint16, 516>> wave_ch0_all;
+        QVector<std::array<qint16, 516>> wave_ch1_all;
+        QVector<std::array<qint16, 516>> wave_ch2_all;
 
         int totalFiles = endFile - startFile;
         int processedFiles = 0;
 
-#if 1
         emit logMessage(QString("正在提取板卡%1的波形数据（读盘-计算流水线）...").arg(deviceIndex), QtInfoMsg);
 
         // 读盘线程：顺序读文件，尽量让磁盘持续满载
@@ -710,13 +754,13 @@ void DataAnalysisWorker::getValidWave()
         // 生产者：读文件 -> push 到队列
         std::atomic_bool producerDone{false};
         std::thread producer([&]() {
-            for (int i=0; i<mFileList.size(); ++i){
+            for (int i=0; i<tempFileList[deviceIndex-1].size(); ++i){
                 {
                     QMutexLocker locker(&mMutex);
                     if (mCancelled) break;
                 }
 
-                const QString fileName = mFileList[i];// QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
+                const QString fileName = tempFileList[deviceIndex-1][i];// QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
                 const QString filePath = QDir(dataDir).filePath(fileName);
                 int fileID = QFileInfo(fileName).baseName().mid(QFileInfo(fileName).baseName().indexOf("data")+4).toInt();
 
@@ -744,7 +788,7 @@ void DataAnalysisWorker::getValidWave()
                 FileJob job;
                 job.filePath = filePath;
                 job.deviceIndex = static_cast<quint8>(deviceIndex);
-                job.packerStartTime = static_cast<quint32>((fileID - 1) * timePerFile);
+                job.packerStartTime = static_cast<quint32>(fileID * timePerFile);
                 job.data = std::move(buf);
 
                 queue.push(std::move(job));
@@ -772,7 +816,7 @@ void DataAnalysisWorker::getValidWave()
                 }
             };
 
-            auto cb = [&](quint32 /*packerCurrentTime*/, quint8 channelIndex, QVector<std::array<qint16, 512>>& wave_ch) {
+            auto cb = [&](quint32 /*packerCurrentTime*/, quint8 channelIndex, QVector<std::array<qint16, 516>>& wave_ch) {
                 QMutexLocker locker(&mergeMutex);
                 if (channelIndex == 1)
                     wave_ch0_all.append(wave_ch);
@@ -825,54 +869,6 @@ void DataAnalysisWorker::getValidWave()
             emit analysisFinished(false, "分析已取消");
             return;
         }
-#else
-        for (int fileID = startFile; fileID < endFile; ++fileID) {
-            {
-                QMutexLocker locker(&mMutex);
-                if (mCancelled) {
-                    emit logMessage("分析已取消", QtWarningMsg);
-                    emit analysisFinished(false, "分析已取消");
-                    return;
-                }
-            }
-
-            QString fileName = QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
-            QString filePath = QDir(dataDir).filePath(fileName);
-            QVector<qint16> ch0, ch1, ch2, ch3;
-            if (!readBin4Ch_fast(filePath, ch0, ch1, ch2, ch3, true)) {
-                emit logMessage(QString("板卡%1 文件%2: 读取失败或文件不存在").arg(deviceIndex).arg(fileName), QtWarningMsg);
-                continue;
-            }
-            processedFiles++;
-
-            //扣基线，调整数据
-            qint16 baseline_ch = calculateBaseline(ch0);
-            adjustDataWithBaseline(ch0, baseline_ch, deviceIndex, 1);
-            qint16 baseline_ch2 = calculateBaseline(ch1);
-            adjustDataWithBaseline(ch1, baseline_ch2, deviceIndex, 2);
-            qint16 baseline_ch3 = calculateBaseline(ch2);
-            adjustDataWithBaseline(ch2, baseline_ch3, deviceIndex, 3);
-            qint16 baseline_ch4 = calculateBaseline(ch3);
-            adjustDataWithBaseline(ch3, baseline_ch4, deviceIndex, 4);
-
-            //提取有效波形
-            QVector<std::array<qint16, 512>> wave_ch0 = overThreshold(ch0, 1, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch1 = overThreshold(ch1, 2, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch2 = overThreshold(ch2, 3, threshold, pre_points, post_points);
-            QVector<std::array<qint16, 512>> wave_ch3 = overThreshold(ch3, 4, threshold, pre_points, post_points);
-
-            //合并有效波形
-            wave_ch0_all.append(wave_ch0);
-            wave_ch1_all.append(wave_ch1);
-            wave_ch2_all.append(wave_ch2);
-            wave_ch3_all.append(wave_ch3);
-
-            // 发送进度更新
-            int totalProgress = totalBoards * totalFiles;
-            int currentProgress = (processedBoards * totalFiles) + processedFiles;
-            emit progressUpdated(currentProgress, totalProgress);
-        }
-#endif
 
         emit logMessage(QString("板卡%1: 已处理 %2/%3 个文件").arg(deviceIndex).arg(processedFiles).arg(totalFiles), QtInfoMsg);
 
@@ -883,11 +879,14 @@ void DataAnalysisWorker::getValidWave()
             emit analysisFinished(false, QString("写入板卡%1的波形数据失败").arg(deviceIndex));
             return;
         } else {
-            emit logMessage(QString("板卡%1写入成功: 通道0=%2个波形, 通道1=%3个波形, 通道2=%4个波形")
+            emit logMessage(QString("板卡%1写入成功: 通道%2=%3个波形, 通道%4=%5个波形, 通道%6=%7个波形")
                         .arg(deviceIndex)
-                        .arg(wave_ch0_all.size())
-                        .arg(wave_ch1_all.size())
-                        .arg(wave_ch2_all.size()), QtInfoMsg);
+                        .arg((deviceIndex-1)*3+1)
+                        .arg(wave_ch0_all.size() > 4 ? wave_ch0_all.size()-4 : 0)
+                        .arg((deviceIndex-1)*3+2)
+                        .arg(wave_ch1_all.size() > 4 ? wave_ch1_all.size()-4 : 0)
+                        .arg((deviceIndex-1)*3+3)
+                        .arg(wave_ch2_all.size() > 4 ? wave_ch2_all.size()-4 : 0), QtInfoMsg);
         }
 
         processedBoards++;
@@ -900,9 +899,9 @@ void DataAnalysisWorker::getValidWave()
 // 将波形数据按板卡分组写入HDF5文件
 #include <QTextCodec>
 bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardNum,
-                                              const QVector<std::array<qint16, 512>>& wave_ch0,
-                                              const QVector<std::array<qint16, 512>>& wave_ch1,
-                                              const QVector<std::array<qint16, 512>>& wave_ch2)
+                                              const QVector<std::array<qint16, 516>>& wave_ch0,
+                                              const QVector<std::array<qint16, 516>>& wave_ch1,
+                                              const QVector<std::array<qint16, 516>>& wave_ch2)
 {
     try {
         // 检查文件是否存在，决定打开方式
@@ -924,12 +923,12 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
         }
 
         // 辅助函数：写入单个通道的数据集
-        auto writeChannel = [&](const QString& datasetName, const QVector<std::array<qint16, 512>>& data) {
+        auto writeChannel = [&](const QString& datasetName, const QVector<std::array<qint16, 516>>& data) {
              std::string ds = datasetName.toUtf8().constData();
 
             if (data.isEmpty()) {
                 // 如果没有数据，创建一个空数据集
-                hsize_t dims[2] = {0, 512};
+                hsize_t dims[2] = {0, 514};
                 H5::DataSpace dataspace(2, dims);
                 H5::DataSet dataset = boardGroup.createDataSet(datasetName.toStdString(),
                                                                H5::PredType::NATIVE_INT16,
@@ -939,10 +938,10 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
             }
 
             // 准备数据：将 QVector<std::array<qint16, 512>> 转换为连续内存
-            hsize_t dims[2] = {static_cast<hsize_t>(data.size()), 512};
+            hsize_t dims[2] = {static_cast<hsize_t>(data.size()), 516};
             H5::DataSpace dataspace(2, dims);
             QVector<qint16> flatData;
-            flatData.resize(static_cast<int>(data.size() * 512));
+            flatData.resize(static_cast<int>(data.size() * 516));
             int offset = 0;
             for (const auto& wave : data) {
                 std::memcpy(flatData.data() + offset,
@@ -977,6 +976,149 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
         writeChannel("wave_ch2", wave_ch2);
 
         boardGroup.close();
+        file.close();
+
+        return true;
+    } catch (H5::FileIException& error) {
+        // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
+        qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSetIException& error) {
+        qDebug() << "HDF5 DataSet Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSpaceIException& error) {
+        qDebug() << "HDF5 DataSpace Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::GroupIException& error) {
+        qDebug() << "HDF5 Group Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (...) {
+        qDebug() << "Unknown HDF5 Exception";
+        return false;
+    }
+}
+
+bool DataAnalysisWorker::writeWaveformHeadToHDF5(const QString& filePath, quint32 packerStartTime, quint32 packerEndTime, quint32 threshold)
+{
+    try {
+        // 检查文件是否存在，决定打开方式
+        bool fileExists = QFileInfo::exists(filePath);
+        QTextCodec* gbk_codec = QTextCodec::codecForName("GBK");
+        QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
+        H5::H5File file(filePathBytes.toStdString(), fileExists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
+
+        // 创建或打开板卡组
+        QString configGroupName = "Config";
+
+        H5::Group configGroup;
+        htri_t exists = H5Lexists(file.getId(), configGroupName.toStdString().c_str(), H5P_DEFAULT);
+
+        if (exists > 0) {
+            configGroup = file.openGroup(configGroupName.toStdString());
+        } else {
+            configGroup = file.createGroup(configGroupName.toStdString());
+        }
+
+
+        // 准备数据：将 QVector<std::array<qint16, 512>> 转换为连续内存
+        hsize_t dims[2] = {1, 3};
+        H5::DataSpace dataspace(2, dims);
+        QVector<quint32> data = {packerStartTime, packerEndTime, threshold};
+
+        // 存在才删（不 open，不抛异常）
+        if (H5Lexists(configGroup.getId(), "configuration", H5P_DEFAULT) > 0) {
+            configGroup.unlink("configuration");
+        }
+
+        H5::DataSet dataset = configGroup.createDataSet(
+            "configuration", H5::PredType::NATIVE_UINT32, dataspace);
+
+        // 保险起见：显式 memspace/fileSpace rank 一致
+        H5::DataSpace fileSpace = dataset.getSpace();
+        H5::DataSpace memSpace(2, dims);
+
+        dataset.write(data.data(),
+                      H5::PredType::NATIVE_UINT32,
+                      memSpace,
+                      fileSpace);
+        fileSpace.close();
+        dataset.close();
+        configGroup.close();
+        dataset.close();
+        file.close();
+
+        return true;
+    } catch (H5::FileIException& error) {
+        // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
+        qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSetIException& error) {
+        qDebug() << "HDF5 DataSet Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSpaceIException& error) {
+        qDebug() << "HDF5 DataSpace Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::GroupIException& error) {
+        qDebug() << "HDF5 Group Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (...) {
+        qDebug() << "Unknown HDF5 Exception";
+        return false;
+    }
+}
+
+bool DataAnalysisWorker::readWaveformHeadFromHDF5(const QString& filePath, quint32& packerStartTime, quint32& packerEndTime, quint32& threshold)
+{
+    try {
+        // 检查文件是否存在，决定打开方式
+        bool fileExists = QFileInfo::exists(filePath);
+        QTextCodec* gbk_codec = QTextCodec::codecForName("GBK");
+        QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
+        H5::H5File file(filePathBytes.toStdString(), fileExists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
+
+        // 创建或打开板卡组
+        QString configGroupName = "Config";
+
+        H5::Group configGroup;
+        htri_t exists = H5Lexists(file.getId(), configGroupName.toStdString().c_str(), H5P_DEFAULT);
+
+        if (exists > 0) {
+            configGroup = file.openGroup(configGroupName.toStdString());
+        } else {
+            file.close();
+            return false;
+        }
+
+
+        // 准备数据：将 QVector<std::array<qint16, 512>> 转换为连续内存
+        hsize_t dims[2] = {1, 3};
+        H5::DataSpace dataspace(2, dims);
+        QVector<quint32> data = {packerStartTime, packerEndTime, threshold};
+
+        // 存在才删（不 open，不抛异常）
+        if (!H5Lexists(configGroup.getId(), "configuration", H5P_DEFAULT) > 0) {
+            configGroup.close();
+            file.close();
+            return false;
+        }
+
+        H5::DataSet dataset = configGroup.openDataSet("configuration");
+        H5::DataSpace fileSpace = dataset.getSpace();
+        H5::DataSpace memSpace(2, dims);
+
+        dataset.read(data.data(),
+                      H5::PredType::NATIVE_UINT32,
+                      memSpace,
+                      fileSpace);
+
+        packerStartTime = data[0];
+        packerEndTime = data[1];
+        threshold = data[2];
+
+        fileSpace.close();
+        dataset.close();
+        configGroup.close();
+        dataset.close();
         file.close();
 
         return true;

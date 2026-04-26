@@ -48,7 +48,7 @@ public:
     // 另外可选输出 colorMap（NLevel+1 x NLevel+1 格子计数）
     QVector<std::array<qint16, 512>> readWave(const std::string &fileName, const std::string &dsetName);
 
-    QVector<QPair<float, float>> computePSD(const QVector<std::array<qint16, 512>> &wave_CH1);
+    QVector<QPair<float, float>> computePSD(const QVector<std::array<qint16, 516>> &wave_CH1);
 
     QVector<float> computeDensity(QVector<QPair<float, float>> &psdData, int NLevel = 200);
 

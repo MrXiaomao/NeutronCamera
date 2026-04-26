@@ -4,6 +4,7 @@
 #include "mainwindow.h"
 #include "offlinewindow.h"
 #include "datacompresswindow.h"
+#include "cpsstatisticswindow.h"
 #include "globalsettings.h"
 #include "darkstyle.h"
 
@@ -192,9 +193,13 @@ int main(int argc, char *argv[])
         QApplication::setApplicationName("中子相机数据处理离线版");
         mMainWindow = new OfflineWindow(isDarkTheme, &w);
     }
-    else if (args.contains("-c") && args.contains("compress")){
+    else if (args.contains("-m") && args.contains("compress")){
         QApplication::setApplicationName(QObject::tr("中子相机数据压缩与上传"));
         mMainWindow = new DataCompressWindow(isDarkTheme, &w);
+    }
+    else if (args.contains("-m") && args.contains("cps")){
+        QApplication::setApplicationName(QObject::tr("中子相机数据分析-计数率统计"));
+        mMainWindow = new CpsStatisticsWindow(isDarkTheme, &w);
     }
     else
         mMainWindow = new MainWindow(isDarkTheme, &w);

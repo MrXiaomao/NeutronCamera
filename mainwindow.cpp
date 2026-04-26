@@ -1227,7 +1227,7 @@ void MainWindow::on_action_data_compress_triggered()
 {
     QString program = QCoreApplication::applicationFilePath();
     QStringList arguments;
-    arguments.append("-c");
+    arguments.append("-m");
     arguments.append("compress");
 
     static int num = 0;
@@ -2198,4 +2198,20 @@ void MainWindow::on_pushButton_clicked()
 void MainWindow::on_pushButton_2_clicked()
 {
     mEnableContinueMeasuer = false;
+}
+
+void MainWindow::on_action_cps_statistics_triggered()
+{
+    QString program = QCoreApplication::applicationFilePath();
+    QStringList arguments;
+    arguments.append("-m");
+    arguments.append("cps");
+
+    static int num = 0;
+    arguments.append("-num");
+    arguments.append(QString::number(num));
+    num++;
+    QProcess::startDetached(program, arguments);
+
+    qInfo().noquote() << tr("打开离线数据计数率统计程序");
 }
