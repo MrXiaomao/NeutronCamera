@@ -311,37 +311,6 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
     // 使用静态函数提取文件名列表
     mfileList = DataCompressWindow::extractFileNames(result);
 
-    // //统计测量时长，选取光纤口1数据来统计
-    // int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "Adata");
-
-    // // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
-    // int time_per = 40;
-    // int measureTime = DataCompressWindow::calculateMeasureTime(count1data, time_per);
-
-    // // 获取第一个文件名打包序号作为开始时间，如：1Adata27.bin
-    // QString file_name = mfileList.first();
-    // // 查找data起始位置
-    // int data_start = file_name.indexOf("data");
-    // if (data_start != -1) {
-    //     // 跳过data，从后续字符中提取开头的连续数字
-    //     QString sub_str = file_name.mid(data_start + 4); // data长度为4，所以偏移4
-    //     int digit_end = 0;
-    //     while (digit_end < sub_str.length() && sub_str[digit_end].isDigit()) {
-    //         digit_end++;
-    //     }
-    //     QString result_str = sub_str.left(digit_end); // 得到"27"
-    //     int start_tm = result_str.toInt();
-    //     ui->line_measure_startT->setText(QString::number((start_tm-1)*time_per));
-    //     ui->line_measure_endT->setText(QString::number((start_tm-1)*time_per+measureTime));
-
-    //     ui->spinBox_startT->setValue((start_tm-1)*time_per);
-    //     ui->spinBox_endT->setValue(start_tm*time_per+measureTime);
-    // }
-    // else {
-    //     ui->line_measure_startT->setText("0");
-    //     ui->line_measure_endT->setText(QString::number(measureTime));
-    // }
-
     // 仅过滤 .h5 文件
     QStringList filters;
     filters << "*.h5";
@@ -818,6 +787,43 @@ void CpsStatisticsWindow::initHeatmap()
         //     }
         // }
     });
+
+    // 能谱曲线
+    QCPAxisRect *spectrumAxisRect = new QCPAxisRect(customPlot);
+    spectrumAxisRect->setObjectName("spectrumAxisRect");
+    {
+        spectrumAxisRect->setupFullAxesBox();
+        spectrumAxisRect->setMinimumMargins(QMargins(0,0,0,0));
+        spectrumAxisRect->setMargins(QMargins(0,0,0,0));
+        spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
+        spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Counts"));
+        spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Channel"));
+        spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 2000);
+        spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 16384);
+
+        // 左上角添加图例
+        QCPLegend *legend = new QCPLegend();
+        legend->setWrap(9);
+        spectrumAxisRect->insetLayout()->addElement(legend, Qt::AlignLeft | Qt::AlignTop); // 清空默认布局
+
+        QCPAxis *keyAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atBottom);
+        QCPAxis *valueAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atLeft);
+
+        for (int i=1; i<=18; ++i){
+            QCPGraph *graph = customPlot->addGraph(keyAxis, valueAxis);
+            graph->setLineStyle(QCPGraph::lsLine);
+            if (i<12){
+                graph->setName(QStringLiteral("HC %1").arg(i));
+                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
+            }
+            else{
+                graph->setName(QStringLiteral("VC %1").arg(i));
+                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
+            }
+        }
+    }
 
     // 时间计数曲线
     QCPAxisRect *timeCountsAxisRect = new QCPAxisRect(customPlot);

@@ -80,12 +80,12 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportFileReadElapsedtime, this, [=](quint32 index, quint32 elapsedtime){
         // QString time = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
         // QString msg = QString("[%1] Device #%2 268435456 bytes received in %3ms").arg(time).arg(index).arg(elapsedtime);
-        // ui->textEdit_log->append(msg);
+        // ui->plainTextEdit_log->append(msg);
     });
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportFileWriteElapsedtime, this, [=](quint32 index, quint32 elapsedtime){
         // QString time = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
         // QString msg = QString("[%1] Device #%2 268435456 bytes written in %3ms").arg(time).arg(index).arg(elapsedtime);
-        // ui->textEdit_log->append(msg);
+        // ui->plainTextEdit_log->append(msg);
     });
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportCaptureFinished, this, [=](){
         ui->action_startMeasure->setEnabled(true);
@@ -1163,7 +1163,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event){
 void MainWindow::replyWriteLog(const QString &msg, QtMsgType msgType)
 {
     // 创建一个 QTextCursor
-    QTextCursor cursor = ui->textEdit_log->textCursor();
+    QTextCursor cursor = ui->plainTextEdit_log->textCursor();
     // 将光标移动到文本末尾
     cursor.movePosition(QTextCursor::End);
 
@@ -1184,10 +1184,10 @@ void MainWindow::replyWriteLog(const QString &msg, QtMsgType msgType)
     cursor.insertHtml("<br>");
 
     // 确保 QTextEdit 显示了光标的新位置
-    ui->textEdit_log->setTextCursor(cursor);
+    ui->plainTextEdit_log->setTextCursor(cursor);
 
     //限制行数
-    QTextDocument *document = ui->textEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件
+    QTextDocument *document = ui->plainTextEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件
     int rowCount = document->blockCount(); // 获取输出区的行数
     int maxRowNumber = 2000;//设定最大行
     if(rowCount > maxRowNumber){//超过最大行则开始删除
@@ -1411,7 +1411,7 @@ void MainWindow::applyColorTheme()
             }
 
             // 创建一个 QTextCursor
-            QTextCursor cursor = ui->textEdit_log->textCursor();
+            QTextCursor cursor = ui->plainTextEdit_log->textCursor();
             QTextDocument *document = cursor.document();
             QString html = document->toHtml();
             html = html.replace("color:#000000", "color:#ffffff");
@@ -1430,7 +1430,7 @@ void MainWindow::applyColorTheme()
                 lightStyle.polish(palette);
             }
 
-            QTextCursor cursor = ui->textEdit_log->textCursor();
+            QTextCursor cursor = ui->plainTextEdit_log->textCursor();
             QTextDocument *document = cursor.document();
             QString html = document->toHtml();
             html = html.replace("color:#ffffff", "color:#000000");

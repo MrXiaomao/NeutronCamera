@@ -338,7 +338,10 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QCustomPlot" name="spectroMeter_spectrum_LSD" native="true"/>
+             <widget class="QCustomPlot" name="spectroMeter_gamma_spectrum_LSD" native="true"/>
+            </item>
+            <item>
+             <widget class="QCustomPlot" name="spectroMeter_neutron_spectrum_LSD" native="true"/>
             </item>
             <item>
              <widget class="QCustomPlot" name="spectroMeter_waveform_LSD" native="true"/>
@@ -416,7 +419,7 @@
          <widget class="QCustomPlot" name="spectroMeter_waveform_PSD" native="true"/>
         </item>
         <item>
-         <widget class="QCustomPlot" name="spectroMeter_spectrum_PSD" native="true"/>
+         <widget class="QCustomPlot" name="spectroMeter_neutron_spectrum_PSD" native="true"/>
         </item>
        </layout>
       </widget>
@@ -441,7 +444,7 @@
          <widget class="QCustomPlot" name="spectroMeter_waveform_LBD" native="true"/>
         </item>
         <item>
-         <widget class="QCustomPlot" name="spectroMeter_spectrum_LBD" native="true"/>
+         <widget class="QCustomPlot" name="spectroMeter_gamma_spectrum_LBD" native="true"/>
         </item>
        </layout>
       </widget>
@@ -836,7 +839,7 @@
                 <number>10000</number>
                </property>
                <property name="singleStep">
-                <number>10</number>
+                <number>1</number>
                </property>
                <property name="value">
                 <number>10</number>
@@ -1284,7 +1287,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>17</height>
+     <height>18</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -1345,10 +1348,11 @@
     <bool>false</bool>
    </attribute>
    <addaction name="action_openfile"/>
-   <addaction name="action_analyze"/>
    <addaction name="action_waveform"/>
    <addaction name="action_ngamma"/>
    <addaction name="action_cps"/>
+   <addaction name="separator"/>
+   <addaction name="action_analyze"/>
    <addaction name="separator"/>
    <addaction name="action_exit"/>
   </widget>
@@ -1514,10 +1518,10 @@
      <normaloff>:/resource/image/waveform.png</normaloff>:/resource/image/waveform.png</iconset>
    </property>
    <property name="text">
-    <string>波形预览</string>
+    <string>波形/能谱</string>
    </property>
    <property name="toolTip">
-    <string>波形预览</string>
+    <string>波形/能谱</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

@@ -3,11 +3,9 @@
 #include <QtGlobal>
 #include <QVector>
 #include <array>
-// #include <algorithm>
 
 #include <H5Cpp.h>
 #include <QVector>
-// #include <vector>
 #include <iostream>
 #include <cmath>
 
@@ -15,6 +13,12 @@
 using namespace alglib;
 
 using namespace H5;
+
+#ifndef H5_DATA_COLS
+#define H5_DATA_EXTEND      4       //触发时刻3（2位毫秒+1位纳秒）+峰值1
+#define H5_DATA_WAVEFORM    160     //扩展数据长度
+#define H5_DATA_COLS        (H5_DATA_WAVEFORM + H5_DATA_EXTEND)
+#endif //H5_DATA_COLS
 
 class n_gamma
 {
@@ -46,9 +50,9 @@ public:
     // 输入: x, y 等长向量（比如 data 第 3/4 列）
     // 输出: c，每个点所在网格的计数（密度）
     // 另外可选输出 colorMap（NLevel+1 x NLevel+1 格子计数）
-    QVector<std::array<qint16, 512>> readWave(const std::string &fileName, const std::string &dsetName);
+    QVector<std::array<qint16, H5_DATA_COLS>> readWave(const std::string &fileName, const std::string &dsetName);
 
-    QVector<QPair<float, float>> computePSD(const QVector<std::array<qint16, 516>> &wave_CH1);
+    QVector<QPair<float, float>> computePSD(const QVector<std::array<qint16, H5_DATA_COLS>> &wave_CH1);
 
     QVector<float> computeDensity(QVector<QPair<float, float>> &psdData, int NLevel = 200);
 

@@ -12,7 +12,11 @@
 #include <QThreadPool>
 #include <QQueue>
 
-
+#ifndef H5_DATA_COLS
+#define H5_DATA_EXTEND      4       //触发时刻3（2位毫秒+1位纳秒）+峰值1
+#define H5_DATA_WAVEFORM    160     //扩展数据长度
+#define H5_DATA_COLS        (H5_DATA_WAVEFORM + H5_DATA_EXTEND)
+#endif //H5_DATA_COLS
 
 // ====== 有界队列：最多缓存 N 个文件（N * 256MB 内存）======
 struct FileJob {
@@ -90,7 +94,7 @@ public:
     // pre_points: 触发点之前的点数
     // post_points: 触发点之后的点数
     // 返回: 所有提取的波形，每个波形是固定长度512的数组（优化内存使用）
-    static QVector<std::array<qint16, 516>>/*波形数据*/ overThreshold(quint32 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points);
+    static QVector<std::array<qint16, H5_DATA_COLS>>/*波形数据*/ overThreshold(quint32 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points);
 
     void getValidWave();
 
@@ -100,9 +104,9 @@ public:
     // wave_ch0, wave_ch1, wave_ch2, wave_ch3: 4个通道的波形数据
     // 返回: 是否成功写入
     static bool writeWaveformToHDF5(const QString& filePath, int boardNum,
-                                    const QVector<std::array<qint16, 516>>& wave_ch0,
-                                    const QVector<std::array<qint16, 516>>& wave_ch1,
-                                    const QVector<std::array<qint16, 516>>& wave_ch2);
+                                    const QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch0,
+                                    const QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch1,
+                                    const QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch2);
 
     // 波形文件头部信息(开始时刻、结束时刻、阈值)
     static bool writeWaveformHeadToHDF5(const QString& filePath, quint32 packerStartTime, quint32 packerEndTime, quint32 threshold);
@@ -187,7 +191,7 @@ public:
                                        int post_points,
                                        std::function<void(quint32 packerCurrentTime,
                                                           quint8 channelIndex,
-                                                          QVector<std::array<qint16, 516>>&)> cb,
+                                                          QVector<std::array<qint16, H5_DATA_COLS>>&)> cb,
                                        std::function<void()> onFinished = {})
         : mJob(std::move(job))
         , mCameraIndex(cameraIndex)
@@ -247,7 +251,7 @@ private:
     int mThreshold = 0;
     int mPre = 20;
     int mPost = 491;
-    std::function<void(quint32, quint8, QVector<std::array<qint16, 516>>&)> mCallback;
+    std::function<void(quint32, quint8, QVector<std::array<qint16, H5_DATA_COLS>>&)> mCallback;
     std::function<void()> mOnFinished;
 };
 

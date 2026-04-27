@@ -26,10 +26,10 @@ n_gamma::n_gamma() {}
 // 读取波形数据，这里是有效波形
 // 读取 wave_CH1.h5 中的数据集 data（行 = 脉冲数, 列 = 采样点数）
 // 返回 QVector<std::array<qint16, 512>>，尺寸为 [numPulses x 512] = [35679 x 512]
-QVector<std::array<qint16, 512>> n_gamma::readWave(const std::string &fileName,
+QVector<std::array<qint16, H5_DATA_COLS>> n_gamma::readWave(const std::string &fileName,
                                               const std::string &dsetName)
 {
-    QVector<std::array<qint16, 512>> wave_CH1;
+    QVector<std::array<qint16, H5_DATA_COLS>> wave_CH1;
 
     try {
         H5File file(fileName, H5F_ACC_RDONLY);
@@ -48,7 +48,7 @@ QVector<std::array<qint16, 512>> n_gamma::readWave(const std::string &fileName,
         hsize_t numPulses  = dims[0];
         hsize_t numSamples = dims[1];
 
-        if (numSamples != 512) {
+        if (numSamples != H5_DATA_COLS) {
             std::cerr << "Error: numSamples != 512, got " << numSamples << std::endl;
             return {};
         }
@@ -89,14 +89,14 @@ QVector<std::array<qint16, 512>> n_gamma::readWave(const std::string &fileName,
  * @param wave_CH1 输入的波形, 这个波形是经过过阈触发筛选后的波形，wave_CH1[pulseIndex][sampleIndex]：numPulses x 512
  * @return data[i] = (标定后能量, PSD 值)，每个元素是一个 QPair<float, float>，first 是能量，second 是 PSD 值
  */
-QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16, 516>> &wave_CH1)
+QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16, H5_DATA_COLS>> &wave_CH1)
 {
     if (wave_CH1.isEmpty())
         return {};
 
-    const int numSamples = 512;    // 固定为 512
+    const int numSamples = H5_DATA_WAVEFORM;    // 固定为 512
 
-    using Pulse = std::array<qint16, 516>;
+    using Pulse = std::array<qint16, H5_DATA_COLS>;
     // 后续要修改波形（baseline 扣除、筛选），拷贝一份
     QVector<Pulse> pulses = wave_CH1;
 
@@ -113,7 +113,7 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         QVector<Pulse> filtered;
         filtered.reserve(pulses.size());
 
-        for (int idx = 4/*前4个数据给触发时刻预留的，真实数据从第5个开始*/; idx < pulses.size(); ++idx) {
+        for (int idx = H5_DATA_EXTEND/*前面的扩展数据是给触发时刻+峰值预留的，真实数据从第H5_DATA_EXTEND个开始*/; idx < pulses.size(); ++idx) {
             const Pulse &p = pulses[idx];
 
             float peak = p[0];

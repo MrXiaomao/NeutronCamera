@@ -464,24 +464,15 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, bo
  * @param remainTime 剩余时间，用于计算采集时刻 
  * @param filePath 历史数据文件路径
  */
-void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath)
+bool PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath)
 {
     QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly)) return ;
+    if (!f.open(QIODevice::ReadOnly)) return false;
     QByteArray spectrumData = f.readAll();
     f.close();
 
     //根据通道号计算对应采集卡的第几通道
     quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
-    quint8 cameraOrientation = 0;
-    if (cameraIndex >= 1 && cameraIndex <= 11){
-        cameraOrientation = CameraOrientation::Horizontal;
-    }
-    else if (cameraIndex >= 12 && cameraIndex <= 18){
-        cameraOrientation = CameraOrientation::Vertical;
-    }
-    else
-        return;
 
     /* 能谱数据（总大小512*2B）
         * 包头           FFAB
@@ -496,62 +487,125 @@ void PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeInde
         * 包尾            FFCD
     */
     QByteArray reverseData = DataCachPoolThread::reverseArray(spectrumData, 16);
-    if (reverseData.startsWith(QByteArray::fromHex("FFAB00D2"))){
-        if (reverseData.size() >= 1024*PACKET_TIMELENGTH){
+    if (reverseData.startsWith(QByteArray::fromHex("FFAB00D2")))
+    {
+        //数据包的其实时间戳/ns
+        for (quint8 timeIndex=1; timeIndex<=mTimestampMs.size(); ++timeIndex){
             quint32 packIndex = mTimestampMs[timeIndex-1] / PACKET_TIMELENGTH + 1;
-            quint32 packPos = mTimestampMs[timeIndex-1] % PACKET_TIMELENGTH - 1;
-            QByteArray chunk = reverseData.mid(packPos*1024, 1024);
-
-            QByteArray chunkHead = chunk.left(16);
-            //std::reverse(chunkHead.begin(), chunkHead.end());
-            QByteArray chunkTail = chunk.right(16);
-            //std::reverse(chunkTail.begin(), chunkTail.end());
-
-            bool ok;
-            //能谱序号 高位16bi表示这是 第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
-            QByteArray head = chunk.left(4);
-            quint32 serialNumber = chunk.mid(4, 2).toHex().toUInt(&ok, 16);
-            quint32 serialNumberRef = chunk.mid(6, 1).toInt();
-            quint16 time = chunk.mid(7, 2).toHex().toUShort(&ok, 16);//测量时间
-            QByteArray reserve1 = chunk.mid(9, 7);
-
-            QByteArray chunkgamma = chunk.mid(16, 496);  //62*4*2
-            QByteArray chunkneutron = chunk.mid(512, 496);
-
-            quint64 absoluteTime = chunk.mid(1008, 8).toHex().toUInt(&ok, 16);//绝对时间
-            QByteArray reserve2 = chunk.mid(1016, 6);
-            QByteArray tail = chunk.right(2);
-
-            //数据包的起始时间戳/ns
-            //quint64 timestamp = (serialNumber - 1) * 50 + serialNumberRef;
-            //if (timestamp == mTimestampMs1)
+            quint32 packPos = mTimestampMs[timeIndex-1] % PACKET_TIMELENGTH;
             {
-                QByteArray gamma = chunkgamma.mid(cameraNo*124, 124);
-                QByteArray neutron = chunkgamma.mid(cameraNo*124, 124);
+                QByteArray chunk = reverseData.mid(packPos*1024, 1024);
+
+                QByteArray chunkHead = chunk.left(16);
+                //std::reverse(chunkHead.begin(), chunkHead.end());
+                QByteArray chunkTail = chunk.right(16);
+                //std::reverse(chunkTail.begin(), chunkTail.end());
+
+                bool ok;
+                //能谱序号 高位16bi表示这是 第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
+                QByteArray head = chunk.left(4);
+                quint32 serialNumber = chunk.mid(4, 2).toHex().toUInt(&ok, 16);
+                quint32 serialNumberRef = chunk.mid(6, 1).toInt();
+                quint16 time = chunk.mid(7, 2).toHex().toUShort(&ok, 16);//测量时间
+                QByteArray reserve1 = chunk.mid(9, 7);
+
+                QByteArray chunkgamma = chunk.mid(16, 496);  //62*4*2
+                QByteArray chunkneutron = chunk.mid(512, 496);
+
+                quint64 absoluteTime = chunk.mid(1008, 8).toHex().toUInt(&ok, 16);//绝对时间
+                QByteArray reserve2 = chunk.mid(1016, 6);
+                QByteArray tail = chunk.right(2);
+
+                //数据包的起始时间戳/ns
+                //quint64 timestamp = (serialNumber - 1) * 50 + serialNumberRef;
+                //if (timestamp == mTimestampMs1)
                 {
-                    QVector<QPair<double, double>> data;
-                    for (int i=0; i<gamma.size(); i+=2){
-                        bool ok;
-                        quint16 amplitude = gamma.mid(i, 2).toHex().toUShort(&ok, 16);
-                        data.append(qMakePair(i/2, amplitude));
+                    QByteArray gamma = chunkgamma.mid(cameraNo*124, 124);
+                    QByteArray neutron = chunkgamma.mid(cameraNo*124, 124);
+                    {
+                        QVector<QPair<double, double>> data;
+                        for (int i=0; i<gamma.size(); i+=2){
+                            bool ok;
+                            quint16 amplitude = gamma.mid(i, 2).toHex().toUShort(&ok, 16);
+                            data.append(qMakePair(i/2, amplitude));
+                        }
+
+                        qDebug() << "reportGammaSpectrum" << timeIndex << cameraIndex;
+
+                        emit reportGammaSpectrum(timeIndex, cameraIndex, data);
                     }
 
-                    emit reportGammaSpectrum(timeIndex, cameraIndex, data);
-                }
+                    {
+                        QVector<QPair<double, double>> data;
+                        for (int i=0; i<neutron.size(); i+=2){
+                            bool ok;
+                            quint16 amplitude = neutron.mid(i, 2).toHex().toUShort(&ok, 16);
+                            data.append(qMakePair(i/2, amplitude));
+                        }
 
-                {
-                    QVector<QPair<double, double>> data;
-                    for (int i=0; i<neutron.size(); i+=2){
-                        bool ok;
-                        quint16 amplitude = neutron.mid(i, 2).toHex().toUShort(&ok, 16);
-                        data.append(qMakePair(i/2, amplitude));
+                        emit reportNeutronSpectrum(timeIndex, cameraIndex, data);
                     }
-
-                    emit reportNeutronSpectrum(timeIndex, cameraIndex, data);
                 }
             }
         }
     }
+    // QByteArray reverseData = DataCachPoolThread::reverseArray(spectrumData, 16);
+    // if (reverseData.startsWith(QByteArray::fromHex("FFAB00D2"))){
+    //     if (reverseData.size() >= 1024*PACKET_TIMELENGTH){
+    //         quint32 packIndex = mTimestampMs[timeIndex-1] / PACKET_TIMELENGTH + 1;
+    //         quint32 packPos = mTimestampMs[timeIndex-1] % PACKET_TIMELENGTH - 1;
+    //         QByteArray chunk = reverseData.mid(packPos*1024, 1024);
+
+    //         QByteArray chunkHead = chunk.left(16);
+    //         //std::reverse(chunkHead.begin(), chunkHead.end());
+    //         QByteArray chunkTail = chunk.right(16);
+    //         //std::reverse(chunkTail.begin(), chunkTail.end());
+
+    //         bool ok;
+    //         //能谱序号 高位16bi表示这是 第几个50ms的数据，低位8bit表示，在每一个50ms里，这是第几个能谱数据（范围是1-50）
+    //         QByteArray head = chunk.left(4);
+    //         quint32 serialNumber = chunk.mid(4, 2).toHex().toUInt(&ok, 16);
+    //         quint32 serialNumberRef = chunk.mid(6, 1).toInt();
+    //         quint16 time = chunk.mid(7, 2).toHex().toUShort(&ok, 16);//测量时间
+    //         QByteArray reserve1 = chunk.mid(9, 7);
+
+    //         QByteArray chunkgamma = chunk.mid(16, 496);  //62*4*2
+    //         QByteArray chunkneutron = chunk.mid(512, 496);
+
+    //         quint64 absoluteTime = chunk.mid(1008, 8).toHex().toUInt(&ok, 16);//绝对时间
+    //         QByteArray reserve2 = chunk.mid(1016, 6);
+    //         QByteArray tail = chunk.right(2);
+
+    //         //数据包的起始时间戳/ns
+    //         //quint64 timestamp = (serialNumber - 1) * 50 + serialNumberRef;
+    //         //if (timestamp == mTimestampMs1)
+    //         {
+    //             QByteArray gamma = chunkgamma.mid(cameraNo*124, 124);
+    //             QByteArray neutron = chunkgamma.mid(cameraNo*124, 124);
+    //             {
+    //                 QVector<QPair<double, double>> data;
+    //                 for (int i=0; i<gamma.size(); i+=2){
+    //                     bool ok;
+    //                     quint16 amplitude = gamma.mid(i, 2).toHex().toUShort(&ok, 16);
+    //                     data.append(qMakePair(i/2, amplitude));
+    //                 }
+
+    //                 emit reportGammaSpectrum(timeIndex, cameraIndex, data);
+    //             }
+
+    //             {
+    //                 QVector<QPair<double, double>> data;
+    //                 for (int i=0; i<neutron.size(); i+=2){
+    //                     bool ok;
+    //                     quint16 amplitude = neutron.mid(i, 2).toHex().toUShort(&ok, 16);
+    //                     data.append(qMakePair(i/2, amplitude));
+    //                 }
+
+    //                 emit reportNeutronSpectrum(timeIndex, cameraIndex, data);
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 /**
@@ -668,8 +722,8 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms
                         }
 
                         for (int rowIdx = 0; rowIdx < totalRows; ++rowIdx){
-                            quint64 timeMs = (static_cast<quint16>(outData[0][rowIdx])<<16 | static_cast<quint16>(outData[1][rowIdx]));
-                            quint64 timeNs = (static_cast<quint16>(outData[2][rowIdx])<<16 | static_cast<quint16>(outData[3][rowIdx]));
+                            quint64 timeMs = static_cast<quint16>(outData[0][rowIdx]);
+                            quint64 timeNs = (static_cast<quint16>(outData[1][rowIdx])<<16 | static_cast<quint16>(outData[2][rowIdx]));
                             timeTrigger.push_back((timeMs*1e6+timeNs)/1e6);
                         }
 
@@ -679,7 +733,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms
 
                 // 写入3个通道的数据
                 QVector<quint64> timeTrigger_ch[3];
-                readChannel("wave_ch0", timeTrigger_ch[0]);
+                readChannel("wave_ch0",  timeTrigger_ch[0]);
                 readChannel("wave_ch1", timeTrigger_ch[1]);
                 readChannel("wave_ch2", timeTrigger_ch[2]);
 

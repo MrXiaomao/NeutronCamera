@@ -486,7 +486,7 @@ QStringList DataCompressWindow::loadRelatedFiles(const QString& dirPath)
     ui->lineEdit_binTotal->setText(humanReadableSize(totalSize));
 
     //统计测量时长，选取光纤口1数据来统计
-    int count1data = countFilesByPrefix(fileList, "Adata");
+    int count1data = countFilesByPrefix(fileList, "1Adata");
     
     int time_per = 40; //单个文件包对应的时间长度，单位ms
     int measureTime = calculateMeasureTime(count1data, time_per);

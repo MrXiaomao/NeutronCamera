@@ -7,7 +7,7 @@
 DataAnalysisWorker::DataAnalysisWorker(QObject *parent)
     : QObject(parent)
     , mThreshold(200)
-    , mTimePerFile(50)
+    , mTimePerFile(40)
     , mStartTime(0)
     , mEndTime(0)
     , mCancelled(false)
@@ -552,9 +552,9 @@ void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16
 }
 
 // 提取超过阈值的有效波形数据
-QVector<std::array<qint16, 516>> DataAnalysisWorker::overThreshold(quint32 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
+QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quint32 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
 {
-    QVector<std::array<qint16, 516>> wave_ch;
+    QVector<std::array<qint16, H5_DATA_COLS>> wave_ch;
     QVector<int> cross_indices;
 
     // 丢弃可能不完整的包（比如半个波形）
@@ -590,21 +590,20 @@ QVector<std::array<qint16, 516>> DataAnalysisWorker::overThreshold(quint32 packe
             int start_idx = cross_idx - pre_points;
 
             // 检查边界，确保能提取完整的512点
-            if (start_idx < 0 || start_idx + 512 > data.size()) {
+            if (start_idx < 0 || start_idx + H5_DATA_WAVEFORM > data.size()) {
                 // 注意：这是静态函数，不能直接访问 ui
                 qDebug() << QString("skip第%1个数据：边界不足").arg(a + 1);
                 continue;
             }
 
             // 创建固定大小的波形数组
-            std::array<qint16, 516> segment_data;
+            std::array<qint16, H5_DATA_COLS> segment_data;
 
             // 前4个数据预留给波形触发时刻，0-1表示ms，2-3表示ns，正式数据从第5个开始
-            quint64 currentPackerTime = (quint64)packerStartTime*1e6/*ms转ns*/ + start_idx * 2/*每个点表示2ns*/;
-            segment_data[0] = (packerStartTime >> 16) & 0xFFFF;
-            segment_data[1] = packerStartTime & 0xFFFF;
-            segment_data[2] = ((start_idx*2) >> 16) & 0xFFFF;
-            segment_data[3] = (start_idx*2) & 0xFFFF;
+            segment_data[0] = packerStartTime & 0xFFFF;
+            segment_data[1] = ((start_idx*2) >> 16) & 0xFFFF;
+            segment_data[2] = (start_idx*2) & 0xFFFF;
+            segment_data[3] = 0;
 //            // 小端序拆分
 //            for (int i = 0; i < 4; ++i) {
 //                // 每次提取对应位置的16位，掩码0xFFFF保留低16位
@@ -620,9 +619,12 @@ QVector<std::array<qint16, 516>> DataAnalysisWorker::overThreshold(quint32 packe
             */
 
             // 提取波形段（正好512点）
-            for (int i = 0; i < 512; ++i) {
-                segment_data[4+i] = data[start_idx + i];//前2位给触发时刻预留的
+            qint16 peak = 0;
+            for (int i = 0; i < H5_DATA_WAVEFORM; ++i) {
+                segment_data[H5_DATA_EXTEND+i] = data[start_idx + i];//前2位给触发时刻预留的
+                peak = std::max(peak, data[start_idx + i]);
             }
+            segment_data[3] = peak;
 
             wave_ch.append(segment_data);
         }
@@ -662,7 +664,7 @@ void DataAnalysisWorker::getValidWave()
 
     // 设置触发阈值前后波形点数
     int pre_points = 20;
-    int post_points = 512 - pre_points - 1;
+    int post_points = 256 - pre_points - 1;
 
     if (dataDir.isEmpty()) {
         emit logMessage("数据目录路径为空", QtWarningMsg);
@@ -726,9 +728,9 @@ void DataAnalysisWorker::getValidWave()
         emit logMessage(QString("开始处理板卡%1的数据...").arg(deviceIndex), QtInfoMsg);
 
         //对每个通道的有效波形数据进行合并
-        QVector<std::array<qint16, 516>> wave_ch0_all;
-        QVector<std::array<qint16, 516>> wave_ch1_all;
-        QVector<std::array<qint16, 516>> wave_ch2_all;
+        QVector<std::array<qint16, H5_DATA_COLS>> wave_ch0_all;
+        QVector<std::array<qint16, H5_DATA_COLS>> wave_ch1_all;
+        QVector<std::array<qint16, H5_DATA_COLS>> wave_ch2_all;
 
         int totalFiles = endFile - startFile;
         int processedFiles = 0;
@@ -816,7 +818,7 @@ void DataAnalysisWorker::getValidWave()
                 }
             };
 
-            auto cb = [&](quint32 /*packerCurrentTime*/, quint8 channelIndex, QVector<std::array<qint16, 516>>& wave_ch) {
+            auto cb = [&](quint32 /*packerCurrentTime*/, quint8 channelIndex, QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch) {
                 QMutexLocker locker(&mergeMutex);
                 if (channelIndex == 1)
                     wave_ch0_all.append(wave_ch);
@@ -899,9 +901,9 @@ void DataAnalysisWorker::getValidWave()
 // 将波形数据按板卡分组写入HDF5文件
 #include <QTextCodec>
 bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardNum,
-                                              const QVector<std::array<qint16, 516>>& wave_ch0,
-                                              const QVector<std::array<qint16, 516>>& wave_ch1,
-                                              const QVector<std::array<qint16, 516>>& wave_ch2)
+                                              const QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch0,
+                                              const QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch1,
+                                              const QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch2)
 {
     try {
         // 检查文件是否存在，决定打开方式
@@ -923,7 +925,7 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
         }
 
         // 辅助函数：写入单个通道的数据集
-        auto writeChannel = [&](const QString& datasetName, const QVector<std::array<qint16, 516>>& data) {
+        auto writeChannel = [&](const QString& datasetName, const QVector<std::array<qint16, H5_DATA_COLS>>& data) {
              std::string ds = datasetName.toUtf8().constData();
 
             if (data.isEmpty()) {
@@ -938,10 +940,10 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
             }
 
             // 准备数据：将 QVector<std::array<qint16, 512>> 转换为连续内存
-            hsize_t dims[2] = {static_cast<hsize_t>(data.size()), 516};
+            hsize_t dims[2] = {static_cast<hsize_t>(data.size()), H5_DATA_COLS};
             H5::DataSpace dataspace(2, dims);
             QVector<qint16> flatData;
-            flatData.resize(static_cast<int>(data.size() * 516));
+            flatData.resize(static_cast<int>(data.size() * H5_DATA_COLS));
             int offset = 0;
             for (const auto& wave : data) {
                 std::memcpy(flatData.data() + offset,

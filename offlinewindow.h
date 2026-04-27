@@ -196,7 +196,9 @@ public slots:
     void replyWaveform(quint8, quint8, QVector<QPair<double,double>>&);
     void replyCalculateDensityPSD(quint8, QVector<QPair<double,double>>&);// PSD密度分布计算
 
-    void replySpectrum(quint8, quint8, const QVector<QPair<double,double>>&);
+    void replyNeutronSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//中子能谱
+    void replyGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//伽马能谱
+
     void replyPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图绘制
     void replyFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&);// FoM图绘制
 
@@ -207,7 +209,6 @@ signals:
     void reportWaveform(quint8, quint8, QVector<QPair<double,double>>&);
     void reportCalculateDensityPSD(quint8, QVector<QPair<double,double>>&);// 对PSD数据对，进行统计，给出PSD分布密度图
 
-    void reportSpectrum(quint8, quint8, const QVector<QPair<double,double>>&);
     void reportPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图
     void reportFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&);// FoM拟合
 
@@ -249,6 +250,10 @@ private slots:
     void ngammaFilter();
     // 计数率统计
     void cpsStatistics();
+
+    void on_comboBox_horCamera_currentIndexChanged(int index);
+
+    void on_comboBox_verCamera_currentIndexChanged(int index);
 
 private:
     Ui::OfflineWindow *ui;
