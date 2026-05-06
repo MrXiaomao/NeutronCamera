@@ -169,7 +169,7 @@ public:
     };
 
     void initUi();
-    void initHeatmap(); // 热度图
+    void initCpsPage(); // 热度图
     void loadRelatedFiles(const QString& src);
 
     QPixmap maskPixmap(QPixmap, QSize sz, QColor clrMask);
@@ -182,6 +182,15 @@ public:
 public slots:
     void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
     void replyCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
+
+    // 计数率统计
+    void doCpsStatistics();
+
+    // 数据处理
+    void doDataProcess();
+
+    // 波形显示
+    void doWavePlot();
 
 signals:
     void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
@@ -198,12 +207,13 @@ private slots:
 
     void on_action_colorTheme_triggered();
 
-    void on_action_cps_triggered(bool checked);
-
-    // 计数率统计
-    void cpsStatistics();
-
     void on_comboBox_h5Files_currentTextChanged(const QString &arg1);
+
+    void on_action_waveform_triggered();
+
+    void on_action_process_triggered();
+
+    void on_action_cps_triggered();
 
 private:
     Ui::CpsStatisticsWindow *ui;

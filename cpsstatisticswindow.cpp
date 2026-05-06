@@ -15,8 +15,8 @@ CpsStatisticsWindow::CpsStatisticsWindow(bool isDarkTheme, QWidget *parent)
     ui->setupUi(this);
 
     initUi();
-    //init3DCurve();
-    initHeatmap(); // 热度图
+
+    initCpsPage();
 
     //QStringList args = QCoreApplication::arguments();
     //this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
@@ -48,7 +48,9 @@ void CpsStatisticsWindow::initUi()
     mProgressIndicator = new QProgressIndicator(this);
 
     ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
-    ui->toolButton_start->setDefaultAction(ui->action_cps);
+    connect(ui->toolButton_cps, &QToolButton::triggered, this, &CpsStatisticsWindow::doCpsStatistics);
+    connect(ui->toolButton_process, &QToolButton::triggered, this, &CpsStatisticsWindow::doDataProcess);
+    //connect(ui->toolButton_wave, &QToolButton::triggered, this, &CpsStatisticsWindow::doWavePlot);
 
     //////////////////////////////////////////////////////////////////////
     //布局
@@ -58,7 +60,7 @@ void CpsStatisticsWindow::initUi()
         splitterH1->setObjectName("splitterH1");
         splitterH1->setHandleWidth(5);
         splitterH1->addWidget(ui->leftStackedWidget);
-        splitterH1->addWidget(ui->centralVboxStackedWidget);
+        splitterH1->addWidget(ui->centralStackedWidget);
         splitterH1->addWidget(ui->rightVboxWidget);
         splitterH1->setSizes(QList<int>() << 100000 << 600000 << 100000);
         splitterH1->setCollapsible(0,false);
@@ -326,32 +328,12 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
         ui->comboBox_h5Files->addItem(item.baseName());
     }
 
-    emit reporWriteLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(fileinfoList.size()));
+    if (fileinfoList.size() == 0)
+        emit reporWriteLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
+    else
+        emit reporWriteLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(fileinfoList.size()));
 }
 
-
-// 计数率统计
-void CpsStatisticsWindow::cpsStatistics()
-{
-    //提取有效波形参数
-    int timeLength = ui->spinBox_time1->value(); // 默认值 1ms
-    int timeStart = ui->spinBox_startT->value(); // 开始时刻
-    int timeStop = ui->spinBox_endT->value(); // 截止时刻
-
-    // 查找目录下的h5文件
-    QString h5FilePath = mFileDir + "/waveform_data.h5";
-    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs;
-    if (QFileInfo::exists(h5FilePath) && !mPCIeCommSdk.analyzeHistoryCpsData(timeLength, timeStart, timeStop, h5FilePath, [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPair){
-            for (auto iter = mapPair.begin(); iter!=mapPair.end(); ++iter){
-                mapPairs[iter.key()] = iter.value();
-            }
-        }))
-    {
-        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
-    }
-
-    emit reportCpsPlot(mapPairs);
-}
 
 void CpsStatisticsWindow::on_action_exit_triggered()
 {
@@ -419,31 +401,6 @@ void CpsStatisticsWindow::applyColorTheme()
         // 四边安装轴并显示
         customPlot->axisRect()->setupFullAxesBox();
         customPlot->axisRect()->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
-        // 坐标轴线颜色
-        customPlot->xAxis->setBasePen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->xAxis2->setBasePen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis->setBasePen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis2->setBasePen(QPen(palette.color(QPalette::WindowText)));
-        // 刻度线颜色
-        customPlot->xAxis->setTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->xAxis2->setTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis->setTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis2->setTickPen(QPen(palette.color(QPalette::WindowText)));
-        // 子刻度线颜色
-        customPlot->xAxis->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->xAxis2->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis2->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
-        // 坐标轴文本标签颜色
-        customPlot->xAxis->setLabelColor(palette.color(QPalette::WindowText));
-        customPlot->xAxis2->setLabelColor(palette.color(QPalette::WindowText));
-        customPlot->yAxis->setLabelColor(palette.color(QPalette::WindowText));
-        customPlot->yAxis2->setLabelColor(palette.color(QPalette::WindowText));
-        // 坐标轴刻度文本标签颜色
-        customPlot->xAxis->setTickLabelColor(palette.color(QPalette::WindowText));
-        customPlot->xAxis2->setTickLabelColor(palette.color(QPalette::WindowText));
-        customPlot->yAxis->setTickLabelColor(palette.color(QPalette::WindowText));
-        customPlot->yAxis2->setTickLabelColor(palette.color(QPalette::WindowText));
 
         customPlot->replot();
     }
@@ -512,12 +469,6 @@ QPixmap CpsStatisticsWindow::dblroundPixmap(QSize sz, QColor clrIn, QColor clrOu
     return result;
 }
 
-
-void CpsStatisticsWindow::on_action_cps_triggered(bool checked)
-{
-    // 计数率统计
-    cpsStatistics();
-}
 
 #include <QRandomGenerator>
 //void CpsStatisticsWindow::init3DCurve()
@@ -736,7 +687,7 @@ void CpsStatisticsWindow::on_action_cps_triggered(bool checked)
 //    surface->show();
 //}
 
-void CpsStatisticsWindow::initHeatmap()
+void CpsStatisticsWindow::initCpsPage()
 {
     mGraphisColor.push_back(QColor::fromRgb(0,47,167));
     mGraphisColor.push_back(QColor::fromRgb(255,0,77));
@@ -769,23 +720,7 @@ void CpsStatisticsWindow::initHeatmap()
     customPlot->plotLayout()->clear();
 
     connect(customPlot, &QCustomPlot::plottableClick, this, [&](QCPAbstractPlottable* plottable, int dataIndex, QMouseEvent* event) {
-        // std::unique_lock<std::mutex> lock(mutex_music_tone);
-        // QStringList nameList = plottable->name().split(" ");
-        // if (nameList.count() > 0)	{
-        //     for (int i = 0; i < musicTone.size(); i++) {
-        //         if (i != dataIndex)
-        //             musicTone[i].active = false;
-        //         else {
-        //             musicTone[i].active = !musicTone[i].active;
-        //             if (musicTone[i].active) {
-        //                 currentMusicToneName = musicTone[i].name;
-        //             }
-        //             else {
-        //                 currentMusicToneName.clear();
-        //             }
-        //         }
-        //     }
-        // }
+
     });
 
     // 能谱曲线
@@ -837,29 +772,6 @@ void CpsStatisticsWindow::initHeatmap()
         timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Time/ms"));
         timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 2000);
         timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 1200);
-
-        // 左上角添加图例
-        QCPLegend *legend = new QCPLegend();
-        legend->setWrap(9);
-        timeCountsAxisRect->insetLayout()->addElement(legend, Qt::AlignLeft | Qt::AlignTop); // 清空默认布局
-
-        QCPAxis *keyAxis = timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
-        QCPAxis *valueAxis = timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft);
-
-        for (int i=1; i<=18; ++i){
-            QCPGraph *graph = customPlot->addGraph(keyAxis, valueAxis);
-            graph->setLineStyle(QCPGraph::lsLine);
-            if (i<12){
-                graph->setName(QStringLiteral("HC %1").arg(i));
-                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
-                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
-            }
-            else{
-                graph->setName(QStringLiteral("VC %1").arg(i));
-                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
-                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
-            }
-        }
     }
 
     // 时间探测器计数曲线
@@ -965,11 +877,37 @@ void CpsStatisticsWindow::initHeatmap()
         customPlot->legend->removeItem(customPlot->legend->itemWithPlottable(cpBars)); // 移除与graph关联的图例项，从而隐藏图例
     }
 
+    /*
+    spectrumAxisRect            |   timeCountsAxisRect
+    timeChannelCountsAxisRect   |   channelCountsAxisRect
+    */
+
+    // 设置上下对齐
+    {
+        QCPMarginGroup* marginGroup = new QCPMarginGroup(customPlot);
+        spectrumAxisRect->setMarginGroup(QCP::msTop | QCP::msBottom, marginGroup);
+        timeCountsAxisRect->setMarginGroup(QCP::msTop | QCP::msBottom, marginGroup);
+    }
+
+    // 设置上下对齐
+    {
+        QCPMarginGroup* marginGroup = new QCPMarginGroup(customPlot);
+        timeChannelCountsAxisRect->setMarginGroup(QCP::msTop | QCP::msBottom, marginGroup);
+        channelCountsAxisRect->setMarginGroup(QCP::msTop | QCP::msBottom, marginGroup);
+        timeChannelCountsColorScale->setMarginGroup(QCP::msTop | QCP::msBottom, marginGroup);
+    }
+
     // 设置左边边界联动对齐
     {
-        QCPMarginGroup* timeCountMarginGroup = new QCPMarginGroup(customPlot);
-        timeChannelCountsAxisRect->setMarginGroup(QCP::msLeft | QCP::msRight, timeCountMarginGroup);
-        timeCountsAxisRect->setMarginGroup(QCP::msLeft | QCP::msRight, timeCountMarginGroup);
+        QCPMarginGroup* marginGroup = new QCPMarginGroup(customPlot);
+        spectrumAxisRect->setMarginGroup(QCP::msLeft | QCP::msRight, marginGroup);
+        timeChannelCountsAxisRect->setMarginGroup(QCP::msLeft | QCP::msRight, marginGroup);
+    }
+
+    {
+        QCPMarginGroup* marginGroup = new QCPMarginGroup(customPlot);
+        timeCountsAxisRect->setMarginGroup(QCP::msLeft | QCP::msRight, marginGroup);
+        channelCountsAxisRect->setMarginGroup(QCP::msLeft | QCP::msRight, marginGroup);
     }
 
     // 关联信号槽函数
@@ -981,7 +919,7 @@ void CpsStatisticsWindow::initHeatmap()
     }
 
     QList<QCPAxis*> allAxes;
-    allAxes << timeCountsAxisRect->axes() << timeChannelCountsAxisRect->axes() << channelCountsAxisRect->axes();
+    allAxes << spectrumAxisRect->axes() << timeCountsAxisRect->axes() << timeChannelCountsAxisRect->axes() << channelCountsAxisRect->axes();
     foreach (QCPAxis *axis, allAxes)
     {
         axis->setLayer("axes");
@@ -991,16 +929,22 @@ void CpsStatisticsWindow::initHeatmap()
     // 布局
     QCPLayoutGrid *leftLayout = new QCPLayoutGrid;
     {
-        leftLayout->addElement(0, 0, timeCountsAxisRect);//上面
+        leftLayout->addElement(0, 0, spectrumAxisRect);//上面
         leftLayout->addElement(1, 0, timeChannelCountsAxisRect);//下面
         leftLayout->addElement(1, 1, timeChannelCountsColorScale);//下面
     }
 
+    QCPLayoutGrid *rightLayout = new QCPLayoutGrid;
+    {
+        rightLayout->addElement(0, 0, timeCountsAxisRect);//上面
+        rightLayout->addElement(1, 0, channelCountsAxisRect);//下面
+    }
+
     customPlot->plotLayout()->clear();
     customPlot->plotLayout()->addElement(0, 0, leftLayout);//左边
-    customPlot->plotLayout()->addElement(0, 1, channelCountsAxisRect);//右边
-    customPlot->plotLayout()->setColumnStretchFactor(0, 2);
-    customPlot->plotLayout()->setColumnStretchFactor(1, 1);
+    customPlot->plotLayout()->addElement(0, 1, rightLayout);//右边
+    //customPlot->plotLayout()->setColumnStretchFactor(0, 1);
+    //customPlot->plotLayout()->setColumnStretchFactor(1, 1);
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 
     // 右键菜单项
@@ -1114,9 +1058,10 @@ void CpsStatisticsWindow::initHeatmap()
     }
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 
-    QVBoxLayout* vLayout = new QVBoxLayout(ui->spectroMeterPageInfoWidget_cps);
+    QVBoxLayout* vLayout = new QVBoxLayout(ui->pageInfoWidget_cps);
+    vLayout->setMargin(0);
     vLayout->addWidget(customPlot);
-    ui->spectroMeterPageInfoWidget_cps->setLayout(vLayout);
+    ui->pageInfoWidget_cps->setLayout(vLayout);
 
     mCpsPlot = customPlot;
 }
@@ -1242,3 +1187,77 @@ void CpsStatisticsWindow::on_comboBox_h5Files_currentTextChanged(const QString &
     }
 }
 
+
+void CpsStatisticsWindow::on_action_waveform_triggered()
+{
+    ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_wave);
+    ui->optionStackedWidget->setCurrentWidget(ui->page_wave);
+}
+
+
+void CpsStatisticsWindow::on_action_process_triggered()
+{
+    ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_process);
+    ui->optionStackedWidget->setCurrentWidget(ui->page_process);
+}
+
+
+void CpsStatisticsWindow::on_action_cps_triggered()
+{
+    ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_cps);
+    ui->optionStackedWidget->setCurrentWidget(ui->page_cps);
+}
+
+
+void CpsStatisticsWindow::doCpsStatistics()
+{
+    // 计数率统计
+    //提取有效波形参数
+    int timeLength = ui->spinBox_time1->value(); // 默认值 1ms
+    int timeStart = ui->spinBox_startT->value(); // 开始时刻
+    int timeStop = ui->spinBox_endT->value(); // 截止时刻
+
+    // 查找目录下的h5文件
+    QString h5FilePath = mFileDir + "/waveform_data.h5";
+    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs;
+    if (QFileInfo::exists(h5FilePath) && !mPCIeCommSdk.analyzeHistoryCpsData(timeLength, timeStart, timeStop, h5FilePath, [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPair){
+            for (auto iter = mapPair.begin(); iter!=mapPair.end(); ++iter){
+                mapPairs[iter.key()] = iter.value();
+            }
+        }))
+    {
+        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
+    }
+
+    emit reportCpsPlot(mapPairs);
+}
+
+
+void CpsStatisticsWindow::doDataProcess()
+{
+
+}
+
+
+void CpsStatisticsWindow::doWavePlot()
+{
+    // // 计数率统计
+    // //提取有效波形参数
+    // int timeLength = ui->spinBox_time1->value(); // 默认值 1ms
+    // int timeStart = ui->spinBox_startT->value(); // 开始时刻
+    // int timeStop = ui->spinBox_endT->value(); // 截止时刻
+
+    // // 查找目录下的h5文件
+    // QString h5FilePath = mFileDir + "/waveform_data.h5";
+    // QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs;
+    // if (QFileInfo::exists(h5FilePath) && !mPCIeCommSdk.analyzeHistoryCpsData(timeLength, timeStart, timeStop, h5FilePath, [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPair){
+    //         for (auto iter = mapPair.begin(); iter!=mapPair.end(); ++iter){
+    //             mapPairs[iter.key()] = iter.value();
+    //         }
+    //     }))
+    // {
+    //     QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
+    // }
+
+    //emit reportWavePlot(mapPairs);
+}
