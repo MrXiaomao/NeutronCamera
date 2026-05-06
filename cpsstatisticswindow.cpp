@@ -11,19 +11,32 @@ CpsStatisticsWindow::CpsStatisticsWindow(bool isDarkTheme, QWidget *parent)
     , ui(new Ui::CpsStatisticsWindow)
     , mIsDarkTheme(isDarkTheme)
     , mainWindow(static_cast<QGoodWindowHelper*>(parent))
+    , mAnalysisThread(nullptr)
+    , mAnalysisWorker(nullptr)
 {
     ui->setupUi(this);
 
     initUi();
-
+    initWaveformPage();
     initCpsPage();
+
+    QActionGroup* actGroup = new QActionGroup(this);
+    actGroup->addAction(ui->action_waveform);
+    actGroup->addAction(ui->action_process);
+    actGroup->addAction(ui->action_cps);
+    ui->action_waveform->setChecked(true);
+    emit ui->action_waveform->triggered(true);
+
+    connect(ui->toolButton_cps, &QToolButton::clicked, this, &CpsStatisticsWindow::onCpsStatistics);
+    connect(ui->toolButton_process, &QToolButton::clicked, this, &CpsStatisticsWindow::onDataProcess);
+    //connect(ui->toolButton_waveform, &QToolButton::clicked, this, &CpsStatisticsWindow::onWaveformPlot);
 
     //QStringList args = QCoreApplication::arguments();
     //this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
     this->applyColorTheme();
 
-    connect(this, SIGNAL(reporWriteLog(const QString&,QtMsgType)), this, SLOT(replyWriteLog(const QString&,QtMsgType)));
-    connect(this, SIGNAL(reportCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)), this, SLOT(replyCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)));
+    connect(this, SIGNAL(doWriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
+    connect(this, SIGNAL(doCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)), this, SLOT(onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)));
     
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
@@ -48,9 +61,6 @@ void CpsStatisticsWindow::initUi()
     mProgressIndicator = new QProgressIndicator(this);
 
     ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
-    connect(ui->toolButton_cps, &QToolButton::triggered, this, &CpsStatisticsWindow::doCpsStatistics);
-    connect(ui->toolButton_process, &QToolButton::triggered, this, &CpsStatisticsWindow::doDataProcess);
-    //connect(ui->toolButton_wave, &QToolButton::triggered, this, &CpsStatisticsWindow::doWavePlot);
 
     //////////////////////////////////////////////////////////////////////
     //布局
@@ -196,7 +206,7 @@ bool CpsStatisticsWindow::eventFilter(QObject *watched, QEvent *event){
     return QWidget::eventFilter(watched, event);
 }
 
-void CpsStatisticsWindow::replyWriteLog(const QString &msg, QtMsgType msgType/* = QtDebugMsg*/)
+void CpsStatisticsWindow::onWriteLog(const QString &msg, QtMsgType msgType/* = QtDebugMsg*/)
 {
 #if 0
     // 创建一个 QTextCursor
@@ -262,18 +272,18 @@ void CpsStatisticsWindow::on_action_openfile_triggered()
         mShotNum = settings.value("Global/ShotNum", "00000").toString();
         mCurrentDetectorType = (DetectorType)settings.value("Global/DetectType", 0).toUInt();
 
-        emit reporWriteLog("实验炮号：" + mShotNum);
+        emit doWriteLog("实验炮号：" + mShotNum);
         if (mCurrentDetectorType == dtLBD){
-            emit reporWriteLog("探测器类型：LBD探测器");
+            emit doWriteLog("探测器类型：LBD探测器");
         }
         else if (mCurrentDetectorType == dtLSD){
-            emit reporWriteLog("探测器类型：LSD探测器");
+            emit doWriteLog("探测器类型：LSD探测器");
         }
         else if (mCurrentDetectorType == dtPSD){
-            emit reporWriteLog("探测器类型：PSD探测器");
+            emit doWriteLog("探测器类型：PSD探测器");
         }
         else{
-            emit reporWriteLog("探测器类型：未知");
+            emit doWriteLog("探测器类型：未知");
         }
     }
 
@@ -281,6 +291,15 @@ void CpsStatisticsWindow::on_action_openfile_triggered()
     loadRelatedFiles(dirPath);
 }
 
+// 计算文件信息列表的总大小
+qint64 CpsStatisticsWindow::calculateTotalSize(const QFileInfoList& fileinfoList)
+{
+    qint64 totalSize = 0;
+    for (const QFileInfo& fi : fileinfoList) {
+        totalSize += fi.size();
+    }
+    return totalSize;
+}
 
 void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
 {
@@ -312,6 +331,109 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
     }
     // 使用静态函数提取文件名列表
     mfileList = DataCompressWindow::extractFileNames(result);
+    {
+        qint64 totalSize = calculateTotalSize(fileinfoList);
+        int fileCount = fileinfoList.count();
+
+        //统计文件详细信息
+        // ==== 填表 ====
+        ui->tableWidget_file->setSortingEnabled(false);  // 填表时关闭排序避免抖动
+        ui->tableWidget_file->clearContents();
+        ui->tableWidget_file->setRowCount(fileCount);
+
+        // 列设置：只需要设一次
+        // 例：列0 文件名，列1 大小(bytes)，列2 可读大小，列3 最后修改时间
+        if (ui->tableWidget_file->columnCount() != 4) {
+            ui->tableWidget_file->setColumnCount(4);
+            ui->tableWidget_file->setHorizontalHeaderLabels(
+                {"File Name", "Size(bytes)", "Size", "Last Modified"}
+                );
+        }
+
+        QLocale locale(QLocale::English);
+        for (int i = 0; i < fileCount; ++i) {
+            const QFileInfo& fi = fileinfoList.at(i);
+
+            auto *itemName = new QTableWidgetItem(fi.fileName());
+            itemName->setFlags(itemName->flags() ^ Qt::ItemIsEditable);
+
+            auto *itemBytes = new QTableWidgetItem(locale.toString(fi.size()));
+            itemBytes->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            itemBytes->setFlags(itemBytes->flags() ^ Qt::ItemIsEditable);
+
+            auto *itemHuman = new QTableWidgetItem(humanReadableSize(fi.size()));
+            itemHuman->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            itemHuman->setFlags(itemHuman->flags() ^ Qt::ItemIsEditable);
+
+            auto *itemTime = new QTableWidgetItem(fi.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
+            itemTime->setFlags(itemTime->flags() ^ Qt::ItemIsEditable);
+
+            ui->tableWidget_file->setItem(i, 0, itemName);
+            ui->tableWidget_file->setItem(i, 1, itemBytes);
+            ui->tableWidget_file->setItem(i, 2, itemHuman);
+            ui->tableWidget_file->setItem(i, 3, itemTime);
+        }
+
+        // 表头美化（可选）
+        ui->tableWidget_file->horizontalHeader()->setStretchLastSection(true);
+        ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+        ui->tableWidget_file->setSelectionBehavior(QAbstractItemView::SelectRows);
+        ui->tableWidget_file->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        ui->tableWidget_file->setAlternatingRowColors(true);
+
+        emit doWriteLog(QString("bin文件数量: %1, 总大小: %2").arg(fileCount).arg(humanReadableSize(totalSize)), QtDebugMsg);
+        ui->lineEdit_binCount->setText(QString::number(fileCount));
+        ui->lineEdit_binTotal->setText(humanReadableSize(totalSize));
+    }
+
+    // 根据文件名统计整个目录下文件的测量时长（仅已第1张卡的DDR1作为参考）
+    {
+        //统计测量时长，选取光纤口1数据来统计
+        int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "Adata") / 3;//正常情况下是3张卡（每张卡分A、B两面，所以这里除以3）
+
+        // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
+        const int time_per = 40;
+        int measureTime = DataCompressWindow::calculateMeasureTime(count1data, time_per);
+
+        // 获取第一个文件名打包序号作为开始时间，如：1Adata27.bin
+        QString file_name = mfileList.first();
+        // 查找data起始位置
+        int data_start = file_name.indexOf("data");
+        if (data_start != -1) {
+            // 跳过data，从后续字符中提取开头的连续数字
+            QString sub_str = file_name.mid(data_start + 4); // data长度为4，所以偏移4
+            int digit_end = 0;
+            while (digit_end < sub_str.length() && sub_str[digit_end].isDigit()) {
+                digit_end++;
+            }
+            QString result_str = sub_str.left(digit_end); // 得到"27"
+            int start_tm = result_str.toInt();
+
+            // 波形显示页面
+            ui->line_waveform_startT_1->setText(QString::number((start_tm-1)*time_per));
+            ui->line_waveform_endT_1->setText(QString::number((start_tm-1)*time_per+measureTime));
+            ui->spinBox_startT_1->setValue((start_tm-1)*time_per);
+            ui->spinBox_endT_1->setValue(start_tm*time_per);
+
+            // 数据压缩处理页面
+            ui->line_waveform_startT_2->setText(QString::number((start_tm-1)*time_per));
+            ui->line_waveform_endT_2->setText(QString::number((start_tm-1)*time_per+measureTime));
+            ui->spinBox_startT_2->setValue((start_tm-1)*time_per);
+            ui->spinBox_endT_2->setValue((start_tm-1)*time_per+measureTime);
+
+            // 计数率统计页面
+            ui->line_waveform_startT_3->setText(QString::number((start_tm-1)*time_per));
+            ui->line_waveform_endT_3->setText(QString::number((start_tm-1)*time_per+measureTime));
+            ui->spinBox_startT_3->setValue((start_tm-1)*time_per);
+            ui->spinBox_endT_3->setValue(start_tm*time_per);
+        }
+        else {
+            ui->line_measure_startT->setText("0");
+            ui->line_measure_endT->setText(QString::number(measureTime));
+            ui->spinBox_time1->setMinimum(0);
+            ui->spinBox_time1->setMaximum(measureTime);
+        }
+    }
 
     // 仅过滤 .h5 文件
     QStringList filters;
@@ -329,9 +451,9 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
     }
 
     if (fileinfoList.size() == 0)
-        emit reporWriteLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
+        emit doWriteLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
     else
-        emit reporWriteLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(fileinfoList.size()));
+        emit doWriteLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(fileinfoList.size()));
 }
 
 
@@ -687,7 +809,8 @@ QPixmap CpsStatisticsWindow::dblroundPixmap(QSize sz, QColor clrIn, QColor clrOu
 //    surface->show();
 //}
 
-void CpsStatisticsWindow::initCpsPage()
+
+void CpsStatisticsWindow::initWaveformPage()
 {
     mGraphisColor.push_back(QColor::fromRgb(0,47,167));
     mGraphisColor.push_back(QColor::fromRgb(255,0,77));
@@ -708,6 +831,63 @@ void CpsStatisticsWindow::initCpsPage()
     mGraphisColor.push_back(QColor::fromRgb(62,108,179));
     mGraphisColor.push_back(QColor::fromRgb(232,88,39));
 
+    QCustomPlot *customPlotHor = new QCustomPlot(this);
+    QCustomPlotHelper* customPlotHelperHor = new QCustomPlotHelper(customPlotHor, this);
+    customPlotHor->legend->setVisible(true);
+    //customPlotHor->legend->setWrap(9);
+    customPlotHor->xAxis->setRange(QCPRange(0, 1000000));
+    customPlotHor->yAxis->setRange(QCPRange(0, 16000));
+    customPlotHor->setNoAntialiasingOnDrag(false);
+    for (int i=1; i<=11; ++i){
+        QCPGraph *graph = customPlotHor->addGraph();
+        graph->setLineStyle(QCPGraph::lsLine);
+        if (i<12){
+            graph->setName(QStringLiteral("HC %1").arg(i));
+            graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
+        }
+        else{
+            graph->setName(QStringLiteral("VC %1").arg(i));
+            graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
+        }
+    }
+    customPlotHor->replot(QCustomPlot::rpQueuedReplot);
+
+    QCustomPlot *customPlotVer = new QCustomPlot(this);
+    QCustomPlotHelper* customPlotHelperVer = new QCustomPlotHelper(customPlotVer, this);
+    customPlotVer->legend->setVisible(true);
+    //customPlotVer->legend->setWrap(9);
+    customPlotVer->xAxis->setRange(QCPRange(0, 1000000));
+    customPlotVer->yAxis->setRange(QCPRange(0, 16000));
+    customPlotVer->setNoAntialiasingOnDrag(false);
+    for (int i=12; i<=18; ++i){
+        QCPGraph *graph = customPlotVer->addGraph();
+        graph->setLineStyle(QCPGraph::lsLine);
+        if (i<12){
+            graph->setName(QStringLiteral("HC %1").arg(i));
+            graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
+        }
+        else{
+            graph->setName(QStringLiteral("VC %1").arg(i));
+            graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
+        }
+    }
+    customPlotVer->replot(QCustomPlot::rpQueuedReplot);
+
+    QVBoxLayout* vLayout = new QVBoxLayout(ui->pageInfoWidget_waveform);
+    vLayout->setMargin(0);
+    vLayout->setSpacing(1);
+    vLayout->addWidget(customPlotHor);
+    vLayout->addWidget(customPlotVer);
+    ui->pageInfoWidget_waveform->setLayout(vLayout);
+
+}
+
+void CpsStatisticsWindow::initCpsPage()
+{
     const int channelCount = 18; // 通道总数
     QCustomPlot *customPlot = new QCustomPlot(this);
     QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
@@ -1066,32 +1246,32 @@ void CpsStatisticsWindow::initCpsPage()
     mCpsPlot = customPlot;
 }
 
-void CpsStatisticsWindow::replyCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs)
+void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs)
 {
     QCPAxisRect *timeCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("timeCountsAxisRect");
     {
         // 设置坐标轴范围
         QCPAxis *keyAxis = timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
         QCPAxis *valueAxis = timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft);
-        keyAxis->setRange(QCPRange(ui->spinBox_startT->value(), ui->spinBox_endT->value()));
+        keyAxis->setRange(QCPRange(ui->spinBox_startT_3->value(), ui->spinBox_endT_3->value()));
     }
     QCPAxisRect *timeChannelCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("timeChannelCountsAxisRect");
     {
         // 设置坐标轴范围
         QCPAxis *keyAxis = timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
         QCPAxis *valueAxis = timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atLeft);
-        keyAxis->setRange(QCPRange(ui->spinBox_startT->value(), ui->spinBox_endT->value()));
+        keyAxis->setRange(QCPRange(ui->spinBox_startT_3->value(), ui->spinBox_endT_3->value()));
     }
 
     QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(mCpsPlot->plottable("colorMap"));
     QCPBars *cpBars = qobject_cast<QCPBars*>(mCpsPlot->plottable("cpBars"));
 
     const int numGroups = 18;
-    const int pointsPerGroup = ui->spinBox_endT->value();
-    int keySize = ui->spinBox_endT->value() - ui->spinBox_startT->value();
+    const int pointsPerGroup = ui->spinBox_endT_3->value();
+    int keySize = ui->spinBox_endT_3->value() - ui->spinBox_startT_3->value();
     int valueSize = 18;
     colorMap->data()->setSize(keySize, valueSize);// 范围不要超出坐标轴范围，否则坐标轴会被覆盖
-    colorMap->data()->setRange(QCPRange(ui->spinBox_startT->value()/* + 1*/, ui->spinBox_endT->value()), QCPRange(1, numGroups));
+    colorMap->data()->setRange(QCPRange(ui->spinBox_startT_3->value()/* + 1*/, ui->spinBox_endT_3->value()), QCPRange(1, numGroups));
 
     QVector<double> keys;
     QVector<double> values;
@@ -1113,7 +1293,7 @@ void CpsStatisticsWindow::replyCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*�
             xData.append(iterSub.key());
             yData.append(iterSub.value());
 
-            int keyIndex = iterSub.key()-ui->spinBox_startT->value();
+            int keyIndex = iterSub.key()-ui->spinBox_startT_3->value();
             int valueIndex = channel - 0.5;
             double x, y, z;
             colorMap->data()->cellToCoord(keyIndex, valueIndex, &x, &y);
@@ -1182,22 +1362,22 @@ void CpsStatisticsWindow::on_comboBox_h5Files_currentTextChanged(const QString &
         ui->line_measure_endT->setText(QString::number(packerEndTime));
         ui->spinBox_threshold->setValue(threshold);
 
-        ui->spinBox_startT->setValue(packerStartTime);
-        ui->spinBox_endT->setValue(packerEndTime);
+        ui->spinBox_startT_3->setValue(packerStartTime);
+        ui->spinBox_endT_3->setValue(packerEndTime);
     }
 }
 
 
 void CpsStatisticsWindow::on_action_waveform_triggered()
 {
-    ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_wave);
-    ui->optionStackedWidget->setCurrentWidget(ui->page_wave);
+    ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_waveform);
+    ui->optionStackedWidget->setCurrentWidget(ui->page_waveform);
 }
 
 
 void CpsStatisticsWindow::on_action_process_triggered()
 {
-    ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_process);
+    //ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_process);
     ui->optionStackedWidget->setCurrentWidget(ui->page_process);
 }
 
@@ -1208,38 +1388,8 @@ void CpsStatisticsWindow::on_action_cps_triggered()
     ui->optionStackedWidget->setCurrentWidget(ui->page_cps);
 }
 
-
-void CpsStatisticsWindow::doCpsStatistics()
-{
-    // 计数率统计
-    //提取有效波形参数
-    int timeLength = ui->spinBox_time1->value(); // 默认值 1ms
-    int timeStart = ui->spinBox_startT->value(); // 开始时刻
-    int timeStop = ui->spinBox_endT->value(); // 截止时刻
-
-    // 查找目录下的h5文件
-    QString h5FilePath = mFileDir + "/waveform_data.h5";
-    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs;
-    if (QFileInfo::exists(h5FilePath) && !mPCIeCommSdk.analyzeHistoryCpsData(timeLength, timeStart, timeStop, h5FilePath, [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPair){
-            for (auto iter = mapPair.begin(); iter!=mapPair.end(); ++iter){
-                mapPairs[iter.key()] = iter.value();
-            }
-        }))
-    {
-        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
-    }
-
-    emit reportCpsPlot(mapPairs);
-}
-
-
-void CpsStatisticsWindow::doDataProcess()
-{
-
-}
-
-
-void CpsStatisticsWindow::doWavePlot()
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+void CpsStatisticsWindow::onWaveformPlot()
 {
     // // 计数率统计
     // //提取有效波形参数
@@ -1260,4 +1410,250 @@ void CpsStatisticsWindow::doWavePlot()
     // }
 
     //emit reportWavePlot(mapPairs);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+/// \brief CpsStatisticsWindow::onDataProcess
+QString CpsStatisticsWindow::humanReadableSize(qint64 bytes)
+{
+    const double KB = 1024.0;
+    const double MB = KB * 1024.0;
+    const double GB = MB * 1024.0;
+
+    if (bytes >= GB) return QString::asprintf("%.2f GB", bytes / GB);
+    if (bytes >= MB) return QString::asprintf("%.2f MB", bytes / MB);
+    if (bytes >= KB) return QString::asprintf("%.2f KB", bytes / KB);
+    return QString("%1 B").arg(bytes);
+}
+
+void CpsStatisticsWindow::onDataProcess()
+{
+    // 获取数据目录路径
+    QString dataDir = ui->textBrowser_filepath->toPlainText();
+    if (dataDir.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("数据目录路径为空"), QtWarningMsg);
+        return;
+    }
+
+    QString outfileName = ui->lineEdit_outputFile->text().trimmed();
+    //根据用户输入，对文件名后缀进行追加.h5，如果存在.h5则不追加后缀，否则追加后缀
+    if (outfileName.isEmpty()) {
+        emit doWriteLog("输出文件名不能为空", QtWarningMsg);
+        return;
+    }
+
+    // 检查是否已有.h5后缀（区分大小写）
+    if (!outfileName.endsWith(".h5", Qt::CaseSensitive)) {
+        outfileName += ".h5";
+    }
+
+    emit doWriteLog("========================================", QtInfoMsg);
+    emit doWriteLog("开始数据压缩分析", QtInfoMsg);
+    emit doWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
+
+    mProgressIndicator->startAnimation();
+
+    // 创建HDF5文件路径（在数据目录下）
+    QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
+    emit doWriteLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
+
+    //检查文件是否存在，如果存在则询问用户是否删除
+    if (QFileInfo::exists(hdf5FilePath)) {
+        //弹窗提醒用户hdf5FilePath已存在，给出选项是否删除
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            "警告",
+            QString("文件 \"%1\" 已存在，是否删除并重新生成？").arg(hdf5FilePath),
+            QMessageBox::Yes | QMessageBox::No,
+            QMessageBox::No
+            );
+        if (reply == QMessageBox::No) {
+            emit doWriteLog("用户取消操作", QtInfoMsg);
+            return;
+        }
+        QFile::remove(hdf5FilePath);
+        emit doWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
+    }
+
+    // 创建并启动工作线程
+    // 如果已有线程在运行，先停止并清理
+    if (mAnalysisThread) {
+        if (mAnalysisThread->isRunning()) {
+            // 如果有worker，先取消分析
+            if (mAnalysisWorker) {
+                mAnalysisWorker->cancelAnalysis();
+                disconnect(mAnalysisWorker, nullptr, this, nullptr);
+            }
+            mAnalysisThread->quit();
+            mAnalysisThread->wait(2000); // 等待最多2秒
+            if (mAnalysisThread->isRunning()) {
+                mAnalysisThread->terminate();
+                mAnalysisThread->wait();
+            }
+        }
+        // 清理旧对象
+        disconnect(mAnalysisThread, nullptr, nullptr, nullptr);
+        if (mAnalysisWorker) {
+            mAnalysisWorker->deleteLater();
+            mAnalysisWorker = nullptr;
+        }
+        mAnalysisThread->deleteLater();
+        mAnalysisThread = nullptr;
+    }
+
+    mAnalysisThread = new QThread(this);
+    mAnalysisWorker = new DataAnalysisWorker();
+
+    // 设置参数
+    int timePerFile = 40;// 每个文件40ms
+    int startTime = ui->spinBox_startT_1->value();
+    int endTime = ui->spinBox_endT_1->value();
+    int threshold = ui->spinBox_threshold->value();
+
+    mAnalysisWorker->setParameters(dataDir, mfileList, outfileName, threshold,
+                                   timePerFile, startTime, endTime);
+
+    // 将worker移动到工作线程
+    mAnalysisWorker->moveToThread(mAnalysisThread);
+
+    // 连接信号和槽（使用QueuedConnection确保线程安全）
+    connect(mAnalysisThread, &QThread::started, mAnalysisWorker, &DataAnalysisWorker::startAnalysis);
+    connect(mAnalysisWorker, &DataAnalysisWorker::logMessage,
+            this, &CpsStatisticsWindow::onAnalysisLogMessage, Qt::QueuedConnection);
+    connect(mAnalysisWorker, &DataAnalysisWorker::progressUpdated,
+            this, &CpsStatisticsWindow::onAnalysisProgress, Qt::QueuedConnection);
+    connect(mAnalysisWorker, &DataAnalysisWorker::analysisFinished,
+            this, &CpsStatisticsWindow::onAnalysisFinished, Qt::QueuedConnection);
+    connect(mAnalysisWorker, &DataAnalysisWorker::analysisError,
+            this, &CpsStatisticsWindow::onAnalysisError, Qt::QueuedConnection);
+
+    // 不在这里设置自动清理，由onAnalysisFinished统一处理
+
+    // 启动工作线程
+    mAnalysisThread->start();
+}
+
+void CpsStatisticsWindow::onAnalysisLogMessage(const QString& msg, QtMsgType msgType)
+{
+    // 这个槽函数在工作线程中通过信号调用，会自动切换到UI线程执行
+    emit doWriteLog(msg, msgType);
+}
+
+void CpsStatisticsWindow::onAnalysisProgress(int current, int total)
+{
+    // 更新进度条（在UI线程中执行）
+    if (total > 0) {
+        ui->progressBar->setMaximum(total);
+        ui->progressBar->setValue(current);
+    }
+}
+
+void CpsStatisticsWindow::onAnalysisFinished(bool success, const QString& message)
+{
+    // 恢复UI状态
+    ui->toolButton_process->setEnabled(true);
+
+    if (success) {
+        emit doWriteLog("数据压缩分析完成", QtInfoMsg);
+
+        // 更新文件大小显示
+        QString dataDir = ui->textBrowser_filepath->toPlainText();
+        QString outfileName = ui->lineEdit_outputFile->text().trimmed();
+        if (!outfileName.endsWith(".h5", Qt::CaseSensitive)) {
+            outfileName += ".h5";
+        }
+        QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
+
+        QFileInfo fi(hdf5FilePath);
+        if (fi.exists()) {
+            qint64 sizeBytes = fi.size();
+            ui->lineEdit_fileSize->setText(humanReadableSize(sizeBytes));
+            emit doWriteLog(QString("压缩后文件大小: %1").arg(humanReadableSize(sizeBytes)), QtInfoMsg);
+        }
+
+        emit doWriteLog("========================================", QtInfoMsg);
+    } else {
+        emit doWriteLog(QString("数据分析失败: %1").arg(message), QtCriticalMsg);
+        QMessageBox::critical(this, "错误", QString("数据分析失败: %1").arg(message));
+    }
+
+    // Worker已经完成工作，现在停止线程并清理
+    // 注意：这里必须在UI线程中执行，确保线程安全
+    if (mAnalysisThread) {
+        // 先断开worker的信号连接，避免后续信号触发
+        if (mAnalysisWorker) {
+            disconnect(mAnalysisWorker, nullptr, this, nullptr);
+        }
+
+        // 停止线程
+        if (mAnalysisThread->isRunning()) {
+            mAnalysisThread->quit();
+            // 等待线程结束（最多等待3秒）
+            if (!mAnalysisThread->wait(3000)) {
+                // 如果等待超时，强制终止
+                emit doWriteLog("警告：线程未能正常结束，强制终止", QtWarningMsg);
+                mAnalysisThread->terminate();
+                mAnalysisThread->wait();
+            }
+        }
+
+        // 断开线程的所有连接
+        disconnect(mAnalysisThread, nullptr, nullptr, nullptr);
+
+        // 清理worker对象（线程已停止，可以安全删除）
+        if (mAnalysisWorker) {
+            mAnalysisWorker->deleteLater();
+            mAnalysisWorker = nullptr;
+        }
+
+        // 清理线程对象
+        mAnalysisThread->deleteLater();
+        mAnalysisThread = nullptr;
+    }
+
+    mProgressIndicator->stopAnimation();
+
+    // 重新加载h5文件列表
+    // 仅过滤 .h5 文件
+    QStringList filters;
+    filters << "*.h5";
+    QFileInfoList fileinfoList = QDir(mFileDir).entryInfoList(
+        filters,
+        QDir::Files | QDir::NoSymLinks,
+        QDir::Unsorted
+        );
+
+    ui->comboBox_h5Files->clear();
+    for (auto item : fileinfoList){
+        ui->comboBox_h5Files->addItem(item.baseName());
+    }
+}
+
+void CpsStatisticsWindow::onAnalysisError(const QString& error)
+{
+    emit doWriteLog(QString("错误: %1").arg(error), QtCriticalMsg);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+void CpsStatisticsWindow::onCpsStatistics()
+{
+    // 计数率统计
+    //提取有效波形参数
+    int timeLength = ui->spinBox_time1->value(); // 默认值 1ms
+    int timeStart = ui->spinBox_startT_3->value(); // 开始时刻
+    int timeStop = ui->spinBox_endT_3->value(); // 截止时刻
+
+    // 查找目录下的h5文件
+    QString h5FilePath = mFileDir + "/waveform_data.h5";
+    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs;
+    if (QFileInfo::exists(h5FilePath) && !mPCIeCommSdk.analyzeHistoryCpsData(timeLength, timeStart, timeStop, h5FilePath, [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPair){
+            for (auto iter = mapPair.begin(); iter!=mapPair.end(); ++iter){
+                mapPairs[iter.key()] = iter.value();
+            }
+        }))
+    {
+        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
+    }
+
+    emit doCpsPlot(mapPairs);
 }

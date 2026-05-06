@@ -895,7 +895,7 @@ void DataAnalysisWorker::getValidWave()
     }
 
     emit logMessage(QString("所有波形数据处理完成，已保存到: %1").arg(hdf5FilePath), QtInfoMsg);
-    emit analysisFinished(true, "数据分析完成");
+    emit analysisFinished(true, hdf5FilePath);
 }
 
 // 将波形数据按板卡分组写入HDF5文件

@@ -169,7 +169,10 @@ public:
     };
 
     void initUi();
-    void initCpsPage(); // 热度图
+    void initCpsPage(); // 计数率
+    void initWaveformPage(); // 原始波形
+
+    qint64 calculateTotalSize(const QFileInfoList& fileinfoList);
     void loadRelatedFiles(const QString& src);
 
     QPixmap maskPixmap(QPixmap, QSize sz, QColor clrMask);
@@ -179,22 +182,27 @@ public:
     virtual void closeEvent(QCloseEvent *event) override;
     virtual bool eventFilter(QObject *watched, QEvent *event) override;
 
-public slots:
-    void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    void replyCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
-
-    // 计数率统计
-    void doCpsStatistics();
-
-    // 数据处理
-    void doDataProcess();
-
     // 波形显示
-    void doWavePlot();
+    Q_SLOT void onWaveformPlot();
+
+    // 数据处理相关的槽函数
+    QString humanReadableSize(qint64 bytes);
+    Q_SLOT void onDataProcess();
+    Q_SLOT void onAnalysisLogMessage(const QString& msg, QtMsgType msgType);
+    Q_SLOT void onAnalysisProgress(int current, int total);
+    Q_SLOT void onAnalysisFinished(bool success, const QString& message);
+    Q_SLOT void onAnalysisError(const QString& error);
+
+    // 计数率统计相关槽函数
+    Q_SLOT void onCpsStatistics();
+
+public slots:
+    void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
+    void onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
 
 signals:
-    void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    void reportCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
+    void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    void doCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
 
 private slots:
     void on_action_openfile_triggered();
@@ -237,6 +245,10 @@ private:
     QString mFileDir;
 
     QString joinFilename(const int& cameraIndex); // 拼接文件名
+
+    // 数据处理线程
+    QThread* mAnalysisThread;
+    DataAnalysisWorker* mAnalysisWorker;
 };
 
 #endif // CPSSTATISTICSWINDOW_H
