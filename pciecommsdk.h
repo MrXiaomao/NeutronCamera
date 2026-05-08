@@ -284,7 +284,7 @@ public:
     Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
     Q_SIGNAL void reportFileWriteElapsedtime(quint32, quint32);
     Q_SIGNAL void reportCaptureFinished();
-    Q_SIGNAL void reportWaveform(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
+    Q_SIGNAL void doWaveform(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
 
@@ -322,7 +322,15 @@ public:
     
     bool analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
 
-    bool analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms*/, quint32 timeStart/*开始时刻ms*/, quint32 timeStop/*结束时刻ms*/, QString filePath/*H5文件路径*/, std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)> callback);
+    bool analyzeHistoryCpsData(quint32 channels/*多道道数（统计能谱用）*/,
+                               quint32 timeWidth/*时间宽度ms（统计计数率用）*/,
+                               quint32 timeStart/*开始时刻ms*/,
+                               quint32 timeStop/*结束时刻ms*/,
+                               QString filePath/*H5文件路径*/,
+                               std::function<void(
+                                   QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>,
+                                   QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>
+                                   )> callback);
 
     /*指令集*/
     //死时间

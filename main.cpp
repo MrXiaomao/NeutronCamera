@@ -38,7 +38,7 @@ void AppMessageHandler(QtMsgType type, const QMessageLogContext& context, const 
         return;// 主要用于过滤系统的警告信息
 
     if (mMainWindow && type != QtDebugMsg){
-        QMetaObject::invokeMethod(mMainWindow, "reporWriteLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(QtMsgType, type));
+        QMetaObject::invokeMethod(mMainWindow, "doWriteLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(QtMsgType, type));
     }
 
     //这里必须调用，否则消息被拦截，log4qt无法捕获系统日志

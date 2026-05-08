@@ -59,12 +59,12 @@ public:
     virtual bool eventFilter(QObject *watched, QEvent *event) override;
 
 public slots:
-    void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    void replyNeutronSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//中子能谱
-    void replyGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//伽马能谱
+    void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
+    void onNeutronSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//中子能谱
+    void onGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//伽马能谱
 
 signals:
-    void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
     void reportNeutronSpectrum(quint8, quint8, QVector<QPair<double,double>>&);
     void reportGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);
 

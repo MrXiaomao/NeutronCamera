@@ -249,8 +249,8 @@ private:
     FileJob mJob;
     quint8 mCameraIndex = 0;
     int mThreshold = 0;
-    int mPre = 20;
-    int mPost = 491;
+    int mPre = 5;
+    int mPost = 200;
     std::function<void(quint32, quint8, QVector<std::array<qint16, H5_DATA_COLS>>&)> mCallback;
     std::function<void()> mOnFinished;
 };

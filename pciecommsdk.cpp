@@ -42,12 +42,9 @@
 PCIeCommSdk::PCIeCommSdk(QObject *parent)
     : QObject{parent}
 {
-    mDevices = enumDevices();
-
     QStringList args = QCoreApplication::arguments();
-    if (args.contains("-m") && args.contains("offline")){
-    }
-    else{
+    if (args.size() == 1){
+        mDevices = enumDevices();
         initCaptureThreads();
     }
 }
@@ -306,7 +303,6 @@ void PCIeCommSdk::replyCaptureWaveformData(quint8 cardIndex/*PCIe卡序号*/, bo
 
                 QByteArray chunk = waveformData.mid(16, 200000000-32);
                 QVector<qint16> ch[3];
-                QVector<qint16> targetdata;
                 if (!DataAnalysisWorker::readBin3Ch_fast(chunk, ch[0], ch[1], ch[2], true)) {
                     return;
                 }
@@ -354,7 +350,7 @@ void PCIeCommSdk::replyCaptureWaveformData(quint8 cardIndex/*PCIe卡序号*/, bo
                     waveformPair.append(qMakePair(k*2, ch[cameraNo][k]));
                 }
 
-                emit reportWaveform(timeIndex, cameraIndex, waveformPair);
+                emit doWaveform(timeIndex, cameraIndex, waveformPair);
             }
         }
     }
@@ -620,61 +616,43 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLen
 {
     //根据通道号计算对应采集卡的第几通道
     quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
-
-    QVector<qint16> ch0, ch1, ch2;
-    QVector<qint16> targetdata;
-    if (!DataAnalysisWorker::readBin3Ch_fast(filePath, ch0, ch1, ch2, true)) {
+    QVector<qint16> ch[3];
+    if (!DataAnalysisWorker::readBin3Ch_fast(filePath, ch[0], ch[1], ch[2], true)) {
         // emit logMessage(QString("文件%1: 读取失败或文件不存在").arg(filePath), QtWarningMsg);
         qDebug() << "文件" << filePath << "读取失败或文件不存在";
         return false;
     }
+    return false;
 
     //计算出是当前文件波形的第几个数据点
     int index = remainTime * 1000 * 1000/ 2;
     int point_num = timeLength * 1000 * 1000 / 2;
 
+    //扣基线，调整数据
+    qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
+    //根据相机序号计算出是第几块光纤卡
+    int board_index = (cameraIndex-1)/CAMNUMBER_DDR_PER+1;
+    DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, board_index, cameraNo + 1);
+    //根据时间段提取数据
     //提取通道号的数据cameraNo
-    QVector<qint16> waveform;
-    if (cameraNo == 0) {
-        //扣基线，调整数据
-        qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch0);
-        //根据相机序号计算出是第几块光纤卡
-        int board_index = (cameraIndex-1)/CAMNUMBER_DDR_PER+1;
-        DataAnalysisWorker::adjustDataWithBaseline(ch0, baseline_ch, board_index, 1);
-        //提取数据
-        waveform = ch0.mid(index, point_num);
-    } else if (cameraNo == 1) {
-        //扣基线，调整数据
-        qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch1);
-        //根据相机序号计算出是第几块光纤卡
-        int board_index = (cameraIndex-1)/CAMNUMBER_DDR_PER+1;
-        DataAnalysisWorker::adjustDataWithBaseline(ch1, baseline_ch, board_index, 2);
-        //提取数据
-        waveform = ch1.mid(index, point_num);
-    } else if (cameraNo == 2) {
-        //扣基线，调整数据
-        qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch2);
-        //根据相机序号计算出是第几块光纤卡
-        int board_index = (cameraIndex-1)/CAMNUMBER_DDR_PER+1;
-        DataAnalysisWorker::adjustDataWithBaseline(ch2, baseline_ch, board_index, 3);
-        //提取数据
-        waveform = ch2.mid(index, point_num);
-    }
+    QVector<qint16> waveform = ch[cameraNo].mid(index, point_num);
 
-    QVector<QPair<double,double>> waveformPair;
-    for (int i=0;i<waveform.size();++i)
-        waveformPair.push_back(qMakePair(i*2, waveform[i]));
-    emit reportWaveform(1, cameraIndex, waveformPair);
+//    QVector<QPair<double,double>> waveformPair;
+//    for (int i=0;i<waveform.size();++i)
+//        waveformPair.push_back(qMakePair(i*2, waveform[i]));
+//    emit doWaveform(1, cameraIndex, waveformPair);
 
-    return true;
+//    return true;
 }
 
 #include "globalsettings.h"
-bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms*/,
+bool PCIeCommSdk::analyzeHistoryCpsData(quint32 channels/*多道道数*/,
+                                        quint32 timeWidth/*时间宽度ms*/,
                                         quint32 timeStart/*开始时刻ms*/,
                                         quint32 timeStop/*结束时刻ms*/,
                                         QString filePath/*H5文件路径*/,
-                                        std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)> callback)
+                                        std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>, QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>)> callback
+                                        )
 {
     //根据通道号计算对应采集卡的第几通道
     QTextCodec* gbk_codec = QTextCodec::codecForName("GBK");
@@ -693,7 +671,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms
                 boardGroup = file.openGroup(boardGroupName.toStdString());
 
                 // 辅助函数：写入单个通道的数据集
-                auto readChannel = [&](const QString& datasetName, QVector<quint64>& timeTrigger) {
+                auto readChannel = [&](const QString& datasetName, QVector<quint64>& timeTrigger, QVector<quint64>& timePeak) {
                     htri_t existsDataset = H5Lexists(boardGroup.getId(), datasetName.toStdString().c_str(), H5P_DEFAULT);
                     if (existsDataset){
                         std::string ds = datasetName.toUtf8().constData();
@@ -725,6 +703,8 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms
                             quint64 timeMs = static_cast<quint16>(outData[0][rowIdx]);
                             quint64 timeNs = (static_cast<quint16>(outData[1][rowIdx])<<16 | static_cast<quint16>(outData[2][rowIdx]));
                             timeTrigger.push_back((timeMs*1e6+timeNs)/1e6);
+
+                            timePeak.push_back(static_cast<quint16>(outData[3][rowIdx]));
                         }
 
                         dataset.close();
@@ -732,10 +712,10 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms
                 };
 
                 // 写入3个通道的数据
-                QVector<quint64> timeTrigger_ch[3];
-                readChannel("wave_ch0",  timeTrigger_ch[0]);
-                readChannel("wave_ch1", timeTrigger_ch[1]);
-                readChannel("wave_ch2", timeTrigger_ch[2]);
+                QVector<quint64> timeTrigger_ch[3], timePeak_ch[3];
+                readChannel("wave_ch0",  timeTrigger_ch[0], timePeak_ch[0]);
+                readChannel("wave_ch1", timeTrigger_ch[1], timePeak_ch[1]);
+                readChannel("wave_ch2", timeTrigger_ch[2], timePeak_ch[2]);
 
                 //根据时间段统计计数率
                 QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair;
@@ -743,31 +723,52 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 timeLength/*点位时间间隔ms
                     quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
 
                     // 1.按照时间段和点位时间间隔分配计数点数组长度
-                    quint32 cpsTotal = (timeStop-timeStart)/timeLength;
+                    quint32 cpsTotal = (timeStop-timeStart)/timeWidth;
                     //cpsMapPair[cameraIndex]. reserve(cpsTotal);
                     //初始化每个时间段内计数率为0
                     for (quint16 intervalNo = 0; intervalNo < cpsTotal; ++intervalNo) {
-                        cpsMapPair[cameraIndex][timeStart + intervalNo * timeLength] = quint32(0);
+                        cpsMapPair[cameraIndex][timeStart + intervalNo * timeWidth] = quint32(0);
                     }
 
                     // 2. 遍历所有输入数据，分桶统计
-                    for (qint32 x : timeTrigger_ch[cameraNo]) {
-                        cpsMapPair[cameraIndex][timeStart + (x-timeStart) / timeLength * timeLength] += 1;
-                        // int intervalIndex = (x - timeStart) / timeLength;
+                    for (qint32 time : timeTrigger_ch[cameraNo]) {
+                        cpsMapPair[cameraIndex][timeStart + (time-timeStart) / timeWidth] += 1;
+                        // int intervalIndex = (time - timeStart) / timeWidth;
                         // // 对应区间计数+1
                         // if (intervalIndex<cpsTotal)
-                        //     cpsMapPair[cameraIndex][timeStart + intervalIndex * timeLength].second += 1;
+                        //     cpsMapPair[cameraIndex][timeStart + intervalIndex * timeWidth].second += 1;
                         // else
                         //     qDebug();
                     }
 
                 }
+
+                //根据时间段统计能谱
+                QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPair;
+                for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
+                    quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
+
+                    // 1.默认道址为8192
+                    timeWidth = (timeStop - timeStart) * 1e3 / channels;
+
+                    //初始化每个道址默认能量值为0
+                    for (quint16 channel = 0; channel < channels; ++channel) {
+                        spectrumMapPair[cameraIndex][channel] = quint32(0);
+                    }
+
+                    // 2. 遍历所有时间段内的能量值，分桶统计
+                    int i = 0;
+                    for (qint32 time : timeTrigger_ch[cameraNo]) {
+                        quint16 channel = (time-timeStart) / timeWidth;// 道址
+                        quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
+                        spectrumMapPair[cameraIndex][channel] += peak;
+                    }
+                }
+
                 boardGroup.close();
-                callback(cpsMapPair);
+                callback(cpsMapPair, spectrumMapPair);
             }
         }
-
-        //emit reportCps(cameraIndex, cpsMapPair);
 
         file.close();
 
@@ -837,10 +838,9 @@ void PCIeCommSdk::setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex
  */
 void PCIeCommSdk::setCaptureParamter(quint8 horCameraIndex, quint8 verCameraIndex, QVector<quint32> tmMeasure)
 {
-    mTimestampMs.clear();
     mHorCameraIndex = horCameraIndex;
     mVerCameraIndex = verCameraIndex;
-    mTimestampMs.append(tmMeasure);
+    mTimestampMs.swap(tmMeasure);
 }
 
 #include <QRegularExpression>

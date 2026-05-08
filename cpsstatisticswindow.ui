@@ -344,7 +344,7 @@
            <number>0</number>
           </property>
           <attribute name="verticalHeaderVisible">
-           <bool>false</bool>
+           <bool>true</bool>
           </attribute>
           <column>
            <property name="text">
@@ -449,7 +449,47 @@
               <string>文件信息</string>
              </property>
              <layout class="QGridLayout" name="gridLayout_5">
-              <item row="2" column="0" colspan="2">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_13">
+                <property name="text">
+                 <string>波形时间范围(ms)：</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="line_waveform_startT_2">
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="2">
+               <widget class="QLabel" name="label_14">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="text">
+                 <string>-</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="3">
+               <widget class="QLineEdit" name="line_waveform_endT_2">
+                <property name="readOnly">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
                <widget class="QLabel" name="label_12">
                 <property name="text">
                  <string>二进制文件数目：</string>
@@ -459,66 +499,38 @@
                 </property>
                </widget>
               </item>
-              <item row="1" column="2">
-               <widget class="QLineEdit" name="line_waveform_startT_2">
-                <property name="readOnly">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
-              <item row="4" column="0" colspan="2">
-               <widget class="QLabel" name="label_9">
-                <property name="text">
-                 <string>压缩后文件数据大小（GB）：</string>
-                </property>
-               </widget>
-              </item>
-              <item row="3" column="0" colspan="2">
-               <widget class="QLabel" name="label_5">
-                <property name="text">
-                 <string>压缩前文件数据大小（GB）：</string>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="1">
-               <widget class="QLabel" name="label_13">
-                <property name="text">
-                 <string>波形时间范围(ms)：</string>
-                </property>
-               </widget>
-              </item>
-              <item row="2" column="2" colspan="6">
+              <item row="1" column="1" colspan="3">
                <widget class="QLineEdit" name="lineEdit_binCount">
                 <property name="readOnly">
                  <bool>true</bool>
                 </property>
                </widget>
               </item>
-              <item row="3" column="2" colspan="6">
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_5">
+                <property name="text">
+                 <string>压缩前文件数据大小（GB）：</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1" colspan="3">
                <widget class="QLineEdit" name="lineEdit_binTotal">
                 <property name="readOnly">
                  <bool>true</bool>
                 </property>
                </widget>
               </item>
-              <item row="4" column="2" colspan="6">
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_9">
+                <property name="text">
+                 <string>压缩后文件数据大小（GB）：</string>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1" colspan="3">
                <widget class="QLineEdit" name="lineEdit_fileSize">
                 <property name="readOnly">
                  <bool>true</bool>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="6" colspan="2">
-               <widget class="QLineEdit" name="line_waveform_endT_2">
-                <property name="readOnly">
-                 <bool>true</bool>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="3" colspan="3">
-               <widget class="QLabel" name="label_14">
-                <property name="text">
-                 <string>-</string>
                 </property>
                </widget>
               </item>
@@ -531,30 +543,10 @@
               <string>压缩参数设置</string>
              </property>
              <layout class="QGridLayout" name="gridLayout_6">
-              <item row="1" column="1">
-               <widget class="QSpinBox" name="spinBox_endT_2">
-                <property name="maximum">
-                 <number>20000</number>
-                </property>
-                <property name="singleStep">
-                 <number>66</number>
-                </property>
-               </widget>
-              </item>
-              <item row="2" column="1">
-               <widget class="QSpinBox" name="spinBox_threshold_2">
-                <property name="maximum">
-                 <number>65535</number>
-                </property>
-                <property name="value">
-                 <number>200</number>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="0">
-               <widget class="QLabel" name="label_10">
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_17">
                 <property name="text">
-                 <string>时间起点(ms)：</string>
+                 <string>压缩生成文件名(*.h5)：</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -584,20 +576,40 @@
               <item row="0" column="1">
                <widget class="QSpinBox" name="spinBox_startT_2"/>
               </item>
-              <item row="3" column="0">
-               <widget class="QLabel" name="label_17">
+              <item row="3" column="1">
+               <widget class="QLineEdit" name="lineEdit_outputFile">
                 <property name="text">
-                 <string>压缩生成文件名(*.h5)：</string>
+                 <string>waveform_data.h5</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QSpinBox" name="spinBox_endT_2">
+                <property name="maximum">
+                 <number>20000</number>
+                </property>
+                <property name="singleStep">
+                 <number>66</number>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_10">
+                <property name="text">
+                 <string>时间起点(ms)：</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                 </property>
                </widget>
               </item>
-              <item row="3" column="1">
-               <widget class="QLineEdit" name="lineEdit_outputFile">
-                <property name="text">
-                 <string>waveform_data.h5</string>
+              <item row="2" column="1">
+               <widget class="QSpinBox" name="spinBox_threshold_2">
+                <property name="maximum">
+                 <number>65535</number>
+                </property>
+                <property name="value">
+                 <number>200</number>
                 </property>
                </widget>
               </item>
@@ -1112,7 +1124,7 @@
                   </widget>
                  </item>
                  <item row="1" column="1">
-                  <widget class="QSpinBox" name="spinBox_threshold_3">
+                  <widget class="QSpinBox" name="spinBox_threshold_1">
                    <property name="minimum">
                     <number>-10000</number>
                    </property>
@@ -1277,7 +1289,7 @@
              </property>
              <layout class="QGridLayout" name="gridLayout_2">
               <item row="2" column="2">
-               <widget class="QLineEdit" name="line_measure_startT">
+               <widget class="QLineEdit" name="line_measure_startT_3">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
                   <horstretch>0</horstretch>
@@ -1296,9 +1308,12 @@
                </widget>
               </item>
               <item row="3" column="2" colspan="3">
-               <widget class="QSpinBox" name="spinBox_threshold">
+               <widget class="QSpinBox" name="spinBox_threshold_3">
                 <property name="readOnly">
                  <bool>true</bool>
+                </property>
+                <property name="maximum">
+                 <number>999999</number>
                 </property>
                </widget>
               </item>
@@ -1313,7 +1328,7 @@
                </widget>
               </item>
               <item row="2" column="4">
-               <widget class="QLineEdit" name="line_measure_endT">
+               <widget class="QLineEdit" name="line_measure_endT_3">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
                   <horstretch>0</horstretch>
@@ -1376,39 +1391,10 @@
               <string>选择时刻</string>
              </property>
              <layout class="QGridLayout" name="gridLayout">
-              <item row="2" column="1">
-               <widget class="QSpinBox" name="spinBox_endT_3">
-                <property name="minimum">
-                 <number>1</number>
-                </property>
-                <property name="maximum">
-                 <number>10000</number>
-                </property>
-                <property name="value">
-                 <number>40</number>
-                </property>
-               </widget>
-              </item>
-              <item row="3" column="0">
-               <widget class="QLabel" name="label_11">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_26">
                 <property name="text">
-                 <string>计数时间宽度/ms：</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="0">
-               <widget class="QLabel" name="label_6">
-                <property name="text">
-                 <string>时间起点（ms）：</string>
+                 <string>时间终点（ms）：</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -1443,6 +1429,29 @@
                 </property>
                </widget>
               </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_6">
+                <property name="text">
+                 <string>时间起点（ms）：</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QSpinBox" name="spinBox_endT_3">
+                <property name="minimum">
+                 <number>1</number>
+                </property>
+                <property name="maximum">
+                 <number>10000</number>
+                </property>
+                <property name="value">
+                 <number>40</number>
+                </property>
+               </widget>
+              </item>
               <item row="1" column="1">
                <widget class="QSpinBox" name="spinBox_startT_3">
                 <property name="maximum">
@@ -1450,14 +1459,57 @@
                 </property>
                </widget>
               </item>
-              <item row="2" column="0">
-               <widget class="QLabel" name="label_26">
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_11">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
                 <property name="text">
-                 <string>时间终点（ms）：</string>
+                 <string>计数率时间宽度（ms）：</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                 </property>
+               </widget>
+              </item>
+              <item row="4" column="0">
+               <widget class="QLabel" name="label_7">
+                <property name="text">
+                 <string>多道道数：</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="1">
+               <widget class="QComboBox" name="comboBox_channels">
+                <property name="currentIndex">
+                 <number>3</number>
+                </property>
+                <item>
+                 <property name="text">
+                  <string>1024</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>2048</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>4096</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>8192</string>
+                 </property>
+                </item>
                </widget>
               </item>
              </layout>

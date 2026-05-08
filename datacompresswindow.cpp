@@ -47,7 +47,7 @@ DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
 //    QStringList args = QCoreApplication::arguments();
 //    this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
 
-    connect(this, SIGNAL(reporWriteLog(const QString&,QtMsgType)), this, SLOT(replyWriteLog(const QString&,QtMsgType)));
+    connect(this, SIGNAL(doWriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
 
     // 连接时间范围验证信号
     connect(ui->spinBox_startT, &QSpinBox::editingFinished, this, &DataCompressWindow::validateTimeRange);
@@ -102,7 +102,7 @@ void DataCompressWindow::closeEvent(QCloseEvent *event) {
         event->ignore();
 }
 
-void DataCompressWindow::replyWriteLog(const QString &msg, QtMsgType msgType/* = QtDebugMsg*/)
+void DataCompressWindow::onWriteLog(const QString &msg, QtMsgType msgType/* = QtDebugMsg*/)
 {
     // 创建一个 QTextCursor
     QTextCursor cursor = ui->textEdit_log->textCursor();
@@ -258,7 +258,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
     QSqlQuery query;
     if (!query.exec("CREATE DATABASE IF NOT EXISTS NeutronCamera")) {
         QString errorMsg = QString("Failed to create database: %1").arg(query.lastError().text());
-        replyWriteLog(errorMsg, QtCriticalMsg);
+        onWriteLog(errorMsg, QtCriticalMsg);
         QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据库创建失败！") + query.lastError().text());
         return;
     }
@@ -282,7 +282,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
         else
             sql += QString("data%1 smallint,").arg(i);
     }
-    replyWriteLog(QString("创建数据表SQL: %1").arg(sql), QtDebugMsg);
+    onWriteLog(QString("创建数据表SQL: %1").arg(sql), QtDebugMsg);
     if (!query.exec(sql)){
         db.close();
         QMessageBox::critical(nullptr, QStringLiteral("提示"), QStringLiteral("数据表格创建失败！") + query.lastError().text());
@@ -400,7 +400,7 @@ void DataCompressWindow::on_action_choseDir_triggered()
     else {
         GlobalSettings settings(filePath+"/device_config.ini");
         mShotNum = settings.value("Global/ShotNum", "00000").toString();
-        emit reporWriteLog("炮号：" + mShotNum);
+        emit doWriteLog("炮号：" + mShotNum);
     }
 
 
@@ -417,7 +417,7 @@ QStringList DataCompressWindow::loadRelatedFiles(const QString& dirPath)
     //对目录下的配置文件信息进行解析，里面包含了炮号、测试开始时间、测量时长、以及探测器类型
     QDir dir(dirPath);
     if (!dir.exists()) {
-        replyWriteLog(QString("目录不存在: %1").arg(dirPath), QtWarningMsg);
+        onWriteLog(QString("目录不存在: %1").arg(dirPath), QtWarningMsg);
         ui->tableWidget_file->clearContents();
         ui->tableWidget_file->setRowCount(0);
         ui->lineEdit_binCount->setText("0");
@@ -481,7 +481,7 @@ QStringList DataCompressWindow::loadRelatedFiles(const QString& dirPath)
     ui->tableWidget_file->setEditTriggers(QAbstractItemView::NoEditTriggers);
     ui->tableWidget_file->setAlternatingRowColors(true);
 
-    replyWriteLog(QString("bin文件数量: %1, 总大小: %2").arg(fileCount).arg(humanReadableSize(totalSize)), QtDebugMsg);
+    onWriteLog(QString("bin文件数量: %1, 总大小: %2").arg(fileCount).arg(humanReadableSize(totalSize)), QtDebugMsg);
     ui->lineEdit_binCount->setText(QString::number(fileCount));
     ui->lineEdit_binTotal->setText(humanReadableSize(totalSize));
 
@@ -635,7 +635,7 @@ void DataCompressWindow::on_action_analyze_triggered()
     // 获取数据目录路径
     QString dataDir = ui->textBrowser_filepath->toPlainText();
     if (dataDir.isEmpty()) {
-        replyWriteLog("数据目录路径为空", QtWarningMsg);
+        onWriteLog("数据目录路径为空", QtWarningMsg);
         QMessageBox::warning(this, "警告", "数据目录路径为空！");
         return;
     }
@@ -646,7 +646,7 @@ void DataCompressWindow::on_action_analyze_triggered()
     
     //根据用户输入，对文件名后缀进行追加.h5，如果存在.h5则不追加后缀，否则追加后缀
     if (outfileName.isEmpty()) {
-        replyWriteLog("输出文件名不能为空", QtWarningMsg);
+        onWriteLog("输出文件名不能为空", QtWarningMsg);
         QMessageBox::warning(this, "警告", "输出文件名不能为空！");
         return;
     }
@@ -656,15 +656,15 @@ void DataCompressWindow::on_action_analyze_triggered()
         outfileName += ".h5";
     }
 
-    replyWriteLog("========================================", QtInfoMsg);
-    replyWriteLog("开始数据压缩分析", QtInfoMsg);
-    replyWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
+    onWriteLog("========================================", QtInfoMsg);
+    onWriteLog("开始数据压缩分析", QtInfoMsg);
+    onWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
 
     mProgressIndicator->startAnimation();
 
     // 创建HDF5文件路径（在数据目录下） 
     QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
-    replyWriteLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
+    onWriteLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
 
     //检查文件是否存在，如果存在则询问用户是否删除
     if (QFileInfo::exists(hdf5FilePath)) {
@@ -677,11 +677,11 @@ void DataCompressWindow::on_action_analyze_triggered()
             QMessageBox::No
         );
         if (reply == QMessageBox::No) {
-            replyWriteLog("用户取消操作", QtInfoMsg);
+            onWriteLog("用户取消操作", QtInfoMsg);
             return;
         }
         QFile::remove(hdf5FilePath);
-        replyWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
+        onWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
     }
 
     // 创建并启动工作线程
@@ -853,7 +853,7 @@ void DataCompressWindow::validateTimeRange()
 void DataCompressWindow::onAnalysisLogMessage(const QString& msg, QtMsgType msgType)
 {
     // 这个槽函数在工作线程中通过信号调用，会自动切换到UI线程执行
-    replyWriteLog(msg, msgType);
+    onWriteLog(msg, msgType);
 }
 
 void DataCompressWindow::onAnalysisProgress(int current, int total)
@@ -872,7 +872,7 @@ void DataCompressWindow::onAnalysisFinished(bool success, const QString& message
     ui->toolButton_start->setEnabled(true);
 
     if (success) {
-        replyWriteLog("数据压缩分析完成", QtInfoMsg);
+        onWriteLog("数据压缩分析完成", QtInfoMsg);
         
         // 更新文件大小显示
         QString dataDir = ui->textBrowser_filepath->toPlainText();
@@ -886,12 +886,12 @@ void DataCompressWindow::onAnalysisFinished(bool success, const QString& message
         if (fi.exists()) {
             qint64 sizeBytes = fi.size();
             ui->lineEdit_fileSize->setText(humanReadableSize(sizeBytes));
-            replyWriteLog(QString("压缩后文件大小: %1").arg(humanReadableSize(sizeBytes)), QtInfoMsg);
+            onWriteLog(QString("压缩后文件大小: %1").arg(humanReadableSize(sizeBytes)), QtInfoMsg);
         }
         
-        replyWriteLog("========================================", QtInfoMsg);
+        onWriteLog("========================================", QtInfoMsg);
     } else {
-        replyWriteLog(QString("数据分析失败: %1").arg(message), QtCriticalMsg);
+        onWriteLog(QString("数据分析失败: %1").arg(message), QtCriticalMsg);
         QMessageBox::critical(this, "错误", QString("数据分析失败: %1").arg(message));
     }
 
@@ -909,7 +909,7 @@ void DataCompressWindow::onAnalysisFinished(bool success, const QString& message
             // 等待线程结束（最多等待3秒）
             if (!mAnalysisThread->wait(3000)) {
                 // 如果等待超时，强制终止
-                replyWriteLog("警告：线程未能正常结束，强制终止", QtWarningMsg);
+                onWriteLog("警告：线程未能正常结束，强制终止", QtWarningMsg);
                 mAnalysisThread->terminate();
                 mAnalysisThread->wait();
             }
@@ -934,6 +934,6 @@ void DataCompressWindow::onAnalysisFinished(bool success, const QString& message
 
 void DataCompressWindow::onAnalysisError(const QString& error)
 {
-    replyWriteLog(QString("错误: %1").arg(error), QtCriticalMsg);
+    onWriteLog(QString("错误: %1").arg(error), QtCriticalMsg);
 }
 

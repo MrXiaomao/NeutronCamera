@@ -183,7 +183,7 @@ public:
     virtual bool eventFilter(QObject *watched, QEvent *event) override;
 
     // 波形显示
-    Q_SLOT void onWaveformPlot();
+    Q_SLOT void doWaveformPlot();
 
     // 数据处理相关的槽函数
     QString humanReadableSize(qint64 bytes);
@@ -199,10 +199,12 @@ public:
 public slots:
     void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
     void onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
+    void onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>);
 
 signals:
     void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
     void doCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
+    void doSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>);
 
 private slots:
     void on_action_openfile_triggered();

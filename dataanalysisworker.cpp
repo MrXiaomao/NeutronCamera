@@ -663,7 +663,7 @@ void DataAnalysisWorker::getValidWave()
     emit logMessage(QString("开始处理波形数据，阈值: %1").arg(threshold), QtInfoMsg);
 
     // 设置触发阈值前后波形点数
-    int pre_points = 20;
+    int pre_points = 5;
     int post_points = 256 - pre_points - 1;
 
     if (dataDir.isEmpty()) {
@@ -693,15 +693,15 @@ void DataAnalysisWorker::getValidWave()
         if (file.startsWith("1A"))
             tempFileList[0].append(file);
         else if (file.startsWith("1B"))
-            tempFileList[0].append(file);
+            tempFileList[1].append(file);
         else if (file.startsWith("2A"))
-            tempFileList[0].append(file);
+            tempFileList[2].append(file);
         else if (file.startsWith("2B"))
-            tempFileList[0].append(file);
+            tempFileList[3].append(file);
         else if (file.startsWith("3A"))
-            tempFileList[0].append(file);
+            tempFileList[4].append(file);
         else if (file.startsWith("3B"))
-            tempFileList[0].append(file);
+            tempFileList[5].append(file);
     }
 
     writeWaveformHeadToHDF5(hdf5FilePath, startTime, endTime, mThreshold);

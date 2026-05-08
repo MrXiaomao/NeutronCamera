@@ -40,9 +40,9 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     restoreSettings();
     applyColorTheme();
 
-    connect(this, SIGNAL(reporWriteLog(const QString&,QtMsgType)), this, SLOT(replyWriteLog(const QString&,QtMsgType)));
-    connect(this, SIGNAL(reportNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
-    connect(this, SIGNAL(reportGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
+    connect(this, SIGNAL(doWriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
+    connect(this, SIGNAL(reportNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(onNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
+    connect(this, SIGNAL(reportGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(onGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
 
     ui->toolButton_startMeasure->setDefaultAction(ui->action_startMeasure);
     ui->toolButton_stopMeasure->setDefaultAction(ui->action_stopMeasure);
@@ -101,7 +101,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         }
 
         if (mEnableContinueMeasuer){
-            reporWriteLog(QString("已完成自动测量次数：%1，异常次数:%2").arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
+            doWriteLog(QString("已完成自动测量次数：%1，异常次数:%2").arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
             if (testOk){
                 QTimer::singleShot(ui->spinBox_intervalSeconds->value() * 1000, this, [=](){
                     mPCIeCommSdk.reset();
@@ -119,8 +119,8 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
             ui->pushButton_2->setEnabled(false);
         }
     });
-    connect(&mPCIeCommSdk, SIGNAL(reportNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
-    connect(&mPCIeCommSdk, SIGNAL(reportGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(replyGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
+    connect(&mPCIeCommSdk, SIGNAL(reportNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(onNeutronSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
+    connect(&mPCIeCommSdk, SIGNAL(reportGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)), this, SLOT(onGammaSpectrum(quint8,quint8,QVector<QPair<double,double>>&)));
 
 
     QTimer::singleShot(0, this, [&](){
@@ -1160,7 +1160,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event){
     return QMainWindow::eventFilter(watched, event);
 }
 
-void MainWindow::replyWriteLog(const QString &msg, QtMsgType msgType)
+void MainWindow::onWriteLog(const QString &msg, QtMsgType msgType)
 {
     // 创建一个 QTextCursor
     QTextCursor cursor = ui->plainTextEdit_log->textCursor();
@@ -1810,7 +1810,7 @@ void MainWindow::updateTableRowHidden()
     }
 }
 
-void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraIndex, QVector<QPair<double,double>>& pairs)
+void MainWindow::onNeutronSpectrum(quint8 timestampIndex, quint8 cameraIndex, QVector<QPair<double,double>>& pairs)
 {
     quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
 
@@ -1859,7 +1859,7 @@ void MainWindow::replyNeutronSpectrum(quint8 timestampIndex, quint8 cameraIndex,
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void MainWindow::replyGammaSpectrum(quint8 timestampIndex, quint8 cameraIndex , QVector<QPair<double,double>>& pairs)
+void MainWindow::onGammaSpectrum(quint8 timestampIndex, quint8 cameraIndex , QVector<QPair<double,double>>& pairs)
 {
     quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
 

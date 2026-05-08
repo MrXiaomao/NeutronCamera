@@ -1350,7 +1350,6 @@
    <addaction name="action_openfile"/>
    <addaction name="action_waveform"/>
    <addaction name="action_ngamma"/>
-   <addaction name="action_cps"/>
    <addaction name="separator"/>
    <addaction name="action_analyze"/>
    <addaction name="separator"/>

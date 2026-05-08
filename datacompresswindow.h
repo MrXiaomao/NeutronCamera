@@ -58,8 +58,8 @@ public:
     // 读取 wave_CH1.h5 中的数据集 data（行 = 波形数, 列 = 单个波形采样点数512）
     static QVector<QVector<qint16>> readWave(const std::string &fileName, const std::string &dsetName);
 
-    Q_SIGNAL void reporWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    Q_SLOT void replyWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
+    Q_SIGNAL void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    Q_SLOT void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
 
     virtual void closeEvent(QCloseEvent *event) override;
 
