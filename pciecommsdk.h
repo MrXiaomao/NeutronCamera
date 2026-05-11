@@ -322,15 +322,24 @@ public:
     
     bool analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
 
-    bool analyzeHistoryCpsData(quint32 channels/*多道道数（统计能谱用）*/,
-                               quint32 timeWidth/*时间宽度ms（统计计数率用）*/,
-                               quint32 timeStart/*开始时刻ms*/,
-                               quint32 timeStop/*结束时刻ms*/,
-                               QString filePath/*H5文件路径*/,
+    bool analyzeHistoryWaveformData(const quint32 timeStart/*开始时刻ms*/,
+                               const quint32 timeStop/*结束时刻ms*/,
+                               const QString& filePath/*H5文件路径*/,
+                               std::function<void(
+                                   QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint16/*数值*/>>
+                                   )> callback);
+
+    bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
+                               const quint32 timeWidth/*时间宽度ms（统计计数率用）*/,
+                               const quint32 timeStart/*开始时刻ms*/,
+                               const quint32 timeStop/*结束时刻ms*/,
+                               const QString& filePath/*H5文件路径*/,
                                std::function<void(
                                    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>,
                                    QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>
-                                   )> callback);
+                                   )> callback,
+                                const quint32 minPeak = 0/*最小峰值0*/,
+                                const quint32 maxPeak = 16384/*最大峰值16384*/);
 
     /*指令集*/
     //死时间

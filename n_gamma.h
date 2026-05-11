@@ -15,8 +15,8 @@ using namespace alglib;
 using namespace H5;
 
 #ifndef H5_DATA_COLS
-#define H5_DATA_EXTEND      4       //触发时刻3（2位毫秒+1位纳秒）+峰值1
-#define H5_DATA_WAVEFORM    160     //扩展数据长度
+#define H5_DATA_EXTEND      2       //触发时刻3（2位毫秒+1位纳秒）+峰值1
+#define H5_DATA_WAVEFORM    512     //扩展数据长度
 #define H5_DATA_COLS        (H5_DATA_WAVEFORM + H5_DATA_EXTEND)
 #endif //H5_DATA_COLS
 
@@ -45,6 +45,7 @@ public:
         QVector<double> Y, Y_fit1, Y_fit2;//散点曲线Y，两个高斯峰的拟合曲线fit1,fit2
         double R1,R2; //拟合优度
         double xlim[2]; //绘图的X轴限制区间
+        double fom;//品质因子
     };
 
     // 输入: x, y 等长向量（比如 data 第 3/4 列）
@@ -59,9 +60,9 @@ public:
     HistResult selectAndHist(const QVector<QPair<float, float>> &data);
     FOM GetFOM(const QVector<double> &psd_x,
                                        const QVector<int> &count_y,
-                                       double minPeakHeight = 1.0f,
+                                       double minPeakHeight = 5.0f,
                                        int nPeaks = 2,
-                                       int minPeakDistance = 5);
+                                       int minPeakDistance = 15);
 
     static void function_cx_1_func(const real_1d_array &c, const real_1d_array &x, double &func, void *ptr);
 

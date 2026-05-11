@@ -59,329 +59,32 @@ void DataAnalysisWorker::startAnalysis()
  * - 每个数据点：16 bit（2 字节，无符号整数）
  *
  * 数据排列方式（逐点交织）：
- * - 原始数据顺序：ch3, ch3, ch2, ch2, ch0, ch0, ch1, ch1, ch3, ch3, ch2, ch2, ch0, ch0, ch1, ch1, ...
- * - 每8个16位数据为一个周期，包含4个通道各2个采样点
- * - 每个通道的2个连续采样点存储在一起，然后按 ch3->ch2->ch0->ch1 的顺序排列
+ * - 原始数据顺序：ch2, ch2, ch0, ch0, ch1, ch1, ch2, ch2, ch0, ch0, ch1, ch1, ...
+ * - 每6个16位数据为一个周期，包含3个通道各2个采样点
+ * - 每个通道的2个连续采样点存储在一起，然后按 ch2->ch0->ch1 的顺序排列
  *
  * @param path 二进制文件路径
  * @param ch0 输出参数：通道0的数据向量（有符号16位整数）
  * @param ch1 输出参数：通道1的数据向量（有符号16位整数）
  * @param ch2 输出参数：通道2的数据向量（有符号16位整数）
- * @param ch3 输出参数：通道3的数据向量（有符号16位整数）
  * @param littleEndian 字节序标志，true表示小端序（默认），false表示大端序
  * @return true 读取成功，false 读取失败（文件不存在、格式错误、映射失败等）
  */
-bool DataAnalysisWorker::readBin4Ch_fast(const QString& path,
-    QVector<qint16>& ch0,
-    QVector<qint16>& ch1,
-    QVector<qint16>& ch2,
-    QVector<qint16>& ch3,
-    bool littleEndian /*= true*/)
-{
-    // 打开文件进行只读访问
-    QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) return false;
-
-    // 文件头和文件尾字节数
-    const qint64 headBytes = 16;
-    const qint64 tailBytes = 16;
-
-    // 获取文件总大小，并检查是否小于头尾字节数之和（避免负数）
-    const qint64 fileSize = f.size();
-    if (fileSize < headBytes + tailBytes) return false;
-
-    // 计算有效数据负载的字节数（总大小减去文件头和文件尾）
-    const qint64 payloadBytes = fileSize - headBytes - tailBytes;
-    // 检查负载字节数是否为2的倍数（每个采样点占2字节）
-    if (payloadBytes % 2 != 0) return false;
-
-    // 计算总采样点数（每2字节为一个采样点）
-    const qint64 totalSamples = payloadBytes / 2;
-    // 检查总采样点数是否为4的倍数（4个通道，每个通道采样点数必须相等）
-    if (totalSamples % 4 != 0) return false;
-    // 计算每个通道的采样点数（总采样点数除以4）
-    const qint64 samplesPerChannel = totalSamples / 4;
-
-    // 预分配各通道数据向量的容量，避免读取过程中反复扩容，提高性能
-    ch0.resize(samplesPerChannel);
-    ch1.resize(samplesPerChannel);
-    ch2.resize(samplesPerChannel);
-    ch3.resize(samplesPerChannel);
-
-    // 使用内存映射方式读取文件，从headBytes位置开始，映射payloadBytes长度的数据
-    // 这种方式比逐字节读取效率更高，特别是在大文件的情况下
-    uchar* p = f.map(headBytes, payloadBytes);
-    if (!p) return false;
-
-    // 将映射的内存区域转换为16位无符号整数数组指针，方便后续读取
-    const quint16* src = reinterpret_cast<const quint16*>(p);
-
-    if (littleEndian) {
-        // 小端序（Little Endian）处理
-        // 逐点解交织：将原始数据按通道分离
-        // 原始数据顺序：src = [ch3_0,ch3_1,ch2_0,ch2_1,ch0_0,ch0_1,ch1_0,ch1_1, ...]
-        // i: 源数据索引（每8个16位数据为一个周期）
-        // j: 目标通道数据索引（每个通道每次处理2个采样点）
-        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 8) {
-            // 从源数据中读取8个16位无符号整数（一个周期）
-            quint16 v0 = src[i + 0];  // ch3 的第一个采样点
-            quint16 v1 = src[i + 1];  // ch3 的第二个采样点
-            quint16 v2 = src[i + 2];  // ch2 的第一个采样点
-            quint16 v3 = src[i + 3];  // ch2 的第二个采样点
-            quint16 v4 = src[i + 4];  // ch0 的第一个采样点
-            quint16 v5 = src[i + 5];  // ch0 的第二个采样点
-            quint16 v6 = src[i + 6];  // ch1 的第一个采样点
-            quint16 v7 = src[i + 7];  // ch1 的第二个采样点
-
-            // 将小端序的16位无符号整数转换为系统字节序（如果系统不是小端序则进行字节交换）
-            v0 = qFromLittleEndian(v0); v1 = qFromLittleEndian(v1);
-            v2 = qFromLittleEndian(v2); v3 = qFromLittleEndian(v3);
-            v4 = qFromLittleEndian(v4); v5 = qFromLittleEndian(v5);
-            v6 = qFromLittleEndian(v6); v7 = qFromLittleEndian(v7);
-
-            // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            // 除以4的原因可能是原始数据进行了放大（左移2位），这里恢复原始范围
-            ch3[j] = static_cast<qint16>(v0)/4; ch3[j+1] = static_cast<qint16>(v1)/4;
-            ch2[j] = static_cast<qint16>(v2)/4; ch2[j+1] = static_cast<qint16>(v3)/4;
-            ch0[j] = static_cast<qint16>(v4)/4; ch0[j+1] = static_cast<qint16>(v5)/4;
-            ch1[j] = static_cast<qint16>(v6)/4; ch1[j+1] = static_cast<qint16>(v7)/4;
-        }
-    } else {
-        // 大端序（Big Endian）处理
-        // 如果文件是大端序，需要将字节顺序转换为系统字节序
-        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 8) {
-            // 从源数据中读取8个16位无符号整数（一个周期）
-            quint16 v0 = src[i + 0];  // ch3 的第一个采样点
-            quint16 v1 = src[i + 1];  // ch3 的第二个采样点
-            quint16 v2 = src[i + 2];  // ch2 的第一个采样点
-            quint16 v3 = src[i + 3];  // ch2 的第二个采样点
-            quint16 v4 = src[i + 4];  // ch0 的第一个采样点
-            quint16 v5 = src[i + 5];  // ch0 的第二个采样点
-            quint16 v6 = src[i + 6];  // ch1 的第一个采样点
-            quint16 v7 = src[i + 7];  // ch1 的第二个采样点
-
-            // 将大端序的16位无符号整数转换为系统字节序（如果系统不是大端序则进行字节交换）
-            v0 = qFromBigEndian(v0); v1 = qFromBigEndian(v1);
-            v2 = qFromBigEndian(v2); v3 = qFromBigEndian(v3);
-            v4 = qFromBigEndian(v4); v5 = qFromBigEndian(v5);
-            v6 = qFromBigEndian(v6); v7 = qFromBigEndian(v7);
-
-            // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            ch3[j] = static_cast<qint16>(v0)/4; ch3[j+1] = static_cast<qint16>(v1)/4;
-            ch2[j] = static_cast<qint16>(v2)/4; ch2[j+1] = static_cast<qint16>(v3)/4;
-            ch0[j] = static_cast<qint16>(v4)/4; ch0[j+1] = static_cast<qint16>(v5)/4;
-            ch1[j] = static_cast<qint16>(v6)/4; ch1[j+1] = static_cast<qint16>(v7)/4;
-        }
-    }
-
-    // 取消内存映射，释放资源
-    f.unmap(p);
-    return true;
-}
-
-bool DataAnalysisWorker::readBin3Ch_fast(const QString& path,
+bool DataAnalysisWorker::readBin3Ch_fast(const QString& filePath,
                                          QVector<qint16>& ch0,
                                          QVector<qint16>& ch1,
                                          QVector<qint16>& ch2,
                                          bool littleEndian /*= true*/)
 {
     // 打开文件进行只读访问
-    QFile f(path);
+    QFile f(filePath);
     if (!f.open(QIODevice::ReadOnly)) return false;
-
-    // 文件头和文件尾字节数
-    const qint64 headBytes = 12;
-    const qint64 tailBytes = 12;
-
-    // 获取文件总大小，并检查是否小于头尾字节数之和（避免负数）
-    const qint64 fileSize = f.size();
-    if (fileSize < headBytes + tailBytes) return false;
-
-    // 计算有效数据负载的字节数（总大小减去文件头和文件尾）
-    const qint64 payloadBytes = fileSize - headBytes - tailBytes;
-    // 检查负载字节数是否为2的倍数（每个采样点占2字节）
-    if (payloadBytes % 2 != 0) return false;
-
-    // 计算总采样点数（每2字节为一个采样点）
-    const qint64 totalSamples = payloadBytes / 2;
-    // 检查总采样点数是否为3的倍数（3个通道，每个通道采样点数必须相等）
-    if (totalSamples % 3 != 0) return false;
-    // 计算每个通道的采样点数（总采样点数除以3）
-    const qint64 samplesPerChannel = totalSamples / 3;
-
-    // 预分配各通道数据向量的容量，避免读取过程中反复扩容，提高性能
-    ch0.resize(samplesPerChannel);
-    ch1.resize(samplesPerChannel);
-    ch2.resize(samplesPerChannel);
-
-    // 使用内存映射方式读取文件，从headBytes位置开始，映射payloadBytes长度的数据
-    // 这种方式比逐字节读取效率更高，特别是在大文件的情况下
-    uchar* p = f.map(headBytes, payloadBytes);
-    if (!p) return false;
-
-    // 将映射的内存区域转换为16位无符号整数数组指针，方便后续读取
-    const quint16* src = reinterpret_cast<const quint16*>(p);
-
-    if (littleEndian) {
-        // 小端序（Little Endian）处理
-        // 逐点解交织：将原始数据按通道分离
-        // 原始数据顺序：src = [ch2_0,ch2_1,ch0_0,ch0_1,ch1_0,ch1_1, ...]
-        // i: 源数据索引（每6个16位数据为一个周期）
-        // j: 目标通道数据索引（每个通道每次处理2个采样点）
-        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 6) {
-            // 从源数据中读取6个16位无符号整数（一个周期）
-            quint16 v0 = src[i + 0];  // ch2 的第一个采样点
-            quint16 v1 = src[i + 1];  // ch2 的第二个采样点
-            quint16 v2 = src[i + 2];  // ch0 的第一个采样点
-            quint16 v3 = src[i + 3];  // ch0 的第二个采样点
-            quint16 v4 = src[i + 4];  // ch1 的第一个采样点
-            quint16 v5 = src[i + 5];  // ch1 的第二个采样点
-
-            // 将小端序的16位无符号整数转换为系统字节序（如果系统不是小端序则进行字节交换）
-            v0 = qFromLittleEndian(v0); v1 = qFromLittleEndian(v1);
-            v2 = qFromLittleEndian(v2); v3 = qFromLittleEndian(v3);
-            v4 = qFromLittleEndian(v4); v5 = qFromLittleEndian(v5);
-
-            // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            // 除以4的原因可能是原始数据进行了放大（左移2位），这里恢复原始范围
-            ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
-            ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
-            ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
-        }
-    } else {
-        // 大端序（Big Endian）处理
-        // 如果文件是大端序，需要将字节顺序转换为系统字节序
-        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 6) {
-            // 从源数据中读取6个16位无符号整数（一个周期）
-            quint16 v0 = src[i + 0];  // ch2 的第一个采样点
-            quint16 v1 = src[i + 1];  // ch2 的第二个采样点
-            quint16 v2 = src[i + 2];  // ch0 的第一个采样点
-            quint16 v3 = src[i + 3];  // ch0 的第二个采样点
-            quint16 v4 = src[i + 4];  // ch1 的第一个采样点
-            quint16 v5 = src[i + 5];  // ch1 的第二个采样点
-
-            // 将大端序的16位无符号整数转换为系统字节序（如果系统不是大端序则进行字节交换）
-            v0 = qFromBigEndian(v0); v1 = qFromBigEndian(v1);
-            v2 = qFromBigEndian(v2); v3 = qFromBigEndian(v3);
-            v4 = qFromBigEndian(v4); v5 = qFromBigEndian(v5);
-
-            // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
-            ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
-            ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
-        }
-    }
-
-    // 取消内存映射，释放资源
-    f.unmap(p);
-    return true;
+    QByteArray buf = f.readAll();;
+    f.close();
+    return DataAnalysisWorker::readBin3Ch_fast(buf, ch0, ch1, ch2, littleEndian);
 }
 
-bool DataAnalysisWorker::readBin4Ch_fast(QByteArray& fileData,
-                            QVector<qint16>& ch0,
-                            QVector<qint16>& ch1,
-                            QVector<qint16>& ch2,
-                            QVector<qint16>& ch3,
-                            bool littleEndian/* = true*/)
-{
-    // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
-    // 注释掉的代码显示原始格式可能有16字节的文件头和文件尾
-    const qint64 headBytes = 16;
-    const qint64 tailBytes = 16;
-    // const qint64 headBytes = 0;
-    // const qint64 tailBytes = 0;
-
-    // 获取文件总大小，并检查是否小于头尾字节数之和（避免负数）
-    const qint64 fileSize = fileData.size();
-    if (fileSize < headBytes + tailBytes) return false;
-
-    // 计算有效数据负载的字节数（总大小减去文件头和文件尾）
-    const qint64 payloadBytes = fileSize - headBytes - tailBytes;
-    // 检查负载字节数是否为2的倍数（每个采样点占2字节）
-    if (payloadBytes % 2 != 0) return false;
-
-    // 计算总采样点数（每2字节为一个采样点）
-    const qint64 totalSamples = payloadBytes / 2;
-    // 检查总采样点数是否为4的倍数（4个通道，每个通道采样点数必须相等）
-    if (totalSamples % 4 != 0) return false;
-    // 计算每个通道的采样点数（总采样点数除以4）
-    const qint64 samplesPerChannel = totalSamples / 4;
-
-    // 预分配各通道数据向量的容量，避免读取过程中反复扩容，提高性能
-    ch0.resize(samplesPerChannel);
-    ch1.resize(samplesPerChannel);
-    ch2.resize(samplesPerChannel);
-    ch3.resize(samplesPerChannel);
-
-    // 使用内存映射方式读取文件，从headBytes位置开始，映射payloadBytes长度的数据
-    // 这种方式比逐字节读取效率更高，特别是在大文件的情况下
-    uchar* p = (uchar *)fileData.constData() + headBytes;
-
-    // 将映射的内存区域转换为16位无符号整数数组指针，方便后续读取
-    const quint16* src = reinterpret_cast<const quint16*>(p);
-
-    if (littleEndian) {
-        // 小端序（Little Endian）处理
-        // 逐点解交织：将原始数据按通道分离
-        // 原始数据顺序：src = [ch3_0,ch3_1,ch2_0,ch2_1,ch0_0,ch0_1,ch1_0,ch1_1, ...]
-        // i: 源数据索引（每8个16位数据为一个周期）
-        // j: 目标通道数据索引（每个通道每次处理2个采样点）
-        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 8) {
-            // 从源数据中读取8个16位无符号整数（一个周期）
-            quint16 v0 = src[i + 0];  // ch3 的第一个采样点
-            quint16 v1 = src[i + 1];  // ch3 的第二个采样点
-            quint16 v2 = src[i + 2];  // ch2 的第一个采样点
-            quint16 v3 = src[i + 3];  // ch2 的第二个采样点
-            quint16 v4 = src[i + 4];  // ch0 的第一个采样点
-            quint16 v5 = src[i + 5];  // ch0 的第二个采样点
-            quint16 v6 = src[i + 6];  // ch1 的第一个采样点
-            quint16 v7 = src[i + 7];  // ch1 的第二个采样点
-
-            // 将小端序的16位无符号整数转换为系统字节序（如果系统不是小端序则进行字节交换）
-            v0 = qFromLittleEndian(v0); v1 = qFromLittleEndian(v1);
-            v2 = qFromLittleEndian(v2); v3 = qFromLittleEndian(v3);
-            v4 = qFromLittleEndian(v4); v5 = qFromLittleEndian(v5);
-            v6 = qFromLittleEndian(v6); v7 = qFromLittleEndian(v7);
-
-            // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            // 除以4的原因可能是原始数据进行了放大（左移2位），这里恢复原始范围
-            ch3[j] = static_cast<qint16>(v0)/4; ch3[j+1] = static_cast<qint16>(v1)/4;
-            ch2[j] = static_cast<qint16>(v2)/4; ch2[j+1] = static_cast<qint16>(v3)/4;
-            ch0[j] = static_cast<qint16>(v4)/4; ch0[j+1] = static_cast<qint16>(v5)/4;
-            ch1[j] = static_cast<qint16>(v6)/4; ch1[j+1] = static_cast<qint16>(v7)/4;
-        }
-    } else {
-        // 大端序（Big Endian）处理
-        // 如果文件是大端序，需要将字节顺序转换为系统字节序
-        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 8) {
-            // 从源数据中读取8个16位无符号整数（一个周期）
-            quint16 v0 = src[i + 0];  // ch3 的第一个采样点
-            quint16 v1 = src[i + 1];  // ch3 的第二个采样点
-            quint16 v2 = src[i + 2];  // ch2 的第一个采样点
-            quint16 v3 = src[i + 3];  // ch2 的第二个采样点
-            quint16 v4 = src[i + 4];  // ch0 的第一个采样点
-            quint16 v5 = src[i + 5];  // ch0 的第二个采样点
-            quint16 v6 = src[i + 6];  // ch1 的第一个采样点
-            quint16 v7 = src[i + 7];  // ch1 的第二个采样点
-
-            // 将大端序的16位无符号整数转换为系统字节序（如果系统不是大端序则进行字节交换）
-            v0 = qFromBigEndian(v0); v1 = qFromBigEndian(v1);
-            v2 = qFromBigEndian(v2); v3 = qFromBigEndian(v3);
-            v4 = qFromBigEndian(v4); v5 = qFromBigEndian(v5);
-            v6 = qFromBigEndian(v6); v7 = qFromBigEndian(v7);
-
-            // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            ch3[j] = static_cast<qint16>(v0)/4; ch3[j+1] = static_cast<qint16>(v1)/4;
-            ch2[j] = static_cast<qint16>(v2)/4; ch2[j+1] = static_cast<qint16>(v3)/4;
-            ch0[j] = static_cast<qint16>(v4)/4; ch0[j+1] = static_cast<qint16>(v5)/4;
-            ch1[j] = static_cast<qint16>(v6)/4; ch1[j+1] = static_cast<qint16>(v7)/4;
-        }
-    }
-
-    return true;
-}
-
-bool DataAnalysisWorker::readBin3Ch_fast(QByteArray& fileData,
+bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
                                          QVector<qint16>& ch0,
                                          QVector<qint16>& ch1,
                                          QVector<qint16>& ch2,
@@ -391,8 +94,6 @@ bool DataAnalysisWorker::readBin3Ch_fast(QByteArray& fileData,
     // 注释掉的代码显示原始格式可能有16字节的文件头和文件尾
     const qint64 headBytes = 12;
     const qint64 tailBytes = 12;
-    // const qint64 headBytes = 0;
-    // const qint64 tailBytes = 0;
 
     // 获取文件总大小，并检查是否小于头尾字节数之和（避免负数）
     const qint64 fileSize = fileData.size();
@@ -426,7 +127,7 @@ bool DataAnalysisWorker::readBin3Ch_fast(QByteArray& fileData,
         // 小端序（Little Endian）处理
         // 逐点解交织：将原始数据按通道分离
         // 原始数据顺序：src = [ch2_0,ch2_1,ch0_0,ch0_1,ch1_0,ch1_1, ...]
-        // i: 源数据索引（每6个16位数据为一个周期）
+        // i: 源数据索引（每6个12位数据为一个周期）
         // j: 目标通道数据索引（每个通道每次处理2个采样点）
         for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 6) {
             // 从源数据中读取6个16位无符号整数（一个周期）
@@ -525,22 +226,35 @@ void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16
     // ch3和ch4：通道号决定调整方式，与板卡编号无关
 
     bool isPositive = false; //是否为正脉冲信号
+    //板卡编号为奇数，则2、3为正，1为负
+    //板卡编号为偶数，则1、3为正，2为负
 
-    if (ch == 3) {
-        // 第3通道：data - baseline
-        isPositive = true;
+    bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数板卡
+    if (isOddBoard)
+    {
+        if (ch==2 || ch==3)
+            isPositive = true;
     }
-    else if (ch == 4) {
-        // 第4通道：baseline - data
-        isPositive = false;
+    else{
+        if (ch==1 || ch==3)
+            isPositive = true;
     }
-    else {
-        // ch1和ch2：根据板卡编号的奇偶性和通道号的组合来决定
-        // 奇数板卡(1,3,5)ch1 或 偶数板卡(2,4,6)ch2: data - baseline
-        // 其他情况: baseline - data
-        bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数板卡
-        isPositive = (isOddBoard && ch == 1) || (!isOddBoard && ch == 2);
-    }
+
+//    if (ch == 3) {
+//        // 第3通道：data - baseline
+//        isPositive = true;
+//    }
+//    else if (ch == 4) {
+//        // 第4通道：baseline - data
+//        isPositive = false;
+//    }
+//    else {
+//        // ch1和ch2：根据板卡编号的奇偶性和通道号的组合来决定
+//        // 奇数板卡(1,3,5)ch1 或 偶数板卡(2,4,6)ch2: data - baseline
+//        // 其他情况: baseline - data
+
+//        isPositive = (isOddBoard && ch == 1) || (!isOddBoard && ch == 2);
+//    }
 
     for (int i = 0; i < data_ch.size(); ++i) {
         if (isPositive) {
@@ -552,7 +266,7 @@ void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16
 }
 
 // 提取超过阈值的有效波形数据
-QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quint32 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
+QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quint16 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
 {
     QVector<std::array<qint16, H5_DATA_COLS>> wave_ch;
     QVector<int> cross_indices;
@@ -589,7 +303,7 @@ QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quin
             int cross_idx = cross_indices[a];
             int start_idx = cross_idx - pre_points;
 
-            // 检查边界，确保能提取完整的512点
+            // 检查边界，确保能提取完整的160个点
             if (start_idx < 0 || start_idx + H5_DATA_WAVEFORM > data.size()) {
                 // 注意：这是静态函数，不能直接访问 ui
                 qDebug() << QString("skip第%1个数据：边界不足").arg(a + 1);
@@ -598,12 +312,13 @@ QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quin
 
             // 创建固定大小的波形数组
             std::array<qint16, H5_DATA_COLS> segment_data;
-
+            std::fill(segment_data.begin(), segment_data.end(), 0);
             // 前4个数据预留给波形触发时刻，0-1表示ms，2-3表示ns，正式数据从第5个开始
-            segment_data[0] = packerStartTime & 0xFFFF;
-            segment_data[1] = ((start_idx*2) >> 16) & 0xFFFF;
-            segment_data[2] = (start_idx*2) & 0xFFFF;
-            segment_data[3] = 0;
+//            segment_data[0] = packerStartTime & 0xFFFF;
+//            segment_data[1] = ((start_idx*2) >> 16) & 0xFFFF;
+//            segment_data[2] = (start_idx*2) & 0xFFFF;
+//            segment_data[3] = 0;
+            segment_data[0] = packerStartTime + (start_idx*2) / 1e6;// 将时间转换为毫秒
 //            // 小端序拆分
 //            for (int i = 0; i < 4; ++i) {
 //                // 每次提取对应位置的16位，掩码0xFFFF保留低16位
@@ -618,13 +333,13 @@ QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quin
                 }
             */
 
-            // 提取波形段（正好512点）
+            // 提取波形段
             qint16 peak = 0;
             for (int i = 0; i < H5_DATA_WAVEFORM; ++i) {
                 segment_data[H5_DATA_EXTEND+i] = data[start_idx + i];//前2位给触发时刻预留的
                 peak = std::max(peak, data[start_idx + i]);
             }
-            segment_data[3] = peak;
+            segment_data[1] = peak;
 
             wave_ch.append(segment_data);
         }
@@ -776,12 +491,14 @@ void DataAnalysisWorker::getValidWave()
 
                 const qint64 size = f.size();
                 if (size <= 0) {
+                    f.close();
                     emit logMessage(QString("板卡%1 文件%2: 文件大小异常").arg(deviceIndex).arg(fileName), QtWarningMsg);
                     continue;
                 }
 
-                QByteArray buf = f.readAll();;
+                QByteArray buf = f.readAll();
                 if (buf.isEmpty()) {
+                    f.close();
                     emit logMessage(QString("板卡%1 文件%2: 读取不完整 (%3/%4)")
                                     .arg(deviceIndex).arg(fileName), QtWarningMsg);
                     continue;
@@ -790,10 +507,10 @@ void DataAnalysisWorker::getValidWave()
                 FileJob job;
                 job.filePath = filePath;
                 job.deviceIndex = static_cast<quint8>(deviceIndex);
-                job.packerStartTime = static_cast<quint32>(fileID * timePerFile);
+                job.packerStartTime = static_cast<quint32>((fileID-1) * timePerFile);
                 job.data = std::move(buf);
-
                 queue.push(std::move(job));
+                f.close();
             }
 
             producerDone = true;
@@ -930,7 +647,7 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
 
             if (data.isEmpty()) {
                 // 如果没有数据，创建一个空数据集
-                hsize_t dims[2] = {0, 514};
+                hsize_t dims[2] = {0, H5_DATA_COLS};
                 H5::DataSpace dataspace(2, dims);
                 H5::DataSet dataset = boardGroup.createDataSet(datasetName.toStdString(),
                                                                H5::PredType::NATIVE_INT16,

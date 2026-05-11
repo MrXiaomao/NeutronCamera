@@ -122,7 +122,7 @@ DEFINES += APP_VERSION="\\\"V1.0.1\\\""
 DEFINES +=_WIN32_WINNT=0x0601
 
 windows {
-    message("当前环境是Windows系统")
+    message("The current environment is a Windows system")
 
     # MinGW
     *-g++* {
@@ -139,14 +139,14 @@ windows {
     }
     # MSVC
     *-msvc* {
-        QMAKE_CXXFLAGS += /utf-8
-        QMAKE_CXXFLAGS += /source-charset:utf-8
-        QMAKE_CXXFLAGS += /execution-charset:utf-8
+#        QMAKE_CXXFLAGS += /utf-8
+#        QMAKE_CXXFLAGS += /source-charset:utf-8
+#        QMAKE_CXXFLAGS += /execution-charset:utf-8
     }
 }
 #QMAKE_MANIFEST += $$PWD/manifest.xml
 unix:!macx:{
-    message("当前环境是Linux系统")
+    message("The current environment is a Linux system")
 
     # 设置源代码编码为UTF-8
     QMAKE_CFLAGS += -finput-charset=UTF-8

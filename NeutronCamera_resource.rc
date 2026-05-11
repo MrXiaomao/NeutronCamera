@@ -1,6 +1,6 @@
 #include <windows.h>
 
-IDI_ICON1	ICON	DISCARDABLE	"D:\\Examples\\Qt\\MicroDetector\\3rdParty\\resource\\logo.ico"
+IDI_ICON1	ICON	"D:\\work\\Qt\\MicroDetector\\3rdParty\\resource\\logo.ico"
 
 VS_VERSION_INFO VERSIONINFO
 	FILEVERSION 0,0,0,0
@@ -11,9 +11,9 @@ VS_VERSION_INFO VERSIONINFO
 #else
 	FILEFLAGS 0x0L
 #endif
-	FILEOS VOS__WINDOWS32
+	FILEOS VOS_NT_WINDOWS32
 	FILETYPE VFT_DLL
-	FILESUBTYPE 0x0L
+	FILESUBTYPE VFT2_UNKNOWN
 	BEGIN
 		BLOCK "StringFileInfo"
 		BEGIN
@@ -23,9 +23,12 @@ VS_VERSION_INFO VERSIONINFO
 				VALUE "FileDescription", "\0"
 				VALUE "FileVersion", "0.0.0.0\0"
 				VALUE "LegalCopyright", "\0"
-				VALUE "OriginalFilename", "Zr_ActivationPrj.exe\0"
-				VALUE "ProductName", "Zr_ActivationPrj\0"
+				VALUE "OriginalFilename", "NeutronCamera.exe\0"
+				VALUE "ProductName", "NeutronCamera\0"
 				VALUE "ProductVersion", "0.0.0.0\0"
+				VALUE "InternalName", "\0"
+				VALUE "Comments", "\0"
+				VALUE "LegalTrademarks", "\0"
 			END
 		END
 		BLOCK "VarFileInfo"

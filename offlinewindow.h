@@ -200,7 +200,7 @@ public slots:
     void onGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//伽马能谱
 
     void onPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图绘制
-    void onFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&);// FoM图绘制
+    void onFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&, double);// FoM图绘制
 
     void onCpsPlot(QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>>);
 
@@ -210,7 +210,7 @@ signals:
     void doCalculateDensityPSD(quint8, QVector<QPair<double,double>>&);// 对PSD数据对，进行统计，给出PSD分布密度图
 
     void doPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图
-    void doFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&);// FoM拟合
+    void doFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&, double);// FoM拟合
 
     void doCpsPlot(QMap<quint8/*通道号*/, QVector<QPair<quint16/*时刻*/,quint32/*计数率*/>>>);
 

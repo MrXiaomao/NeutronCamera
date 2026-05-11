@@ -113,12 +113,12 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         QVector<Pulse> filtered;
         filtered.reserve(pulses.size());
 
-        for (int idx = H5_DATA_EXTEND/*前面的扩展数据是给触发时刻+峰值预留的，真实数据从第H5_DATA_EXTEND个开始*/; idx < pulses.size(); ++idx) {
+        for (int idx = 0; idx < pulses.size(); ++idx) {
             const Pulse &p = pulses[idx];
 
-            float peak = p[0];
-            int peakIndex0 = 0; // 0-based
-            for (int s = 1; s < numSamples; ++s) {
+            float peak = p[H5_DATA_EXTEND];/*前面的扩展数据是给触发时刻+峰值预留的，真实数据从第H5_DATA_EXTEND个开始*/
+            int peakIndex0 = H5_DATA_EXTEND; // 0-based
+            for (int s = H5_DATA_EXTEND+1; s < numSamples; ++s) {
                 if (p[s] > peak) {
                     peak = p[s];
                     peakIndex0 = s;
@@ -142,8 +142,8 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         filtered.reserve(pulses.size());
 
         for (const Pulse &p : pulses) {
-            float peak = p[0];
-            for (int s = 1; s < numSamples; ++s) {
+            float peak = p[H5_DATA_EXTEND];
+            for (int s = H5_DATA_EXTEND+1; s < numSamples; ++s) {
                 if (p[s] > peak)
                     peak = p[s];
             }
@@ -162,12 +162,12 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         const int baseSamples = 16;
         for (Pulse &p : pulses) {
             float sum = 0.0f;
-            for (int s = 0; s < baseSamples; ++s) {
+            for (int s = H5_DATA_EXTEND; s < H5_DATA_EXTEND+baseSamples; ++s) {
                 sum += p[s];
             }
             qint16 baseline = matlab_int16(sum / baseSamples);
 
-            for (int s = 0; s < numSamples; ++s) {
+            for (int s = H5_DATA_EXTEND; s < numSamples; ++s) {
                 //这里可能有溢出风险
                 p[s] = p[s] - baseline;
             }
@@ -181,8 +181,8 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         filtered.reserve(pulses.size());
         int lines =1;
         for (const Pulse &p : pulses) {
-            float minVal = p[0];
-            for (int s = 1; s < numSamples; ++s) {
+            float minVal = p[H5_DATA_EXTEND];
+            for (int s = H5_DATA_EXTEND+1; s < numSamples; ++s) {
                 if (p[s] < minVal)
                     minVal = p[s];
             }
@@ -210,9 +210,9 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         const Pulse &pulse = pulses[i1];
 
         // 1) 峰值和峰位
-        float peak = pulse[0];
-        int peakIndex0 = 0;
-        for (int s = 1; s < numSamples; ++s) {
+        float peak = pulse[H5_DATA_EXTEND];
+        int peakIndex0 = H5_DATA_EXTEND;
+        for (int s = H5_DATA_EXTEND+1; s < numSamples; ++s) {
             if (pulse[s] > peak) {
                 peak = pulse[s];
                 peakIndex0 = s;
@@ -222,7 +222,7 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         // 2) 找恒比阈值 crossing 点 Th_id
         int Th_id0 = -1;  // 0-based
         const float thr = ratio * peak;
-        for (int s = 0; s <= peakIndex0 && s + 1 < numSamples; ++s) {
+        for (int s = H5_DATA_EXTEND; s <= peakIndex0 && s + 1 < numSamples; ++s) {
             if (pulse[s] <= thr && pulse[s + 1] > thr) {
                 Th_id0 = s;
                 break;
@@ -371,18 +371,18 @@ n_gamma::HistResult n_gamma::selectAndHist(const QVector<QPair<float, float>> &d
     QVector<float> psd_Na;
     HistResult out;
 
-    // ---------- 1) 能量框选：700 < E < 900 ----------
+    // ---------- 1) 能量框选：600 < E < 1000 ----------
     psd_Na.reserve(data.size());
     for (const auto &pair : data) {
         float E = pair.first;
-        if (E > 600.0f && E < 1000.0f) {
+        if (E > 700.0f && E < 900.0f) {
             psd_Na.push_back(pair.second);
         }
     }
 
     // ---------- 2) psd_x = 0:0.002:1 ----------
     const double start = 0.0f;
-    const double step  = 0.002f;
+    const double step  = 0.001f;
     const double end   = 1.0f;
 
     int numBins = int(std::round((end - start) / step)) + 1; // 501 bins
@@ -432,9 +432,9 @@ n_gamma::HistResult n_gamma::selectAndHist(const QVector<QPair<float, float>> &d
  */
 n_gamma::FOM n_gamma::GetFOM(const QVector<double> &psd_x,
                               const QVector<int> &count_y,
-                              double minPeakHeight/* = 1.0f*/,
+                              double minPeakHeight/* = 5.0f*/,
                               int nPeaks/* = 2*/,
-                              int minPeakDistance/* = 5*/)
+                              int minPeakDistance/* = 15*/)
 {
 
     n_gamma::FOM fom;
@@ -593,6 +593,12 @@ n_gamma::FOM n_gamma::GetFOM(const QVector<double> &psd_x,
     fom.xlim[1] = p2[1]+8*p2[2]/1.414;
     fom.R1 = R1_square;
     fom.R2 = R2_square;
+
+    double b1 = p1[1];
+    double b2 = p2[1];
+    double c1_ = p1[2];
+    double c2_ = p2[2];
+    fom.fom = abs(b1-b2) / (c1_+ c2_) * 1.414 / 2.355;
 
     return fom;
 }

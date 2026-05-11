@@ -82,7 +82,7 @@ void QProgressIndicator::setColor(const QColor & color)
 
 QSize QProgressIndicator::sizeHint() const
 {
-    return QSize(160, 160);
+    return QSize(160, 240);
 }
 
 int QProgressIndicator::heightForWidth(int w) const
@@ -113,7 +113,6 @@ void QProgressIndicator::paintEvent(QPaintEvent * /*event*/)
     int capsuleHeight = outerRadius - innerRadius;
     int capsuleWidth  = (width > 32 ) ? capsuleHeight *.23 : capsuleHeight *.35;
     int capsuleRadius = capsuleWidth/2;
-
     for (int i=0; i<12; i++)
     {
         QColor color = m_color;
@@ -121,9 +120,14 @@ void QProgressIndicator::paintEvent(QPaintEvent * /*event*/)
         p.setPen(Qt::NoPen);
         p.setBrush(color);
         p.save();
+
         p.translate(rect().center());
         p.rotate(m_angle - i*30.0f);
         p.drawRoundedRect(-capsuleWidth*0.5, -(innerRadius+capsuleHeight), capsuleWidth, capsuleHeight, capsuleRadius, capsuleRadius);
+
         p.restore();
     }
+
+    p.setPen(Qt::black);
+    p.drawText(0, this->height() - 40, width, 40, Qt::AlignCenter, "系统忙，请耐心等待...");
 }

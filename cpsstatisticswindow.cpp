@@ -27,7 +27,9 @@ CpsStatisticsWindow::CpsStatisticsWindow(bool isDarkTheme, QWidget *parent)
     ui->action_waveform->setChecked(true);
     emit ui->action_waveform->triggered(true);
 
-    connect(ui->toolButton_cps, &QToolButton::clicked, this, &CpsStatisticsWindow::onCpsStatistics);
+    connect(ui->toolButton_cps, &QToolButton::clicked, this, [=]{
+        onCpsStatistics();
+    });
     connect(ui->toolButton_process, &QToolButton::clicked, this, &CpsStatisticsWindow::onDataProcess);
     //connect(ui->toolButton_waveform, &QToolButton::clicked, this, &CpsStatisticsWindow::doWaveformPlot);
 
@@ -42,9 +44,7 @@ CpsStatisticsWindow::CpsStatisticsWindow(bool isDarkTheme, QWidget *parent)
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
         QGoodWindow::setAppCustomTheme(mIsDarkTheme,this->mThemeColor); // Must be >96
-    });
 
-    QTimer::singleShot(0, this, [&](){
         if(mainWindow) {
             mainWindow->fixMenuBarWidth();
         }
@@ -62,7 +62,7 @@ void CpsStatisticsWindow::initUi()
     mProgressIndicator = new QProgressIndicator(this);
 
     ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
-    ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
+    ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     ui->tableWidget_filelist->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     //////////////////////////////////////////////////////////////////////
@@ -349,7 +349,7 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
         if (ui->tableWidget_filelist->columnCount() != 4) {
             ui->tableWidget_filelist->setColumnCount(4);
             ui->tableWidget_filelist->setHorizontalHeaderLabels(
-                {"文件名", "大小(bytes)", "大小", "修改时间"}
+                {"文件名", "大小(bytes)", "大小(MB)", "修改时间"}
                 );
         }
 
@@ -365,10 +365,11 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
             itemBytes->setFlags(itemBytes->flags() ^ Qt::ItemIsEditable);
 
             auto *itemHuman = new QTableWidgetItem(humanReadableSize(fi.size()));
-            itemHuman->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            itemHuman->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);            
             itemHuman->setFlags(itemHuman->flags() ^ Qt::ItemIsEditable);
 
             auto *itemTime = new QTableWidgetItem(fi.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
+            itemHuman->setTextAlignment(Qt::AlignCenter);
             itemTime->setFlags(itemTime->flags() ^ Qt::ItemIsEditable);
 
             ui->tableWidget_filelist->setItem(i, 0, itemName);
@@ -378,6 +379,7 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
         }
 
         // 表头美化（可选）
+        ui->tableWidget_filelist->horizontalHeader()->setMinimumWidth(200);
         ui->tableWidget_filelist->horizontalHeader()->setStretchLastSection(true);
         ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
         ui->tableWidget_filelist->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -914,7 +916,7 @@ void CpsStatisticsWindow::initCpsPage()
         spectrumAxisRect->setMinimumMargins(QMargins(0,0,0,0));
         spectrumAxisRect->setMargins(QMargins(0,0,0,0));
         spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
-        spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Counts"));
+        spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("V"));
         spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Channel"));
         spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 2000);
         spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 16384);
@@ -932,13 +934,13 @@ void CpsStatisticsWindow::initCpsPage()
             graph->setLineStyle(QCPGraph::lsLine);
             if (i<12){
                 graph->setName(QStringLiteral("HC %1").arg(i));
-                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
-                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
+                graph->setPen(QPen(mGraphisColor[i-1], 1, Qt::PenStyle::SolidLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 5));//显示散点图
             }
             else{
                 graph->setName(QStringLiteral("VC %1").arg(i));
-                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
-                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
+                graph->setPen(QPen(mGraphisColor[i-1], 1, Qt::PenStyle::DashLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 5));//显示散点图
             }
         }
     }
@@ -951,7 +953,7 @@ void CpsStatisticsWindow::initCpsPage()
         timeCountsAxisRect->setMinimumMargins(QMargins(0,0,0,0));
         timeCountsAxisRect->setMargins(QMargins(0,0,0,0));
         timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
-        timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Counts"));
+        timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Count"));
         timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Time/ms"));
         timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 2000);
         timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 1200);
@@ -969,13 +971,13 @@ void CpsStatisticsWindow::initCpsPage()
             graph->setLineStyle(QCPGraph::lsLine);
             if (i<12){
                 graph->setName(QStringLiteral("HC %1").arg(i));
-                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
-                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
+                graph->setPen(QPen(mGraphisColor[i-1], 1, Qt::PenStyle::SolidLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 5));//显示散点图
             }
             else{
                 graph->setName(QStringLiteral("VC %1").arg(i));
-                graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
-                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
+                graph->setPen(QPen(mGraphisColor[i-1], 1, Qt::PenStyle::DashLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 5));//显示散点图
             }
 
             customPlot->legend->removeItem(customPlot->legend->itemWithPlottable(graph)); // 移除与graph关联的图例项，从而隐藏图例
@@ -985,8 +987,8 @@ void CpsStatisticsWindow::initCpsPage()
     // 时间探测器计数曲线
     QCPAxisRect *timeChannelCountsAxisRect = new QCPAxisRect(customPlot);
     timeChannelCountsAxisRect->setObjectName("timeChannelCountsAxisRect");
-    timeChannelCountsAxisRect->setRangeZoomFactor(1, 1);//禁止轴缩放
-    timeChannelCountsAxisRect->setRangeDragAxes(nullptr, nullptr);// 禁止轴拖拽
+   	timeChannelCountsAxisRect->setRangeZoomFactor(1, 1);//禁止轴缩放
+   	timeChannelCountsAxisRect->setRangeDragAxes(nullptr, nullptr);// 禁止轴拖拽
     QCPColorScale *timeChannelCountsColorScale = nullptr;
     {
         timeChannelCountsAxisRect->setupFullAxesBox();
@@ -1008,15 +1010,15 @@ void CpsStatisticsWindow::initCpsPage()
         // 禁止坐标轴缩放
         //keyAxis->setRange(-50.0, 2050.0);// 数据量是20个，每个间隔是100ms，所以总时间是2000，+/-50是为了让标签名称正好显示在中间位置
         //valueAxis->setRange(0.5, 18.5);// +0.5是为了让名称正好显示在中间位置
-        keyAxis->setRange(0.0, 10000.0);// 数据量是20个，每个间隔是100ms，所以总时间是2000，+/-50是为了让标签名称正好显示在中间位置
-        valueAxis->setRange(0.5, 19.0);// +0.5是为了让名称正好显示在中间位置
+        //keyAxis->setRange(0.0, 10000.0);// 数据量是20个，每个间隔是100ms，所以总时间是2000，+/-50是为了让标签名称正好显示在中间位置
+        //valueAxis->setRange(0. , 18.0);// +0.5是为了让名称正好显示在中间位置
         {
             QSharedPointer<QCPAxisTickerText> textTicker(new QCPAxisTickerText);
             QVector<QString> labels;
             QVector<double> positions;
-            for (int i = 0; i <= 18; ++i) {
-                positions << (double)(i);
-                labels << QString::number(i);
+            for (int i = 0; i <= 17; ++i) {
+                positions << (double)(i+0.5);
+                labels << QString::number(i+1);
             }
             textTicker->setTicks(positions, labels);
             valueAxis->setTicker(textTicker);
@@ -1025,8 +1027,14 @@ void CpsStatisticsWindow::initCpsPage()
         QCPColorMap *colorMap = new QCPColorMap(keyAxis, valueAxis);
         colorMap->setName("colorMap");
         colorMap->setInterpolate(false);
-        colorMap->data()->setSize(10000, 18);
-        colorMap->data()->setRange(QCPRange(1, 10000), QCPRange(1, 18));
+        colorMap->data()->setSize(1000, 18);
+        colorMap->data()->setRange(QCPRange(0, 1000), QCPRange(0, 18));
+        colorMap->setInterpolate(true);// 颜色平滑过度
+        colorMap->setTightBoundary(true);//设置最外层的数据行和列是否被裁剪到指定的键值范围
+        colorMap->rescaleDataRange(true);
+        colorMap->rescaleValueAxis(true, true);
+        colorMap->rescaleKeyAxis(true);
+
         timeChannelCountsColorScale = new QCPColorScale(customPlot);
         timeChannelCountsColorScale->setType(QCPAxis::atRight);
         timeChannelCountsColorScale->setRangeDrag(false);
@@ -1035,7 +1043,6 @@ void CpsStatisticsWindow::initCpsPage()
         QCPColorGradient gradient(QCPColorGradient::gpRainbow);
         gradient.setColorStopAt(0, QColor(255, 255, 255));
         colorMap->setGradient(gradient/*QCPColorGradient::gpRainbow*/);
-        colorMap->rescaleDataRange();
 
         QCPMarginGroup *marginGroup = new QCPMarginGroup(customPlot);
         timeChannelCountsAxisRect->setMarginGroup(QCP::msBottom|QCP::msTop, marginGroup);
@@ -1148,12 +1155,14 @@ void CpsStatisticsWindow::initCpsPage()
         rightLayout->addElement(1, 0, channelCountsAxisRect);//下面
     }
 
+    customPlotHelper->setGraphCheckBox(customPlot, spectrumAxisRect);
+    customPlotHelper->setGraphCheckBox(customPlot, timeCountsAxisRect);
+
     customPlot->plotLayout()->clear();
     customPlot->plotLayout()->addElement(0, 0, leftLayout);//左边
     customPlot->plotLayout()->addElement(0, 1, rightLayout);//右边
     //customPlot->plotLayout()->setColumnStretchFactor(0, 1);
     //customPlot->plotLayout()->setColumnStretchFactor(1, 1);
-    customPlot->replot(QCustomPlot::rpQueuedReplot);
 
     // 右键菜单项
     customPlotHelper->onContextMenu = [=](const QCPAxisRect* axisRect, bool& allow){
@@ -1164,32 +1173,65 @@ void CpsStatisticsWindow::initCpsPage()
     };
 
     connect(customPlotHelper, &QCustomPlotHelper::selectRangeChanged, this, [=](const QCPAxisRect *axisRect, const QCPRange& range){
-        if (axisRect == timeCountsAxisRect){
+        if (axisRect == spectrumAxisRect && range.size() >= 1){
+            int minPeak, maxPeak;
+            int channels = ui->comboBox_channels->currentText().toInt();
+            minPeak = range.lower * 16384 / channels;
+            maxPeak = range.upper * 16384 / channels;
+            onCpsStatistics(minPeak, maxPeak);
+        }
+
+        else if (axisRect == timeCountsAxisRect && range.size() >= 1){
             Q_UNUSED(range);
+
+            QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
+            colorMap->data()->clear();
+            colorMap->data()->setSize(range.size(), 18);
+            colorMap->data()->setRange(range, QCPRange(0, 18));//限制坐标轴显示范围
+            colorMap->data()->setKeyRange(range);//限制坐标轴显示范围
+
             QCPBars *cpBars = qobject_cast<QCPBars*>(customPlot->plottable("cpBars"));
+
             QVector<double> keys, values;
             QVector<QPen> barPen;
             QVector<QBrush> barBrush;
+            double yMax = 0;
             values.resize(18);
-            for (int group=0; group<18; ++group){
+            for (int channel=0; channel<18; ++channel){
                 QCPGraph *graph = nullptr;
-                if (group < 11)
-                    graph = customPlot->graph(timeCountsAxisRect, QStringLiteral("HC %1").arg(group+1));
+                if (channel < 11)
+                    graph = customPlot->graph(timeCountsAxisRect, QStringLiteral("HC %1").arg(channel+1));
                 else
-                    graph = customPlot->graph(timeCountsAxisRect, QStringLiteral("VC %1").arg(group+1));
+                    graph = customPlot->graph(timeCountsAxisRect, QStringLiteral("VC %1").arg(channel+1));
 
-                keys << (double)(group + 1);
+                keys << (double)(channel + 1);
                 barPen << QPen(Qt::black );
-                barBrush << QBrush(mGraphisColor[group]);
+                barBrush << QBrush(mGraphisColor[channel]);
 
                 for (int i=0; i<graph->data()->size(); ++i){
                     if (graph->data()->at(i)->key>=range.lower && graph->data()->at(i)->key<=range.upper){
-                        values[group] += (double)graph->data()->at(i)->value;
+                        values[channel] += (double)graph->data()->at(i)->value;
+                        yMax = qMax((double)yMax, (double)values[channel]);
+
+                        int keyIndex = graph->data()->at(i)->key-range.lower;
+                        int valueIndex = channel;
+                        double z = graph->data()->at(i)->value;
+                        colorMap->data()->setCell(keyIndex, valueIndex, z);
                     }
                 }
             }
 
+            // 时间+通道+计数率热度图
+            colorMap->rescaleDataRange(true);
+            colorMap->rescaleValueAxis(true, true);
+            colorMap->rescaleKeyAxis(true);
+
+            QCPAxisRect *timeChannelCountsAxisRect = customPlot->findChild<QCPAxisRect*>("timeChannelCountsAxisRect");
+            timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(range);
+            timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->rescale(false);
+
             cpBars->setData(keys, values, barPen, barBrush);
+            cpBars->valueAxis()->setRange(QCPRange(0,  yMax * 1.1));
             customPlot->replot(QCustomPlot::rpQueuedReplot);
         }
     });
@@ -1203,8 +1245,8 @@ void CpsStatisticsWindow::initCpsPage()
         const double step = (xMax - xMin) / (pointsPerGroup - 1);  // 20个点的步长
 
         QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
-        colorMap->data()->setSize(pointsPerGroup, numGroups);
-        colorMap->data()->setRange(QCPRange(0, pointsPerGroup*100), QCPRange(1, numGroups));
+        //colorMap->data()->setSize(pointsPerGroup, numGroups);
+        //colorMap->data()->setRange(QCPRange(0, pointsPerGroup*100), QCPRange(0.5, numGroups + 0.5));
 
         QCPBars *cpBars = qobject_cast<QCPBars*>(customPlot->plottable("cpBars"));
 
@@ -1243,27 +1285,42 @@ void CpsStatisticsWindow::initCpsPage()
                 xData.append(key*100);
                 yData.append(value);
 
-                double x, y;
-                colorMap->data()->cellToCoord(i, group, &x, &y);
-                colorMap->data()->setCell(i, group, value);
+//                double x, y;
+//                colorMap->data()->cellToCoord(i, group, &x, &y);
+//                //colorMap->data()->setCell(i, group, value);
+//                colorMap->data()->setCell(0, 0, 60);
+//                colorMap->data()->setCell(1, 1, 80);
                 values[group] += value;
-            }
+            }           
 
             // 时间+计数率曲线
             QCPGraph *graph = nullptr;
             if (group < 11)
-                graph = customPlot->graph(QStringLiteral("HC %1").arg(group+1));
+                graph = customPlot->graph(timeCountsAxisRect, QStringLiteral("HC %1").arg(group+1));
             else
-                graph = customPlot->graph(QStringLiteral("VC %1").arg(group+1));
+                graph = customPlot->graph(timeCountsAxisRect, QStringLiteral("VC %1").arg(group+1));
             graph->setData(xData, yData);
         }
 
+        //colorMap->data()->setSize(1000, 18);
+        colorMap->data()->setSize(50, 18);
+        colorMap->data()->setRange(QCPRange(0, 50), QCPRange(0, 18));//限制坐标轴显示范围
+        for (int x=0; x<50; ++x)
+            for (int y=0; y<18; ++y)
+                colorMap->data()->setCell(x, y, qCos(x)+qSin(y));
+
+        colorMap->setInterpolate(true);// 颜色平滑过度
+        colorMap->setTightBoundary(true);//设置最外层的数据行和列是否被裁剪到指定的键值范围
+
         // 时间+通道+计数率热度图
-        colorMap->rescaleDataRange();
+        colorMap->rescaleDataRange(true);
+        colorMap->rescaleValueAxis(true, true);
+        colorMap->rescaleKeyAxis(true);
 
         // 通道+计数率总和柱状图
         cpBars->setData(keys, values, barPen, barBrush);
     }
+
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 
     QVBoxLayout* vLayout = new QVBoxLayout(ui->pageInfoWidget_cps);
@@ -1272,6 +1329,7 @@ void CpsStatisticsWindow::initCpsPage()
     ui->pageInfoWidget_cps->setLayout(vLayout);
 
     mCpsPlot = customPlot;
+    emit mCpsPlot->afterLayout();
 }
 
 void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs)
@@ -1294,17 +1352,18 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
     QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(mCpsPlot->plottable("colorMap"));
     QCPBars *cpBars = qobject_cast<QCPBars*>(mCpsPlot->plottable("cpBars"));
 
-    const int numGroups = 18;
+    const int channels = 18;
     const int pointsPerGroup = ui->spinBox_endT_3->value();
     int keySize = ui->spinBox_endT_3->value() - ui->spinBox_startT_3->value();
-    int valueSize = 18;
-    colorMap->data()->setSize(keySize, valueSize);// 范围不要超出坐标轴范围，否则坐标轴会被覆盖
-    colorMap->data()->setRange(QCPRange(ui->spinBox_startT_3->value()/* + 1*/, ui->spinBox_endT_3->value()), QCPRange(1, numGroups));
+    colorMap->data()->setSize(keySize, channels);// 范围不要超出坐标轴范围，否则坐标轴会被覆盖
+    colorMap->data()->setRange(QCPRange(ui->spinBox_startT_3->value()/* + 1*/, ui->spinBox_endT_3->value()), QCPRange(0, channels));
 
     QVector<double> keys;
     QVector<double> values;
     QVector<QPen> barPen;
     QVector<QBrush> barBrush;
+    double yMax = 0;
+    double yMax2 = 0;
 
     for (auto iter = mapPairs.begin(); iter != mapPairs.end(); ++iter){
         int channel = iter.key();
@@ -1320,6 +1379,7 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
         for (auto iterSub = mapPair.begin(); iterSub != mapPair.end(); ++iterSub){
             xData.append(iterSub.key());
             yData.append(iterSub.value());
+            yMax = qMax((double)yMax, (double)iterSub.value());
 
             int keyIndex = iterSub.key()-ui->spinBox_startT_3->value();
             int valueIndex = channel - 0.5;
@@ -1329,16 +1389,25 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
             colorMap->data()->setCell(keyIndex, valueIndex, z);
 
             values[channel-1] += iterSub.value();
+            yMax2 = qMax((double)yMax2, (double)values[channel-1]);
         }
 
         // 时间+计数率曲线
         QCPGraph *graph = nullptr;
-        if (channel < 11)
+        if (channel <= 11)
             graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("HC %1").arg(channel));
         else
             graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("VC %1").arg(channel));
         graph->setData(xData, yData);
     }
+
+    colorMap->setInterpolate(true);// 颜色平滑过度
+    colorMap->setTightBoundary(true);//设置最外层的数据行和列是否被裁剪到指定的键值范围
+
+    // 时间+通道+计数率热度图
+    colorMap->rescaleDataRange(true);
+    colorMap->rescaleValueAxis(true, true);
+    colorMap->rescaleKeyAxis(true);
 
     // 时间+通道+计数率热度图
     colorMap->rescaleDataRange();
@@ -1347,6 +1416,8 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
     cpBars->setData(keys, values, barPen, barBrush);
 
     // 队列刷新
+    timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(QCPRange(0,  yMax * 1.1));
+    cpBars->valueAxis()->setRange(QCPRange(0,  yMax2 * 1.1));
     mCpsPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
@@ -1358,7 +1429,7 @@ void CpsStatisticsWindow::onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/
         // 设置坐标轴范围
         QCPAxis *keyAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atBottom);
         QCPAxis *valueAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atLeft);
-        keyAxis->setRange(QCPRange(0, 8192));
+        keyAxis->setRange(QCPRange(0, mapPairs[1].count()));
     }
 
     QVector<double> keys;
@@ -1386,7 +1457,7 @@ void CpsStatisticsWindow::onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/
 
         // 时间+计数率曲线
         QCPGraph *graph = nullptr;
-        if (channel < 11)
+        if (channel <= 11)
             graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("HC %1").arg(channel));
         else
             graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("VC %1").arg(channel));
@@ -1527,8 +1598,6 @@ void CpsStatisticsWindow::onDataProcess()
     emit doWriteLog("开始数据压缩分析", QtInfoMsg);
     emit doWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
 
-    mProgressIndicator->startAnimation();
-
     // 创建HDF5文件路径（在数据目录下）
     QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
     emit doWriteLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
@@ -1550,6 +1619,8 @@ void CpsStatisticsWindow::onDataProcess()
         QFile::remove(hdf5FilePath);
         emit doWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
     }
+
+    mProgressIndicator->startAnimation();
 
     // 创建并启动工作线程
     // 如果已有线程在运行，先停止并清理
@@ -1712,8 +1783,9 @@ void CpsStatisticsWindow::onAnalysisError(const QString& error)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-void CpsStatisticsWindow::onCpsStatistics()
+void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
 {
+    mProgressIndicator->startAnimation();
     // 计数率统计
     //提取有效波形参数
     int timeWidth = ui->spinBox_time1->value(); // 默认值 1ms
@@ -1721,23 +1793,41 @@ void CpsStatisticsWindow::onCpsStatistics()
     int timeStop = ui->spinBox_endT_3->value(); // 截止时刻
     int channels = ui->comboBox_channels->currentText().toInt();
 
-    // 查找目录下的h5文件
-    QString h5FilePath = mFileDir + "/waveform_data.h5";
-    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPairs;
-    QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPairs;
-    if (QFileInfo::exists(h5FilePath) && !mPCIeCommSdk.analyzeHistoryCpsData(channels, timeWidth, timeStart, timeStop, h5FilePath, [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair, QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPair){
-            for (auto iter = cpsMapPair.begin(); iter!=cpsMapPair.end(); ++iter){
-                cpsMapPairs[iter.key()] = iter.value();
-            }
+    std::thread producer([=]{
+        // 查找目录下的h5文件
+	    QString h5FilePath = mFileDir + "/waveform_data.h5";
+	    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPairs;
+	    QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPairs;
+	    if (QFileInfo::exists(h5FilePath) &&
+	        !mPCIeCommSdk.analyzeHistoryCpsData(channels,
+	            timeWidth,
+	            timeStart,
+	            timeStop,
+	            h5FilePath,
+	            [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair, QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPair){
+	            for (auto iter = cpsMapPair.begin(); iter!=cpsMapPair.end(); ++iter){
+	                cpsMapPairs[iter.key()] = iter.value();
+	            }
+	
+	            for (auto iter = spectrumMapPair.begin(); iter!=spectrumMapPair.end(); ++iter){
+	                spectrumMapPairs[iter.key()] = iter.value();
+	            }
+	        }, minPeak, maxPeak))
+	    {
+	        mProgressIndicator->stopAnimation();
+	        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
+	        return;
+	    }
 
-            for (auto iter = spectrumMapPair.begin(); iter!=spectrumMapPair.end(); ++iter){
-                spectrumMapPairs[iter.key()] = iter.value();
-            }
-        }))
-    {
-        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
-    }
-
-    emit doCpsPlot(cpsMapPairs);
-    emit doSpectrumPlot(spectrumMapPairs);
+        // 在std::thread中，拿到接收对象的指针后，通过QMetaObject invokeMethod投递，否则槽函数无法响应
+        QMetaObject::invokeMethod(this, [=](){
+		    emit doCpsPlot(cpsMapPairs);
+		
+		    if (0==minPeak && 16384==maxPeak)//如果是选择能谱范围就不要重新刷新能谱图了
+		        emit doSpectrumPlot(spectrumMapPairs);
+		
+		    mProgressIndicator->stopAnimation();
+        }, Qt::QueuedConnection);
+    });
+    producer.detach();
 }

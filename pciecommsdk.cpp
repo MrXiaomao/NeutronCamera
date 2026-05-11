@@ -270,13 +270,13 @@ void PCIeCommSdk::replyCaptureWaveformData(quint8 cardIndex/*PCIe卡序号*/, bo
 
     cameraIndex = cameraFrom + cameraNo;
 
-    /* 原始数据格式(总大小200000000B)
+    /* 原始数据格式(总大小120000000B)
      * 包头              FFAB
      * 数据类型           00D3
      * 包序号             0000
      * 测量时间           0000
      * 包头时间戳         0000 0000 0000 0000
-     * 原始数据(B  )      200,000,000-32
+     * 原始数据(B  )      120,000,000-32
      * 包尾时间戳         0000 0000 0000 0000
      * 保留位            0000 0000 0000
      * 包尾              FFCD
@@ -301,7 +301,7 @@ void PCIeCommSdk::replyCaptureWaveformData(quint8 cardIndex/*PCIe卡序号*/, bo
                 QByteArray reserve = waveformTai.mid(8, 6);
                 QByteArray tail = waveformTai.right(2);
 
-                QByteArray chunk = waveformData.mid(16, 200000000-32);
+                QByteArray chunk = waveformData.mid(16, 120000000-32);
                 QVector<qint16> ch[3];
                 if (!DataAnalysisWorker::readBin3Ch_fast(chunk, ch[0], ch[1], ch[2], true)) {
                     return;
@@ -315,34 +315,14 @@ void PCIeCommSdk::replyCaptureWaveformData(quint8 cardIndex/*PCIe卡序号*/, bo
                 //计算出是当前文件波形的第几个数据点
                 int index = remainTime * 1000 * 1000/ 2;
                 int point_num = timeLength * 1000 * 1000 / 2;
+                //根据相机序号计算出是第几块光纤卡
+                int board_index = (cameraIndex-1)/4+1;
 
+                //扣基线，调整数据
+                qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
+                DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, board_index, cameraNo + 1);
                 //提取通道号的数据cameraNo
-                QVector<qint16> waveform;
-                if (cameraNo == 0) {
-                    //扣基线，调整数据
-                    qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0]);
-                    //根据相机序号计算出是第几块光纤卡
-                    int board_index = (cameraIndex-1)/4+1;
-                    DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, board_index, 1);
-                    //提取数据
-                    waveform = ch[0].mid(index, point_num);
-                } else if (cameraNo == 1) {
-                    //扣基线，调整数据
-                    qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[1]);
-                    //根据相机序号计算出是第几块光纤卡
-                    int board_index = (cameraIndex-1)/4+1;
-                    DataAnalysisWorker::adjustDataWithBaseline(ch[1], baseline_ch, board_index, 2);
-                    //提取数据
-                    waveform = ch[1].mid(index, point_num);
-                } else if (cameraNo == 2) {
-                    //扣基线，调整数据
-                    qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[2]);
-                    //根据相机序号计算出是第几块光纤卡
-                    int board_index = (cameraIndex-1)/4+1;
-                    DataAnalysisWorker::adjustDataWithBaseline(ch[2], baseline_ch, board_index, 3);
-                    //提取数据
-                    waveform = ch[2].mid(index, point_num);
-                }
+                QVector<qint16> waveform = ch[cameraNo].mid(index, point_num);
 
                 //数据流类型是int16
                 QVector<QPair<double, double>> waveformPair;
@@ -622,36 +602,32 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLen
         qDebug() << "文件" << filePath << "读取失败或文件不存在";
         return false;
     }
-    return false;
 
     //计算出是当前文件波形的第几个数据点
     int index = remainTime * 1000 * 1000/ 2;
     int point_num = timeLength * 1000 * 1000 / 2;
+    //根据相机序号计算出是第几块光纤卡
+    int board_index = (cameraIndex-1)/CAMNUMBER_DDR_PER+1;
 
     //扣基线，调整数据
     qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
-    //根据相机序号计算出是第几块光纤卡
-    int board_index = (cameraIndex-1)/CAMNUMBER_DDR_PER+1;
     DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, board_index, cameraNo + 1);
-    //根据时间段提取数据
     //提取通道号的数据cameraNo
     QVector<qint16> waveform = ch[cameraNo].mid(index, point_num);
 
-//    QVector<QPair<double,double>> waveformPair;
-//    for (int i=0;i<waveform.size();++i)
-//        waveformPair.push_back(qMakePair(i*2, waveform[i]));
-//    emit doWaveform(1, cameraIndex, waveformPair);
+    QVector<QPair<double,double>> waveformPair;
+    for (int i=0;i<waveform.size();++i)
+        waveformPair.push_back(qMakePair(i*2, waveform[i]));
+    emit doWaveform(1, cameraIndex, waveformPair);
 
-//    return true;
+    return true;
 }
 
 #include "globalsettings.h"
-bool PCIeCommSdk::analyzeHistoryCpsData(quint32 channels/*多道道数*/,
-                                        quint32 timeWidth/*时间宽度ms*/,
-                                        quint32 timeStart/*开始时刻ms*/,
-                                        quint32 timeStop/*结束时刻ms*/,
-                                        QString filePath/*H5文件路径*/,
-                                        std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>, QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>)> callback
+bool PCIeCommSdk::analyzeHistoryWaveformData(const quint32 timeStart/*开始时刻ms*/,
+                                        const quint32 timeStop/*结束时刻ms*/,
+                                        const QString& filePath/*H5文件路径*/,
+                                        std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint16/*数值*/>>)> callback
                                         )
 {
     //根据通道号计算对应采集卡的第几通道
@@ -671,7 +647,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 channels/*多道道数*/,
                 boardGroup = file.openGroup(boardGroupName.toStdString());
 
                 // 辅助函数：写入单个通道的数据集
-                auto readChannel = [&](const QString& datasetName, QVector<quint64>& timeTrigger, QVector<quint64>& timePeak) {
+                auto readChannel = [&](const QString& datasetName, QVector<qint16>& timeTrigger, QVector<qint16>& timePeak) {
                     htri_t existsDataset = H5Lexists(boardGroup.getId(), datasetName.toStdString().c_str(), H5P_DEFAULT);
                     if (existsDataset){
                         std::string ds = datasetName.toUtf8().constData();
@@ -686,9 +662,9 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 channels/*多道道数*/,
                         const hsize_t totalRows = dims[0];
 
                         std::vector<std::vector<int16_t>> outData;
-                        outData.resize(4);
+                        outData.resize(2);//第1列时间毫秒 第2列峰值
                         // 逐列选切片读取：每次选所有行 + 当前1列
-                        for (int colIdx = 0; colIdx < 4; colIdx++) {
+                        for (int colIdx = 0; colIdx < 2; colIdx++) {
                             hsize_t offset[2] = {0, (hsize_t)colIdx};
                             hsize_t count[2]  = {totalRows, 1}; // 一次读1列
                             fileSpace.selectHyperslab(H5S_SELECT_SET, count, offset);
@@ -700,11 +676,10 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 channels/*多道道数*/,
                         }
 
                         for (int rowIdx = 0; rowIdx < totalRows; ++rowIdx){
-                            quint64 timeMs = static_cast<quint16>(outData[0][rowIdx]);
-                            quint64 timeNs = (static_cast<quint16>(outData[1][rowIdx])<<16 | static_cast<quint16>(outData[2][rowIdx]));
-                            timeTrigger.push_back((timeMs*1e6+timeNs)/1e6);
+                            qint16 timeMs = static_cast<qint16>(outData[0][rowIdx]);
+                            timeTrigger.push_back(timeMs);
 
-                            timePeak.push_back(static_cast<quint16>(outData[3][rowIdx]));
+                            timePeak.push_back(static_cast<qint16>(outData[1][rowIdx]));
                         }
 
                         dataset.close();
@@ -712,7 +687,163 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 channels/*多道道数*/,
                 };
 
                 // 写入3个通道的数据
-                QVector<quint64> timeTrigger_ch[3], timePeak_ch[3];
+                QVector<qint16> timeTrigger_ch[3], timePeak_ch[3];
+                readChannel("wave_ch0",  timeTrigger_ch[0], timePeak_ch[0]);
+                readChannel("wave_ch1", timeTrigger_ch[1], timePeak_ch[1]);
+                readChannel("wave_ch2", timeTrigger_ch[2], timePeak_ch[2]);
+
+                //根据时间段统计计数率
+                // QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair;
+                // for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
+                //     quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
+                //     if (cameraIndex == 7)
+                //         qDebug();
+
+                //     // 1.按照时间段和点位时间间隔分配计数点数组长度
+                //     quint32 cpsTotal = (timeStop-timeStart)/timeWidth;
+                //     //cpsMapPair[cameraIndex]. reserve(cpsTotal);
+                //     //初始化每个时间段内计数率为0
+                //     for (quint16 intervalNo = 0; intervalNo < cpsTotal; ++intervalNo) {
+                //         cpsMapPair[cameraIndex][timeStart + intervalNo * timeWidth] = quint32(0);
+                //     }
+
+                //     // 2. 遍历所有输入数据，分桶统计
+                //     for (qint32 time : timeTrigger_ch[cameraNo]) {
+                //         if (time > timeStop)
+                //             break;
+
+                //         cpsMapPair[cameraIndex][timeStart + (time-timeStart) / timeWidth] += 1;
+                //         // int intervalIndex = (time - timeStart) / timeWidth;
+                //         // // 对应区间计数+1
+                //         // if (intervalIndex<cpsTotal)
+                //         //     cpsMapPair[cameraIndex][timeStart + intervalIndex * timeWidth].second += 1;
+                //         // else
+                //         //     qDebug();
+                //     }
+
+                //     if (cameraIndex == 7)
+                //         qDebug();
+                // }
+
+                //根据时间段统计能谱
+                // QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPair;
+                // for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
+                //     quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
+
+                //     //初始化每个道址默认能量值为0
+                //     for (quint16 channel = 0; channel < channels; ++channel) {
+                //         spectrumMapPair[cameraIndex][channel] = quint32(0);
+                //     }
+
+                //     // 2. 遍历所有时间段内的能量值，分桶统计
+                //     int i = 0;
+                //     double channelWidth = (double)(timeStop - timeStart) / channels;
+                //     for (qint32 time : timeTrigger_ch[cameraNo]) {
+                //         if (time > timeStop)
+                //             break;
+
+                //         quint16 channel = (time-timeStart) / channelWidth;// 道址
+                //         quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
+                //         spectrumMapPair[cameraIndex][channel] += peak;
+                //     }
+                // }
+
+                boardGroup.close();
+                //callback(cpsMapPair, spectrumMapPair);
+            }
+        }
+
+        file.close();
+
+        return true;
+    } catch (H5::FileIException& error) {
+        // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
+        qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSetIException& error) {
+        qDebug() << "HDF5 DataSet Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSpaceIException& error) {
+        qDebug() << "HDF5 DataSpace Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::GroupIException& error) {
+        qDebug() << "HDF5 Group Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (...) {
+        qDebug() << "Unknown HDF5 Exception";
+        return false;
+    }
+}
+
+bool PCIeCommSdk::analyzeHistoryCpsData(
+                                        const quint32 channels/*多道道数*/,
+                                        const quint32 timeWidth/*时间宽度ms*/,
+                                        const quint32 timeStart/*开始时刻ms*/,
+                                        const quint32 timeStop/*结束时刻ms*/,
+                                        const QString& filePath/*H5文件路径*/,
+                                        std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>, QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>)> callback,
+                                        const quint32 minPeak/*最小峰值0*/,
+                                        const quint32 maxPeak/*最大峰值16384*/
+                                        )
+{
+    //根据通道号计算对应采集卡的第几通道
+    QTextCodec* gbk_codec = QTextCodec::codecForName("GBK");
+    QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
+    try {
+        H5::H5File file(filePathBytes.toStdString(), H5F_ACC_RDONLY);
+
+        for (int boardNum=1; boardNum<=6; ++boardNum){
+            // 创建或打开板卡组
+            QString boardGroupName = QString("Board%1").arg(boardNum);
+
+            H5::Group boardGroup;
+            htri_t existsGroup = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
+
+            if (existsGroup > 0) {
+                boardGroup = file.openGroup(boardGroupName.toStdString());
+
+                // 辅助函数：写入单个通道的数据集
+                auto readChannel = [&](const QString& datasetName, QVector<qint16>& timeTrigger, QVector<qint16>& timePeak) {
+                    htri_t existsDataset = H5Lexists(boardGroup.getId(), datasetName.toStdString().c_str(), H5P_DEFAULT);
+                    if (existsDataset){
+                        std::string ds = datasetName.toUtf8().constData();
+                        H5::DataSet dataset = boardGroup.openDataSet(ds);
+                        H5::DataSpace fileSpace = dataset.getSpace();
+
+                        // 校验维度
+                        int rank = fileSpace.getSimpleExtentNdims();
+                        if (rank != 2) return false;
+                        hsize_t dims[2];
+                        fileSpace.getSimpleExtentDims(dims, nullptr);
+                        const hsize_t totalRows = dims[0];
+
+                        std::vector<std::vector<int16_t>> outData;
+                        outData.resize(2);//第1列时间毫秒 第2列峰值
+                        // 逐列选切片读取：每次选所有行 + 当前1列
+                        for (int colIdx = 0; colIdx < 2; colIdx++) {
+                            hsize_t offset[2] = {0, (hsize_t)colIdx};
+                            hsize_t count[2]  = {totalRows, 1}; // 一次读1列
+                            fileSpace.selectHyperslab(H5S_SELECT_SET, count, offset);
+
+                            H5::DataSpace memSpace(1, &totalRows); // 内存空间是一维，长度为总行数
+                            outData[colIdx].resize(totalRows);
+
+                            dataset.read(outData[colIdx].data(), H5::PredType::NATIVE_INT16, memSpace, fileSpace);
+                        }
+
+                        for (int rowIdx = 0; rowIdx < totalRows; ++rowIdx){
+                            qint16 timeMs = static_cast<qint16>(outData[0][rowIdx]);
+                            timeTrigger.push_back(timeMs);
+
+                            timePeak.push_back(static_cast<qint16>(outData[1][rowIdx]));
+                        }
+
+                        dataset.close();
+                    }
+                };
+
+                // 写入3个通道的数据
+                QVector<qint16> timeTrigger_ch[3], timePeak_ch[3];
                 readChannel("wave_ch0",  timeTrigger_ch[0], timePeak_ch[0]);
                 readChannel("wave_ch1", timeTrigger_ch[1], timePeak_ch[1]);
                 readChannel("wave_ch2", timeTrigger_ch[2], timePeak_ch[2]);
@@ -726,30 +857,29 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 channels/*多道道数*/,
                     quint32 cpsTotal = (timeStop-timeStart)/timeWidth;
                     //cpsMapPair[cameraIndex]. reserve(cpsTotal);
                     //初始化每个时间段内计数率为0
-                    for (quint16 intervalNo = 0; intervalNo < cpsTotal; ++intervalNo) {
+                    for (quint16 intervalNo = 0; intervalNo <= cpsTotal; ++intervalNo) {
                         cpsMapPair[cameraIndex][timeStart + intervalNo * timeWidth] = quint32(0);
                     }
 
                     // 2. 遍历所有输入数据，分桶统计
+                    int i = 0;
                     for (qint32 time : timeTrigger_ch[cameraNo]) {
-                        cpsMapPair[cameraIndex][timeStart + (time-timeStart) / timeWidth] += 1;
-                        // int intervalIndex = (time - timeStart) / timeWidth;
-                        // // 对应区间计数+1
-                        // if (intervalIndex<cpsTotal)
-                        //     cpsMapPair[cameraIndex][timeStart + intervalIndex * timeWidth].second += 1;
-                        // else
-                        //     qDebug();
-                    }
+                        if (time < timeStart)
+                            continue;
 
+                        if (time > timeStop)
+                            break;
+
+                        quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
+                        if (peak >= minPeak && peak <= maxPeak)
+                            cpsMapPair[cameraIndex][(timeStart + time) / timeWidth * timeWidth] += 1;
+                    }
                 }
 
                 //根据时间段统计能谱
                 QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPair;
                 for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
                     quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
-
-                    // 1.默认道址为8192
-                    timeWidth = (timeStop - timeStart) * 1e3 / channels;
 
                     //初始化每个道址默认能量值为0
                     for (quint16 channel = 0; channel < channels; ++channel) {
@@ -758,10 +888,17 @@ bool PCIeCommSdk::analyzeHistoryCpsData(quint32 channels/*多道道数*/,
 
                     // 2. 遍历所有时间段内的能量值，分桶统计
                     int i = 0;
+                    double channelWidth = (double)(16384/channels);
                     for (qint32 time : timeTrigger_ch[cameraNo]) {
-                        quint16 channel = (time-timeStart) / timeWidth;// 道址
+                        if (time < timeStart)
+                            continue;
+
+                        if (time > timeStop)
+                            break;
+
                         quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
-                        spectrumMapPair[cameraIndex][channel] += peak;
+                        quint16 channel = peak / channelWidth;// 道址
+                        spectrumMapPair[cameraIndex][channel] += 1;
                     }
                 }
 
@@ -1364,7 +1501,7 @@ CaptureThread::CaptureThread(const quint32 cardIndex, const QString& devicePath,
     }
 #endif //ENABLE_IOCP
 
-    int capacity = 4;// 40ms, 4s共100帧，10s共250帧
+    int capacity = 280;// 40ms, 4s共100帧，10s共250帧
     mDDRWaveformDatas.reserve(capacity);
     mRAMSpectrumDatas.reserve(capacity);
     try{
@@ -1738,34 +1875,41 @@ void CaptureThread::run()
             for (int i = 0; i < mCapturedRef; ++i)
             {
                 //emit reportCaptureData(mIsDDR1, i+1, mDDRWaveformDatas.at(i), mRAMSpectrumDatas.at(i)); //发给数据缓存处理线程
-
                 quint16 packref = i + 1;
-                {
-                    QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(packref/*++mPackref*/);
-                    QFile file(filename);
-                    if (!file.open(QIODevice::WriteOnly)) {
-                        qDebug() << "Cannot open file for writing";
-                    }
-                    else{
-                        file.write(mDDRWaveformDatas.at(i));
-                        file.close();
-                    }
-                }
+                threadPool->start([=](){
+                    //读能谱数据
+                    //qDebug() << "[" << mCardIndex << "] " << ddrName << capturedRef << " enter elapsedTimerStart=" <<tt1;
+                    //读原始数据
+                    //delay(60000);
+                    SetThreadAffinityMask(QThread::currentThreadId(), (packref % 16) << 1ULL);
 
-                {
-                    QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(packref/*mPackref*/);
-                    QFile file(filename);
-                    if (!file.open(QIODevice::WriteOnly)) {
-                        qDebug() << "Cannot open file for writing";
-                    }
-                    else{
-                        file.write(mRAMSpectrumDatas.at(i));
-                        file.close();
+                    {
+                        QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(packref/*++mPackref*/);
+                        QFile file(filename);
+                        if (!file.open(QIODevice::WriteOnly)) {
+                            qDebug() << "Cannot open file for writing";
+                        }
+                        else{
+                            file.write(mDDRWaveformDatas.at(i));
+                            file.close();
+                        }
                     }
 
-                    qDebug() << "reportCaptureSpectrumData" << mCardIndex << mIsDDR1 << packref;
-                    emit reportCaptureSpectrumData(mCardIndex, mIsDDR1, packref, mRAMSpectrumDatas.at(i));
-                }
+                    {
+                        QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg (packref/*mPackref*/);
+                        QFile file(filename);
+                        if (!file.open(QIODevice::WriteOnly)) {
+                            qDebug() << "Cannot open file for writing";
+                        }
+                        else{
+                            file.write(mRAMSpectrumDatas.at(i));
+                            file.close();
+                        }
+
+                        qDebug() << "reportCaptureSpectrumData" << mCardIndex << mIsDDR1 << packref;
+                        emit reportCaptureSpectrumData(mCardIndex, mIsDDR1, packref, mRAMSpectrumDatas.at(i));
+                    }
+                });
             }
             qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据已经全部存储到硬盘中！";
 

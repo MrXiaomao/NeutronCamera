@@ -255,10 +255,10 @@ void OfflineWindow::initUi()
         initCustomPlot(ui->spectroMeter_waveform_LSD, tr(""), tr("波形"));
         initCustomPlot(ui->spectroMeter_neutron_spectrum_LSD, tr(""), tr("中子能谱"));
         initCustomPlot(ui->spectroMeter_gamma_spectrum_LSD, tr(""), tr("伽马能谱"));
-        initCustomPlot(ui->spectroMeter_horCamera_PSD, tr("水平 n:γ Energy(keVee) PSD图"), tr(""));
-        initCustomPlot(ui->spectroMeter_horCamera_FOM, tr("水平 FOM图"), tr(""));
-        initCustomPlot(ui->spectroMeter_verCamera_PSD, tr("垂直 n:γ Energy(keVee) PSD图"), tr(""));
-        initCustomPlot(ui->spectroMeter_verCamera_FOM, tr("垂直 FOM图"), tr(""));
+        initCustomPlot(ui->spectroMeter_horCamera_PSD, tr("水平 n/γ Energy(MeVee) PSD图"), tr("PSD"));
+        initCustomPlot(ui->spectroMeter_horCamera_FOM, tr("水平 PSD FOM图"), tr("Counts"));
+        initCustomPlot(ui->spectroMeter_verCamera_PSD, tr("垂直 n/γ Energy(MeVee) PSD图"), tr("PSD"));
+        initCustomPlot(ui->spectroMeter_verCamera_FOM, tr("垂直 PSD FOM图"), tr("Counts"));
 
         initCustomPlot(ui->spectroMeter_waveform_PSD, tr(""), tr("波形"));
         initCustomPlot(ui->spectroMeter_neutron_spectrum_PSD, tr("道址"), tr("中子能谱"));
@@ -306,12 +306,6 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
     customPlot->legend->setVisible(false);
     customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom/* | QCP::iSelectPlottables*/);
     customPlot->xAxis->setTickLabelRotation(-45);
-    // customPlot->xAxis->rescale(false);
-    // customPlot->yAxis->rescale(false);
-    // customPlot->yAxis->ticker()->setTickCount(5);
-    // customPlot->xAxis->ticker()->setTickCount(10);
-    // customPlot->yAxis2->ticker()->setTickCount(5);
-    // customPlot->xAxis2->ticker()->setTickCount(10);
     customPlot->xAxis->setLabel(axisXLabel);
     customPlot->yAxis->setLabel(axisYLabel);
     customPlot->axisRect()->setupFullAxesBox(true);
@@ -402,6 +396,15 @@ void OfflineWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, 
             }
             graph->setName(title[i]);
         }
+
+        // 添加标签显示品质因子
+        QCPItemText* itemText = new QCPItemText(customPlot);
+        itemText->setObjectName("itemText");
+        itemText->setLayer("overlay");
+        itemText->position->setType(QCPItemPosition::ptAxisRectRatio);
+        itemText->position->setCoords(0.10, 0.04);
+        itemText->setTextAlignment(Qt::AlignLeft);
+        itemText->setText("品质因子：-");
     }
     customPlot->replot();
     connect(customPlot->xAxis, SIGNAL(rangeChanged(const QCPRange &)), customPlot->xAxis2, SLOT(setRange(const QCPRange &)));
@@ -590,7 +593,7 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
     mfileList = DataCompressWindow::extractFileNames(result);
 
     //统计测量时长，选取光纤口1数据来统计
-    int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "Adata");
+    int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "Adata") / 3;//正常情况下是3张卡（每张卡分A、B两面，所以这里除以3）
 
     // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
     int time_per = 40;
@@ -781,7 +784,7 @@ void OfflineWindow::ngammaFilter()
         };
 
         auto cb = [&](quint32 /*packerCurrentTime*/,
-                    quint8 /*channelIdx*/,
+                      quint8 /*channelIdx*/,
                       QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch) {
             QMutexLocker locker(&mergeMutex);
             ch_all_valid_wave.append(wave_ch);
@@ -832,7 +835,7 @@ void OfflineWindow::ngammaFilter()
         QtInfoMsg
     );
 
-    emit doWriteLog(QString("  波形提取总耗时：%1 ms (%2 秒，占比 %3%)")
+    emit doWriteLog(QString("  波形提取总耗时：%1 ms (%2 秒)")
             .arg(totalWaveExtractTime)
             .arg(totalWaveExtractTime / 1000.0, 0, 'f', 2),
         QtInfoMsg
@@ -919,7 +922,7 @@ void OfflineWindow::ngammaFilter()
     }
 
     // 绘制FoM图表
-    emit doFoMPlot(PCIeCommSdk::CameraOrientation::Horizontal, xLim, curveData);
+    emit doFoMPlot(PCIeCommSdk::CameraOrientation::Horizontal, xLim, curveData, FOM_data.fom);
     qApp->restoreOverrideCursor();
     qint64 fomPlotTime = fomPlotTimer.elapsed();
     emit doWriteLog(QString("FoM图表绘制耗时：%1 ms").arg(fomPlotTime),QtInfoMsg);
@@ -1484,7 +1487,7 @@ void OfflineWindow::onPSDPlot(quint8 cameraOrientation, const QVector<double>& p
     customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
 }
 
-void OfflineWindow::onFoMPlot(quint8 cameraOrientation, QPair<double,double> xlim, const QVector<FOM_CurvePoint>& pairs)
+void OfflineWindow::onFoMPlot(quint8 cameraOrientation, QPair<double,double> xlim, const QVector<FOM_CurvePoint>& pairs, double fom)
 {
     // 核密度图谱
     QCustomPlot* customPlot = nullptr;
@@ -1531,8 +1534,11 @@ void OfflineWindow::onFoMPlot(quint8 cameraOrientation, QPair<double,double> xli
         customPlot->graph(2)->setData(x, y, z);
     }
 
+    QCPItemText* itemText = customPlot->findChild<QCPItemText*>("itemText");
+    if (itemText)
+        itemText->setText(QStringLiteral("品质因子：%1").arg(fom));
+
     customPlot->xAxis->setRange(xlim.first, xlim.second);
-    // customPlot->xAxis->rescale(true);
     customPlot->yAxis->rescale(true);
     customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
 }

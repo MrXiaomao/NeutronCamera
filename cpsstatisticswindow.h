@@ -194,7 +194,7 @@ public:
     Q_SLOT void onAnalysisError(const QString& error);
 
     // 计数率统计相关槽函数
-    Q_SLOT void onCpsStatistics();
+    Q_SLOT void onCpsStatistics(int minPeak = 0, int maxPeak = 16384);
 
 public slots:
     void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
@@ -227,7 +227,6 @@ private slots:
 
 private:
     Ui::CpsStatisticsWindow *ui;
-    //CustomSurface *surface;
     bool mIsDarkTheme = true;
     bool mThemeColorEnable = true;
     QColor mThemeColor = QColor(255,255,255);
@@ -241,7 +240,6 @@ private:
     QStringList mfileList;
     void applyColorTheme();
 
-    //void init3DCurve(); // 3维曲线图
     QCustomPlot* mCpsPlot; //计数率
     QVector<QColor> mBarColor;
     QString mFileDir;

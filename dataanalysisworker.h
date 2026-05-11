@@ -13,8 +13,8 @@
 #include <QQueue>
 
 #ifndef H5_DATA_COLS
-#define H5_DATA_EXTEND      4       //触发时刻3（2位毫秒+1位纳秒）+峰值1
-#define H5_DATA_WAVEFORM    160     //扩展数据长度
+#define H5_DATA_EXTEND      2       //触发时刻1（毫秒）+峰值1
+#define H5_DATA_WAVEFORM    512     //扩展数据长度
 #define H5_DATA_COLS        (H5_DATA_WAVEFORM + H5_DATA_EXTEND)
 #endif //H5_DATA_COLS
 
@@ -43,33 +43,19 @@ public:
                        int startTime,
                        int endTime);
 
-    // 单个文件总大小：256 MB（整）
+    // 单个文件总大小：120 MB（整）
     // 文件头：128 bit = 16 字节（公共部分，跳过）
     // 文件尾：128 bit = 16 字节（跳过）
     // 中间全部是有效数据
     // 每个数据点 16 bit（2 字节，无符号）
-    // 数据排列方式：ch3, ch3, ch2, ch2, ch0, ch0, ch1, ch1...（逐点交织）
-    static bool readBin4Ch_fast(const QString& path,
-                                QVector<qint16>& ch0,
-                                QVector<qint16>& ch1,
-                                QVector<qint16>& ch2,
-                                QVector<qint16>& ch3,
-                                bool littleEndian = true);
-
-    static bool readBin4Ch_fast(QByteArray& fileData,
-                                QVector<qint16>& ch0,
-                                QVector<qint16>& ch1,
-                                QVector<qint16>& ch2,
-                                QVector<qint16>& ch3,
-                                bool littleEndian = true);
-
-    static bool readBin3Ch_fast(const QString& path,
+    // 数据排列方式：ch2, ch2, ch0, ch0, ch1, ch1...（逐点交织）
+    static bool readBin3Ch_fast(const QString& filePath,
                                 QVector<qint16>& ch0,
                                 QVector<qint16>& ch1,
                                 QVector<qint16>& ch2,
                                 bool littleEndian = true);
 
-    static bool readBin3Ch_fast(QByteArray& fileData,
+    static bool readBin3Ch_fast(const QByteArray& fileData,
                                 QVector<qint16>& ch0,
                                 QVector<qint16>& ch1,
                                 QVector<qint16>& ch2,
@@ -94,7 +80,7 @@ public:
     // pre_points: 触发点之前的点数
     // post_points: 触发点之后的点数
     // 返回: 所有提取的波形，每个波形是固定长度512的数组（优化内存使用）
-    static QVector<std::array<qint16, H5_DATA_COLS>>/*波形数据*/ overThreshold(quint32 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points);
+    static QVector<std::array<qint16, H5_DATA_COLS>>/*波形数据*/ overThreshold(quint16 packerStartTime/*毫秒*/, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points);
 
     void getValidWave();
 
@@ -206,39 +192,40 @@ public:
 
     void run() override {
         // 1) 从 buffer 解交织出 4 通道
-        QVector<qint16> ch0, ch1, ch2;
-        if (!DataAnalysisWorker::readBin3Ch_fast(mJob.data, ch0, ch1, ch2, true)) {
+        QVector<qint16> ch[3];
+        if (!DataAnalysisWorker::readBin3Ch_fast(mJob.data, ch[0], ch[1], ch[2], true)) {
             if (mOnFinished) mOnFinished();
             return;
         }
 
         // 2) 通道选择逻辑（0=全通道；否则按相机号映射板卡+通道）
         quint8 deviceIndex = mJob.deviceIndex;
-        int channelIndex = 0;
+        int cameraNo = 0;
         if (mCameraIndex != 0) {
+            //只有nγ甄别才会进入到此处
             deviceIndex = (mCameraIndex - 1) / 3 + 1;
-            channelIndex = (mCameraIndex - 1) % 3 + 1; // 1..3
+            cameraNo = (mCameraIndex - 1) % 3; // 0..2
         }
 
          quint32 packerCurrentTime = mJob.packerStartTime;
 
         // 3) 基线 + 调整 + 过阈提取（每个通道独立）
-        if (channelIndex == 1 || mCameraIndex == 0) {
-            qint16 b = DataAnalysisWorker::calculateBaseline(ch0);
-            DataAnalysisWorker::adjustDataWithBaseline(ch0, b, deviceIndex, 1);
-            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch0, 1, mThreshold, mPre, mPost);
+        if (cameraNo == 0 || mCameraIndex == 0) {
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0]);
+            DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, deviceIndex, 1);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[0], 1, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 1, wave);
         }
-        if (channelIndex == 2 || mCameraIndex == 0) {
-            qint16 b = DataAnalysisWorker::calculateBaseline(ch1);
-            DataAnalysisWorker::adjustDataWithBaseline(ch1, b, deviceIndex, 2);
-            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch1, 2, mThreshold, mPre, mPost);
+        if (cameraNo == 1 || mCameraIndex == 0) {
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[1]);
+            DataAnalysisWorker::adjustDataWithBaseline(ch[1], baseline_ch, deviceIndex, 2);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[1], 2, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 2, wave);
         }
-        if (channelIndex == 3 || mCameraIndex == 0) {
-            qint16 b = DataAnalysisWorker::calculateBaseline(ch2);
-            DataAnalysisWorker::adjustDataWithBaseline(ch2, b, deviceIndex, 3);
-            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch2, 3, mThreshold, mPre, mPost);
+        if (cameraNo == 2 || mCameraIndex == 0) {
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[2]);
+            DataAnalysisWorker::adjustDataWithBaseline(ch[2], baseline_ch, deviceIndex, 3);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[2], 3, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 3, wave);
         }
 
