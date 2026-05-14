@@ -1767,6 +1767,7 @@ void CpsStatisticsWindow::on_action_waveform_triggered()
 {
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_waveform);
     ui->optionStackedWidget->setCurrentWidget(ui->page_waveform);
+    ui->page_waveform->layout()->addWidget(ui->logWidget);
 }
 
 
@@ -1774,18 +1775,21 @@ void CpsStatisticsWindow::on_action_process_triggered()
 {
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_process);
     ui->optionStackedWidget->setCurrentWidget(ui->page_process);
+    ui->page_process->layout()->addWidget(ui->logWidget);
 }
 
 void CpsStatisticsWindow::on_action_ngamma_triggered()
 {
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_ngamma);
     ui->optionStackedWidget->setCurrentWidget(ui->page_ngamma);
+    ui->page_ngamma->layout()->addWidget(ui->logWidget);
 }
 
 void CpsStatisticsWindow::on_action_cps_triggered()
 {
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_cps);
     ui->optionStackedWidget->setCurrentWidget(ui->page_cps);
+    ui->page_cps->layout()->addWidget(ui->logWidget);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////

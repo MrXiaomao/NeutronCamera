@@ -26,7 +26,6 @@ SOURCES += \
     mainwindow.cpp \
     n_gamma.cpp \
     netsettingwindow.cpp \
-    offlinewindow.cpp \
     pciecommsdk.cpp \
     pcieiocpreader.cpp \
     qgaugepanel.cpp \
@@ -42,7 +41,6 @@ HEADERS += \
     detsettingwindow.h \
     n_gamma.h \
     netsettingwindow.h \
-    offlinewindow.h \
     pciecommsdk.h \
     pcieiocpreader.h \
     qgaugepanel.h \
@@ -58,8 +56,7 @@ FORMS += \
     datacompresswindow.ui \
     detsettingwindow.ui \
     mainwindow.ui \
-    netsettingwindow.ui \
-    offlinewindow.ui
+    netsettingwindow.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

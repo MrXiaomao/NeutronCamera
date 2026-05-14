@@ -156,13 +156,16 @@
            </size>
           </property>
           <property name="verticalScrollBarPolicy">
-           <enum>Qt::ScrollBarAlwaysOff</enum>
+           <enum>Qt::ScrollBarAlwaysOn</enum>
           </property>
           <property name="horizontalScrollBarPolicy">
            <enum>Qt::ScrollBarAlwaysOff</enum>
           </property>
           <property name="sizeAdjustPolicy">
            <enum>QAbstractScrollArea::AdjustIgnored</enum>
+          </property>
+          <property name="editTriggers">
+           <set>QAbstractItemView::NoEditTriggers</set>
           </property>
           <property name="selectionMode">
            <enum>QAbstractItemView::NoSelection</enum>
@@ -278,19 +281,6 @@
            </property>
           </column>
          </widget>
-        </item>
-        <item>
-         <spacer name="verticalSpacer_2">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>20</width>
-            <height>258</height>
-           </size>
-          </property>
-         </spacer>
         </item>
        </layout>
       </widget>
@@ -415,7 +405,13 @@
         <number>0</number>
        </property>
        <item>
-        <widget class="QGroupBox" name="groupBox_2">
+        <widget class="QGroupBox" name="groupBox_filepath">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
          <property name="minimumSize">
           <size>
            <width>0</width>
@@ -447,7 +443,7 @@
              </size>
             </property>
             <property name="verticalScrollBarPolicy">
-             <enum>Qt::ScrollBarAlwaysOff</enum>
+             <enum>Qt::ScrollBarAlwaysOn</enum>
             </property>
             <property name="readOnly">
              <bool>true</bool>
@@ -460,7 +456,7 @@
        <item>
         <widget class="QStackedWidget" name="optionStackedWidget">
          <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
@@ -1473,7 +1469,7 @@
                  <bool>true</bool>
                 </property>
                 <property name="text">
-                 <string>开始压缩</string>
+                 <string>开始处理</string>
                 </property>
                 <property name="icon">
                  <iconset resource="lresource.qrc">
@@ -1834,7 +1830,7 @@
                  <bool>true</bool>
                 </property>
                 <property name="text">
-                 <string>开始统计</string>
+                 <string>开始分析</string>
                 </property>
                 <property name="icon">
                  <iconset resource="lresource.qrc">
@@ -1857,6 +1853,12 @@
        </item>
        <item>
         <widget class="QWidget" name="logWidget" native="true">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
          <layout class="QVBoxLayout" name="verticalLayout_9">
           <property name="spacing">
            <number>0</number>

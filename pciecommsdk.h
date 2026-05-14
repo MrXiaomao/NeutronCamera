@@ -29,44 +29,6 @@ typedef int HANDLE;
 #include <QWaitCondition>
 #include <QThreadPool>
 
-class DataCachPoolThread : public QThread {
-    Q_OBJECT
-public:
-    explicit DataCachPoolThread();
-
-    void run() override;
-
-    void setParamter(const quint32 cardIndex, const QString &saveFilePath);
-
-    Q_SIGNAL void reportFileWriteElapsedtime(quint32,quint32);
-    Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
-    Q_SIGNAL void reportCaptureSpectrumData(quint8,bool,quint32,const QByteArray& data);
-
-    Q_SLOT void replyThreadExit();
-    Q_SLOT void replyCaptureData(bool isDDR1, quint8 packref, const QByteArray& waveformData, const QByteArray& spectrumData);
-
-    /**
-    * @function name: reverseArray
-    * @brief 对数据每12字节做个反转
-    * @param[in]        data
-    * @param[out]       data
-    * @return           void
-    */
-    static QByteArray reverseArray(const QByteArray& data, quint8 offset = 12);
-
-private:
-    quint32 mCardIndex;//设备名称
-    QString mSaveFilePath;//保存路径
-    QVector<QByteArray> mCachePool;
-    bool mTerminated = false;
-    QMutex mMutexWrite;
-    QElapsedTimer mElapsedTimer;
-
-    quint32 mPackref = 0;
-    bool mReady = false;
-    QWaitCondition mCondition;
-};
-
 #include <cstring>
 class CaptureThread : public QThread {
     Q_OBJECT
@@ -154,7 +116,6 @@ public:
     Q_SIGNAL void reportCaptureFinished(quint32, bool);
 
 private:
-    DataCachPoolThread* mDataCachPoolThread = nullptr;
     quint32 mIsDDR1 = true;//设备名称
     quint32 mCardIndex;//设备名称
 #if ENABLE_IOCP
@@ -255,22 +216,22 @@ public:
     void setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex, quint32 timeLength, quint32 tmMeasure);
     /*设置采集参数，在线*/
     void setCaptureParamter(quint8 horCameraIndex, quint8 verCameraIndex, QVector<quint32> tmMeasure);
-
-    bool openHistoryFile(QString filename);
     
     bool analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLength, quint32 remainTime, QString filePath);
     
     bool analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
 
+    // 根据通道号、开始时间、结束时间以及文件存储目录解析波形数据
     bool analyzeHistoryWaveformData(
                                 const quint8& cameraIndex,
                                 const quint32& timeStart/*开始时刻ms*/,
                                 const quint32& timeStop/*结束时刻ms*/,
-                                const QString& filePath/*文件存储路径*/,
+                                const QString& fileDir/*文件存储路径*/,
                                 std::function<void(
                                     const QMap<quint64/*时刻（ns）*/,qint16/*数值*/>&
                                     )> callback);
 
+    // 从H5文件解析计数率信息和能谱信息
     bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
                                const quint32 timeWidth/*时间宽度ms（统计计数率用）*/,
                                const quint32 timeStart/*开始时刻ms*/,
@@ -305,6 +266,7 @@ public:
         wl512 = 0x03    //波形长度512
     };
     void writeWaveformMode(TriggerMode triggerMode = tmTimer, quint16 waveformLength = 64);
+
     /*********************************************************
      能谱基本配置
     ***********************************************************/
@@ -322,6 +284,7 @@ public:
         dtSpectrum = 0x00D2,//能谱
     };
     void writeWorkMode(WorkMode workMode = wmSpectrum);
+
     /*********************************************************
      控制类指令
     ***********************************************************/
@@ -329,7 +292,7 @@ public:
     void writeStartMeasure();
     //停止测量
     void writeStopMeasure();
-
+    //发送指令
     void writeCommand(QByteArray& data);
 
     inline static bool writeData(quint8 cardIndex, HANDLE hFile, quint64 offset, const QByteArray& data);
@@ -339,20 +302,15 @@ public:
     static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
 
     enum MeasureMode{
-        mmContinue,
-        mmSingle,
+        mmContinue,// 连续测量
+        mmSingle,// 单次测量
     };
     void setMeasureMode(MeasureMode mm = mmSingle){mMeasureMode = mm;};
 
 signals:
 
-
 private:
     QMap<quint32, CaptureThread*> mMapCaptureThread;
-    // QMap<quint32, HANDLE> mMapDevice;//DDR句柄
-    // QMap<quint32, HANDLE> mMapUser;//设备控制句柄
-    // QMap<quint32, HANDLE> mMapBypass;//RAM句柄
-
     QStringList mDevices;
     QMap<quint32, bool> mThreadRunning;
     quint8 mCameraIndex = 1;/*相机序号*/

@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QDebug>
 #include "datacompresswindow.h"
+
 #ifdef _WIN32
 #define	XDMA_FILE_USER		"\\user"
 #define	XDMA_FILE_CONTROL	"\\control"
@@ -887,29 +888,6 @@ void PCIeCommSdk::setCaptureParamter(quint8 horCameraIndex, quint8 verCameraInde
     mTimestampMs.swap(tmMeasure);
 }
 
-#include <QRegularExpression>
-bool PCIeCommSdk::openHistoryFile(QString filename)
-{
-    /*
-    // 从文件名中提取卡号和包序号
-    quint32 cardIndex =1;
-    quint32 packIndex = 1;
-    QRegularExpression re("\\d+"); // \d+ 匹配一个或多个数字
-    auto matches = re.globalMatch(QFileInfo(filename).baseName());
-    QStringList numbers;
-
-    while (matches.hasNext()) {
-        QRegularExpressionMatch match = matches.next();
-        numbers.append(match.captured(0));
-    }
-    cardIndex = numbers.at(0).toUInt();
-    packIndex = numbers.at(1).toUInt();
-    */
-    analyzeHistoryWaveformData(mCameraIndex, mTimeLength, mRemainTime, filename);
-    return true;
-
-}
-
 void PCIeCommSdk::writeDeathTime(quint16 deathTime)
 {
     QByteArray askCurrentCmd = QByteArray::fromHex("12 34 00 0F FA 11 00 00 00 00 AB CD");
@@ -1178,172 +1156,6 @@ QByteArray PCIeCommSdk::reverseArray(const QByteArray& data, quint8 offset)
 }
 
 /**
- * WriteFileThread 数据缓存/写硬盘线程====================================================
-*/
-/**
-* @function name: DataCachPoolThread
-* @brief 构造函数
-* @param[in]    cardIndex 采集卡索引
-* @param[in]    hFile DDR内存句柄
-* @param[in]    hUser Fpga控制指令句柄
-* @param[in]    hBypass DDR内存句柄
-* @param[in]    saveFilePath 文件保存路径
-* @param[in]    captureTimeSeconds 采集时长
-* @param[out]
-* @return
-*/
-DataCachPoolThread::DataCachPoolThread()
-{
-
-}
-
-void DataCachPoolThread::setParamter(const quint32 cardIndex, const QString &saveFilePath)
-{
-    mPackref = 0;
-    mCardIndex = cardIndex;
-    mSaveFilePath = saveFilePath;
-}
-
-/**
-* @function name:replyThreadExit
-* @brief 响应线程退出事件
-* @param[in]
-* @param[out]
-* @return
-*/
-void DataCachPoolThread::replyThreadExit()
-{
-    mTerminated = true;
-    mElapsedTimer.start();
-}
-
-/**
-* @function name:replyCaptureData
-* @brief 响应实时采集数据事件
-* @param[in]    waveformData 波形数据
-* @param[in]    spectrumData 能谱数据
-* @param[out]
-* @return
-*/
-void DataCachPoolThread::replyCaptureData(bool isDDR1, quint8 packref, const QByteArray& waveformData, const QByteArray& spectrumData)
-{
-    QMutexLocker locker(&mMutexWrite);
-
-    {
-        QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(isDDR1 ? 'A' : 'B').arg(packref/*++mPackref*/);
-        QFile file(filename);
-        if (!file.open(QIODevice::WriteOnly)) {
-            qDebug() << "Cannot open file for writing";
-        }
-        else{
-            file.write(waveformData);
-            file.close();
-        }
-    }
-
-    {
-        QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(isDDR1 ? 'A' : 'B').arg(packref/*mPackref*/);
-        QFile file(filename);
-        if (!file.open(QIODevice::WriteOnly)) {
-            qDebug() << "Cannot open file for writing";
-        }
-        else{
-            file.write(spectrumData);
-            file.close();
-        }
-
-        //QByteArray reverseData = reverseArray(spectrumData, 16);
-        //emit reportCaptureSpectrumData(mCardIndex, packref, reverseData);
-        emit reportCaptureSpectrumData(mCardIndex,isDDR1,packref, spectrumData);
-    }
-}
-
-void DataCachPoolThread::run()
-{
-    qRegisterMetaType<QByteArray>("QByteArray");
-
-    QThreadPool* pool = QThreadPool::globalInstance();
-    pool->setMaxThreadCount(QThread::idealThreadCount());
-
-    while (!this->isInterruptionRequested())
-    {
-        QVector<QByteArray> tempPool;
-        {
-            QMutexLocker locker(&mMutexWrite);
-            if (mCachePool.size() > 0){
-                tempPool.swap(mCachePool);
-            }
-            else{
-                //数据处理完了，超过3秒没数据过来表示已经录制完了
-                if (mTerminated && mElapsedTimer.elapsed() >= 3000)
-                    break;
-
-                while (!mReady){
-                    mCondition.wait(&mMutexWrite);
-                }
-
-                tempPool.swap(mCachePool);
-                mReady = false;
-            }
-        }
-
-        while (tempPool.size() > 0){
-            //写原始数据
-            {
-                QByteArray data = tempPool.at(0);
-                QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mPackref);
-                QFile file(filename);
-                if (!file.open(QIODevice::WriteOnly)) {
-                    qDebug() << "Cannot open file for writing";
-                }
-                else{
-                    file.write(data);
-                    file.close();
-                }
-
-                tempPool.pop_front();
-            }
-
-            //写能谱数据
-            {
-                QByteArray data = reverseArray(tempPool.at(0));
-                emit reportCaptureSpectrumData(mCardIndex,true,mPackref, data);
-
-                QString filename = QString("%1/%2spec%3.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mPackref);
-                QFile file(filename);
-                if (!file.open(QIODevice::WriteOnly)) {
-                    qDebug() << "Cannot open file for writing";
-                }
-                else{
-                    file.write(data);
-                    file.close();
-                }
-
-                tempPool.pop_front();
-            }
-
-            mPackref++;
-        }
-
-        QThread::msleep(1);
-    }
-
-    pool->waitForDone();
-    qDebug() << "destroyDataCachPoolThread id:" << this->currentThreadId();
-}
-
-QByteArray DataCachPoolThread::reverseArray(const QByteArray& data, quint8 offset)
-{
-    QByteArray result;
-    for (int i=0; i<data.size()/offset; ++i){
-        QByteArray block = data.mid(i*offset, offset);
-        std::reverse(block.begin(), block.end());
-        result.append(block);
-    }
-
-    return result;
-}
-/**
  * CaptureThread 采集数据线程====================================================
 */
 
@@ -1427,12 +1239,6 @@ CaptureThread::CaptureThread(const quint32 cardIndex, const QString& devicePath,
     }
 
     connect(this, &QThread::finished, this, &QThread::deleteLater);
-
-    mDataCachPoolThread = new DataCachPoolThread();
-    connect(this, QOverload<bool,quint8,const QByteArray&,const QByteArray&>::of(&CaptureThread::reportCaptureData), mDataCachPoolThread, &DataCachPoolThread::replyCaptureData, Qt::DirectConnection);
-    connect(this, &CaptureThread::reportThreadExit, mDataCachPoolThread, &DataCachPoolThread::replyThreadExit);
-    connect(mDataCachPoolThread, &DataCachPoolThread::reportCaptureWaveformData, this, &CaptureThread::reportCaptureWaveformData);
-    connect(mDataCachPoolThread, &DataCachPoolThread::reportCaptureSpectrumData, this, &CaptureThread::reportCaptureSpectrumData);
 }
 
 CaptureThread::~CaptureThread()
@@ -1466,7 +1272,6 @@ void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTime
 {
     this->mSaveFilePath = saveFilePath;
     this->mCaptureCount = quint32((double)captureTimeSeconds / 40.0 + 0.4);
-    mDataCachPoolThread->setParamter(mCardIndex, mSaveFilePath);
 }
 
 bool CaptureThread::startMeasure()
@@ -1750,7 +1555,7 @@ void CaptureThread::run()
 {
     qRegisterMetaType<QByteArray>("QByteArray");
     qRegisterMetaType<QVector<QPair<double,double>>>("QVector<QPair<double,double>>");
-    //提升线程优先级
+    //提升延时时间精度
     timeBeginPeriod(1);// 可提高精度到2ms -lwinmm
 
     quint64 memOffet = mIsDDR1 ? 0 : 0x40000000;
@@ -1768,10 +1573,8 @@ void CaptureThread::run()
 
     QMutex timeMutex;
     QWaitCondition timeCond;
-    quint8 lastRegisterValue = 0x00; // 最后寄存器值 0~3
+    quint8 lastRegisterValue = 0x00; // 保存最后寄存器值 0~3
 
-    // 启动数据缓存线程（确保事件循环启动）
-    mDataCachPoolThread->start();
     qDebug().nospace() << "[" << mCardIndex << (mIsDDR1 ? "] DDR1" : "] DDR2") << " 数据采集线程 id:" << this->currentThreadId();
 
     // 创建线程池
@@ -2032,12 +1835,6 @@ void CaptureThread::run()
     // 等待子线程安全退出（避免资源泄漏）
     irqCond.wakeOne();
 
-    // 数据缓存线程管理（确保事件循环退出）
-    if (mDataCachPoolThread->isRunning()) {
-        mDataCachPoolThread->quit();
-        mDataCachPoolThread->wait();
-    }
-    mDataCachPoolThread->deleteLater();
     //timeEndPeriod(1);
 
     // 报告线程退出

@@ -2,7 +2,6 @@
 #pragma execution_character_set("utf-8")
 
 #include "mainwindow.h"
-#include "offlinewindow.h"
 #include "datacompresswindow.h"
 #include "cpsstatisticswindow.h"
 #include "globalsettings.h"
@@ -189,16 +188,12 @@ int main(int argc, char *argv[])
 
     QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
     QGoodWindowHelper w;
-    if (args.contains("-m") && args.contains("offline")){
-        QApplication::setApplicationName("中子相机数据处理离线版");
-        mMainWindow = new OfflineWindow(isDarkTheme, &w);
-    }
-    else if (args.contains("-m") && args.contains("compress")){
+    if (args.contains("-m") && args.contains("compress")){
         QApplication::setApplicationName(QObject::tr("中子相机数据压缩与上传"));
         mMainWindow = new DataCompressWindow(isDarkTheme, &w);
     }
     else if (args.contains("-m") && args.contains("cps")){
-        QApplication::setApplicationName(QObject::tr("中子相机数据分析-计数率统计"));
+        QApplication::setApplicationName(QObject::tr("中子相机离线数据综合分析"));
         mMainWindow = new CpsStatisticsWindow(isDarkTheme, &w);
     }
     else
