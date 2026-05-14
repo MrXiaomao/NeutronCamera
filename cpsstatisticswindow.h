@@ -152,8 +152,24 @@ class CpsStatisticsWindow;
 //    }
 //};
 
+#ifndef FOM_CURVEPOINT
+#define FOM_CURVEPOINT
+// 定义结构体：每个x对应多条曲线的y值
+struct FOM_CurvePoint {
+    double x;          // 公共的x坐标
+    double y1;         // 曲线1的y值
+    double y2;         // 曲线2的y值
+    double y3;         // 曲线3的y值
+
+    // 构造函数（可选，方便使用）
+    FOM_CurvePoint(double x_ = 0, double y1_ = 0, double y2_ = 0, double y3_ = 0)
+        : x(x_), y1(y1_), y2(y2_), y3(y3_) {}
+};
+#endif
+
 class QCustomPlot;
 class QProgressIndicator;
+class WaitingSpinnerWidget;
 class CpsStatisticsWindow : public QMainWindow
 {
     Q_OBJECT
@@ -169,8 +185,9 @@ public:
     };
 
     void initUi();
-    void initCpsPage(); // 计数率
     void initWaveformPage(); // 原始波形
+    void initNGammaPage();
+    void initCpsPage(); // 计数率
 
     qint64 calculateTotalSize(const QFileInfoList& fileinfoList);
     void loadRelatedFiles(const QString& src);
@@ -183,7 +200,7 @@ public:
     virtual bool eventFilter(QObject *watched, QEvent *event) override;
 
     // 波形显示
-    Q_SLOT void doWaveformPlot();
+    Q_SLOT void onWaveform();
 
     // 数据处理相关的槽函数
     QString humanReadableSize(qint64 bytes);
@@ -193,18 +210,27 @@ public:
     Q_SLOT void onAnalysisFinished(bool success, const QString& message);
     Q_SLOT void onAnalysisError(const QString& error);
 
+    // nγ甄别
+    Q_SLOT void onNGammaFilter();
+
     // 计数率统计相关槽函数
     Q_SLOT void onCpsStatistics(int minPeak = 0, int maxPeak = 16384);
 
 public slots:
     void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    void onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
+    void onWaveformPlot(quint8/*通道号*/, const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&);
+    void onPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图绘制
+    void onFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&, double);// FoM图绘制
     void onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>);
+    void onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>);
 
 signals:
     void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    void doCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>);
+    void doWaveformPlot(quint8/*通道号*/, const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&);
+    void doPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图
+    void doFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&, double);// FoM拟合
     void doSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>);
+    void doCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>);
 
 private slots:
     void on_action_openfile_triggered();
@@ -223,6 +249,8 @@ private slots:
 
     void on_action_process_triggered();
 
+    void on_action_ngamma_triggered();
+
     void on_action_cps_triggered();
 
 private:
@@ -236,10 +264,13 @@ private:
     DetectorType mCurrentDetectorType;
     QVector<QColor> mGraphisColor;
 
-    QProgressIndicator *mProgressIndicator = nullptr;
+    //QProgressIndicator *mProgressIndicator = nullptr;
+    WaitingSpinnerWidget *mWaitingSpinnerWidget = nullptr;
     QStringList mfileList;
     void applyColorTheme();
 
+    QCustomPlot* mWaveformHorPlot; //水平相机
+    QCustomPlot* mWaveformVerPlot; //垂直相机
     QCustomPlot* mCpsPlot; //计数率
     QVector<QColor> mBarColor;
     QString mFileDir;

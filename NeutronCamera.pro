@@ -8,7 +8,7 @@ CONFIG += c++17
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
-DEFINES += _VER_2_0
+DEFINES +=
 DEFINES += _VER_2_1=1
 DEFINES += ENABLE_DDR2=1
 #DEFINES += NORAM=1
@@ -31,7 +31,8 @@ SOURCES += \
     pcieiocpreader.cpp \
     qgaugepanel.cpp \
     qprogressindicator.cpp \
-    switchbutton.cpp
+    switchbutton.cpp \
+    waitingspinnerwidget.cpp
 
 HEADERS += \
     commhelper.h \
@@ -49,7 +50,8 @@ HEADERS += \
     globalsettings.h \
     mainwindow.h \
     qprogressindicator.h \
-    switchbutton.h
+    switchbutton.h \
+    waitingspinnerwidget.h
 
 FORMS += \
     cpsstatisticswindow.ui \

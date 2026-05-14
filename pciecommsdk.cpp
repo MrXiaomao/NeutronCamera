@@ -241,9 +241,7 @@ bool PCIeCommSdk::test()
 void PCIeCommSdk::printDataError()
 {
     for (int index = 1; index <= mDevices.size()*2; ++index){
-        if (mMapCaptureThread[index]->dataExistError()){
-            mMapCaptureThread[index]->printDataError();
-        }
+        mMapCaptureThread[index]->printDebugInfo();
     }
 }
 
@@ -368,7 +366,7 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, bo
      * 保留位          0000 0000 0000
      * 包尾            FFCD
     */
-    QByteArray reverseData = DataCachPoolThread::reverseArray(spectrumData, 16);
+    QByteArray reverseData = PCIeCommSdk::reverseArray(spectrumData, 16);
     if (reverseData.startsWith(QByteArray::fromHex("FFAB00D2")))
     {
         //数据包的其实时间戳/ns
@@ -462,7 +460,7 @@ bool PCIeCommSdk::analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeInde
         * 保留位          0000 0000 0000
         * 包尾            FFCD
     */
-    QByteArray reverseData = DataCachPoolThread::reverseArray(spectrumData, 16);
+    QByteArray reverseData = PCIeCommSdk::reverseArray(spectrumData, 16);
     if (reverseData.startsWith(QByteArray::fromHex("FFAB00D2")))
     {
         //数据包的其实时间戳/ns
@@ -624,155 +622,64 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLen
 }
 
 #include "globalsettings.h"
-bool PCIeCommSdk::analyzeHistoryWaveformData(const quint32 timeStart/*开始时刻ms*/,
-                                        const quint32 timeStop/*结束时刻ms*/,
-                                        const QString& filePath/*H5文件路径*/,
-                                        std::function<void(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint16/*数值*/>>)> callback
+bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
+                                        const quint32& timeStart/*开始时刻ms*/,
+                                        const quint32& timeStop/*结束时刻ms*/,
+                                        const QString& fileDir/*文件存储路径*/,
+                                        std::function<void(const QMap<quint64/*时刻（ns）*/,qint16/*数值*/>&)> callback
                                         )
 {
+    QMap<quint64/*时刻*/,qint16/*数值*/> waveformPair;
+
+    //根据开始时间和结束时间，过滤掉不在时间范围内的文件
+    int startFileId = timeStart / PACKET_TIMELENGTH + 1;
+    int endFileId = (timeStop + PACKET_TIMELENGTH - 1) / PACKET_TIMELENGTH;
+    //根据通道号判断是板卡的A面还是B面
+    QString sideFile = "B";
+    if ((cameraIndex % 6) >= 1 && (cameraIndex % 6) <= 3)
+        sideFile = "A";
+    //根据通道号计算板卡的索引
+    int board_index = (cameraIndex+5) / 6;
     //根据通道号计算对应采集卡的第几通道
-    QTextCodec* gbk_codec = QTextCodec::codecForName("GBK");
-    QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
-    try {
-        H5::H5File file(filePathBytes.toStdString(), H5F_ACC_RDONLY);
+    quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
+    for (int id = startFileId; id <= endFileId; ++id){
+        QString filePath = QString("%1/%2%3data%4.bin").arg(fileDir).arg(board_index).arg(sideFile).arg(id);
 
-        for (int boardNum=1; boardNum<=6; ++boardNum){
-            // 创建或打开板卡组
-            QString boardGroupName = QString("Board%1").arg(boardNum);
+        QVector<qint16> ch[3];
+        if (DataAnalysisWorker::readBin3Ch_fast(filePath, ch[0], ch[1], ch[2], true)) {
 
-            H5::Group boardGroup;
-            htri_t existsGroup = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
+            //计算出是当前文件波形的第几个数据点
+            quint32 timeFrom;
+            quint32 timeTo;
 
-            if (existsGroup > 0) {
-                boardGroup = file.openGroup(boardGroupName.toStdString());
+            if (id == startFileId)
+                timeFrom = (timeStart % 40) * 1000 * 1000 / 2;
+            else
+                timeFrom = 0;
 
-                // 辅助函数：写入单个通道的数据集
-                auto readChannel = [&](const QString& datasetName, QVector<qint16>& timeTrigger, QVector<qint16>& timePeak) {
-                    htri_t existsDataset = H5Lexists(boardGroup.getId(), datasetName.toStdString().c_str(), H5P_DEFAULT);
-                    if (existsDataset){
-                        std::string ds = datasetName.toUtf8().constData();
-                        H5::DataSet dataset = boardGroup.openDataSet(ds);
-                        H5::DataSpace fileSpace = dataset.getSpace();
-
-                        // 校验维度
-                        int rank = fileSpace.getSimpleExtentNdims();
-                        if (rank != 2) return false;
-                        hsize_t dims[2];
-                        fileSpace.getSimpleExtentDims(dims, nullptr);
-                        const hsize_t totalRows = dims[0];
-
-                        std::vector<std::vector<int16_t>> outData;
-                        outData.resize(2);//第1列时间毫秒 第2列峰值
-                        // 逐列选切片读取：每次选所有行 + 当前1列
-                        for (int colIdx = 0; colIdx < 2; colIdx++) {
-                            hsize_t offset[2] = {0, (hsize_t)colIdx};
-                            hsize_t count[2]  = {totalRows, 1}; // 一次读1列
-                            fileSpace.selectHyperslab(H5S_SELECT_SET, count, offset);
-
-                            H5::DataSpace memSpace(1, &totalRows); // 内存空间是一维，长度为总行数
-                            outData[colIdx].resize(totalRows);
-
-                            dataset.read(outData[colIdx].data(), H5::PredType::NATIVE_INT16, memSpace, fileSpace);
-                        }
-
-                        for (int rowIdx = 0; rowIdx < totalRows; ++rowIdx){
-                            qint16 timeMs = static_cast<qint16>(outData[0][rowIdx]);
-                            timeTrigger.push_back(timeMs);
-
-                            timePeak.push_back(static_cast<qint16>(outData[1][rowIdx]));
-                        }
-
-                        dataset.close();
-                    }
-                };
-
-                // 写入3个通道的数据
-                QVector<qint16> timeTrigger_ch[3], timePeak_ch[3];
-                readChannel("wave_ch0",  timeTrigger_ch[0], timePeak_ch[0]);
-                readChannel("wave_ch1", timeTrigger_ch[1], timePeak_ch[1]);
-                readChannel("wave_ch2", timeTrigger_ch[2], timePeak_ch[2]);
-
-                //根据时间段统计计数率
-                // QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair;
-                // for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
-                //     quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
-                //     if (cameraIndex == 7)
-                //         qDebug();
-
-                //     // 1.按照时间段和点位时间间隔分配计数点数组长度
-                //     quint32 cpsTotal = (timeStop-timeStart)/timeWidth;
-                //     //cpsMapPair[cameraIndex]. reserve(cpsTotal);
-                //     //初始化每个时间段内计数率为0
-                //     for (quint16 intervalNo = 0; intervalNo < cpsTotal; ++intervalNo) {
-                //         cpsMapPair[cameraIndex][timeStart + intervalNo * timeWidth] = quint32(0);
-                //     }
-
-                //     // 2. 遍历所有输入数据，分桶统计
-                //     for (qint32 time : timeTrigger_ch[cameraNo]) {
-                //         if (time > timeStop)
-                //             break;
-
-                //         cpsMapPair[cameraIndex][timeStart + (time-timeStart) / timeWidth] += 1;
-                //         // int intervalIndex = (time - timeStart) / timeWidth;
-                //         // // 对应区间计数+1
-                //         // if (intervalIndex<cpsTotal)
-                //         //     cpsMapPair[cameraIndex][timeStart + intervalIndex * timeWidth].second += 1;
-                //         // else
-                //         //     qDebug();
-                //     }
-
-                //     if (cameraIndex == 7)
-                //         qDebug();
-                // }
-
-                //根据时间段统计能谱
-                // QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPair;
-                // for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
-                //     quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
-
-                //     //初始化每个道址默认能量值为0
-                //     for (quint16 channel = 0; channel < channels; ++channel) {
-                //         spectrumMapPair[cameraIndex][channel] = quint32(0);
-                //     }
-
-                //     // 2. 遍历所有时间段内的能量值，分桶统计
-                //     int i = 0;
-                //     double channelWidth = (double)(timeStop - timeStart) / channels;
-                //     for (qint32 time : timeTrigger_ch[cameraNo]) {
-                //         if (time > timeStop)
-                //             break;
-
-                //         quint16 channel = (time-timeStart) / channelWidth;// 道址
-                //         quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
-                //         spectrumMapPair[cameraIndex][channel] += peak;
-                //     }
-                // }
-
-                boardGroup.close();
-                //callback(cpsMapPair, spectrumMapPair);
+            if (id == endFileId){
+                if ((timeStop % 40) == 0)
+                    timeTo  = ch[cameraNo].size();
+                else
+                    timeTo = (timeStop % 40) * 1000 * 1000 / 2;
             }
+            else
+                timeTo  = ch[cameraNo].size();
+
+            //扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
+            DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, board_index, cameraNo + 1);
+
+            //提取通道号的数据cameraNo
+            QVector<qint16> waveform = ch[cameraNo].mid(timeFrom, timeTo);
+
+            for (int i=0;i<waveform.size();++i)
+                waveformPair.insert(i*2, waveform[i]);
         }
-
-        file.close();
-
-        return true;
-    } catch (H5::FileIException& error) {
-        // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
-        qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();
-        return false;
-    } catch (H5::DataSetIException& error) {
-        qDebug() << "HDF5 DataSet Exception:" << error.getDetailMsg().c_str();
-        return false;
-    } catch (H5::DataSpaceIException& error) {
-        qDebug() << "HDF5 DataSpace Exception:" << error.getDetailMsg().c_str();
-        return false;
-    } catch (H5::GroupIException& error) {
-        qDebug() << "HDF5 Group Exception:" << error.getDetailMsg().c_str();
-        return false;
-    } catch (...) {
-        qDebug() << "Unknown HDF5 Exception";
-        return false;
     }
+
+    callback(waveformPair);
+    return true;
 }
 
 bool PCIeCommSdk::analyzeHistoryCpsData(
@@ -1238,8 +1145,7 @@ void PCIeCommSdk::initCaptureThreads()
                 qInfo() << "数据采集完毕！";
             }
         }, Qt::DirectConnection);
-        connect(captureThread, &CaptureThread::reportFileReadElapsedtime, this, &PCIeCommSdk::reportFileReadElapsedtime);
-        connect(captureThread, &CaptureThread::reportFileWriteElapsedtime, this, &PCIeCommSdk::reportFileWriteElapsedtime);
+
         //connect(captureThread, QOverload<quint8,bool,quint32,const QByteArray&>::of(&CaptureThread::reportCaptureWaveformData), this, &PCIeCommSdk::replyCaptureWaveformData);
         connect(captureThread, QOverload<quint8,bool,quint32,const QByteArray&>::of(&CaptureThread::reportCaptureSpectrumData), this, &PCIeCommSdk::replyCaptureSpectrumData);
 
@@ -1257,6 +1163,18 @@ void PCIeCommSdk::initCaptureThreads()
         mMapCaptureThread[index] = captureThread;
         mMapCaptureThread[index]->start();
     }
+}
+
+QByteArray PCIeCommSdk::reverseArray(const QByteArray& data, quint8 offset)
+{
+    QByteArray result;
+    for (int i=0; i<data.size()/offset; ++i){
+        QByteArray block = data.mid(i*offset, offset);
+        std::reverse(block.begin(), block.end());
+        result.append(block);
+    }
+
+    return result;
 }
 
 /**
@@ -1370,12 +1288,6 @@ void DataCachPoolThread::run()
         }
 
         while (tempPool.size() > 0){
-            //QByteArray data = tempPool.at(0);
-            // WriteFileTask *task = new WriteFileTask(mIndex, ++mPackref, mSaveFilePath, data);
-            // connect(task, &WriteFileTask::reportFileWriteElapsedtime, this, &WriteFileThread::reportFileWriteElapsedtime);
-            // pool->start(task);
-            // tempPool.pop_front();
-
             //写原始数据
             {
                 QByteArray data = tempPool.at(0);
@@ -1519,7 +1431,6 @@ CaptureThread::CaptureThread(const quint32 cardIndex, const QString& devicePath,
     mDataCachPoolThread = new DataCachPoolThread();
     connect(this, QOverload<bool,quint8,const QByteArray&,const QByteArray&>::of(&CaptureThread::reportCaptureData), mDataCachPoolThread, &DataCachPoolThread::replyCaptureData, Qt::DirectConnection);
     connect(this, &CaptureThread::reportThreadExit, mDataCachPoolThread, &DataCachPoolThread::replyThreadExit);
-    connect(mDataCachPoolThread, &DataCachPoolThread::reportFileWriteElapsedtime, this, &CaptureThread::reportFileWriteElapsedtime);
     connect(mDataCachPoolThread, &DataCachPoolThread::reportCaptureWaveformData, this, &CaptureThread::reportCaptureWaveformData);
     connect(mDataCachPoolThread, &DataCachPoolThread::reportCaptureSpectrumData, this, &CaptureThread::reportCaptureSpectrumData);
 }
@@ -1600,115 +1511,239 @@ void CaptureThread::delay(quint32 us)
 
 bool CaptureThread::checkDataError()
 {
-    // qint32 capturedRef = 1; //包序号
-    // quint8 step = 3;// 0~3 数据块
-    // quint64 offset = step * 0x07270E00;
-    // if (readWaveformData(step, mDDRWaveformDatas.at(capturedRef-1), offset)){
-    //     QByteArray data = DataCachPoolThread::reverseArray(mDDRWaveformDatas.at(capturedRef-1));
-    //     qDebug().noquote() << data.left(12).toHex(' ');
-    //     qDebug().noquote() << data.right(12).toHex(' ');
-    //     qDebug() << "";
-    // }
-
     QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
-    bool ok = true;
+    bool okPkg = true;
     int lastSeq = 0;
-    int index = 0;
 
-    // 校验包头序号和包尾序号是否一致
-    for (int i=0; i<this->mCapturedRef; ++i){
-        QByteArray data = DataCachPoolThread::reverseArray(mDDRWaveformDatas.at(i).left(96));
-        int currentSeq = (quint8)data[7];
-        if (ok && ((currentSeq - lastSeq) != 1)){
-            if (i>=255){
-                int currentSeq2 = 256 + currentSeq;
-                if ((currentSeq2 - lastSeq) == 1){
-                    lastSeq = currentSeq2;
-                    continue;
-                }
+    // 检测波形数据是否完整，并记录出错时序号
+    {
+        // 校验包头序号和包尾序号是否一致
+        for (int i=0; i<this->mCapturedRef; ++i){
+            QByteArray pkgHead = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).left(12));
+            QByteArray pkgTail = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).right(12));
+            int headSeq = (quint8)pkgHead[7];
+            int tailSeq = (quint8)pkgTail[7];
+            if (headSeq != tailSeq){
+                // 包头和包尾序号不一致
+                mErrorStart = i;
+                okPkg = false;
+                break;
             }
 
-            mErrorStart = i;
-            index = i+1;
-            ok = false;
-            // qDebug().nospace() << "[" << mCardIndex << "] "
-            //                    << ddrName << " [" << i+1 << "] "
-            //                    << data.left(12).toHex(' ')
-            //                    << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx" ;
-        } else{
-            // qDebug().nospace() << "[" << mCardIndex << "] "
-            //                << ddrName << " [" << i+1 << "] "
-            //                << data.left(12).toHex(' ');
+            int currentSeq = headSeq;
+            if (i>=255)
+                currentSeq += 256;
+
+            if ((currentSeq - lastSeq) != 1){
+                mErrorStart = i;
+                okPkg = false;
+                break;
+            }
+
+            lastSeq = currentSeq;
         }
 
-        lastSeq = currentSeq;
-        //     qDebug().noquote() << data.right(12).toHex(' ');
-        //     qDebug() << "";
-    }
-
-    if (ok){
-        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " frames ok";
-        qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << " frames ok";
-    }
-    else{
-        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " frames exception, index = " << index;
-        qCritical().nospace() << "[" << mCardIndex << "] " << ddrName << " frames exception, index = " << index;
-
-        qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据正在存储到硬盘中，请等待...";
-        for (int i = mErrorStart-5; i < mErrorStart+5; ++i)
-        {
-            if (i>=0 && i<mCapturedRef)
-                emit reportCaptureData(mIsDDR1, i+1, mDDRWaveformDatas.at(i), mRAMSpectrumDatas.at(i)); //发给数据缓存处理线程
+        if (okPkg && !mIsRegisterInvalid){
+            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 波形正常";
+            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << " 波形正常";
         }
-        qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据已经全部存储到硬盘中！";
+        else{
+            if (!okPkg){
+                qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 波形帧序号异常, 索引 = " << mErrorStart+1;
+                qCritical().nospace() << "[" << mCardIndex << "] " << ddrName << " 波形帧序号异常, 索引 = " << mErrorStart+1;
+            }
+
+            if (mIsRegisterInvalid){
+                qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
+                qCritical().nospace() << "[" << mCardIndex << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
+            }
+
+            //存储异常数据
+            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "波形数据正在存储到硬盘中，请等待...";
+            if (!okPkg){
+                for (int i = mErrorStart-5; i < mErrorStart+5; ++i)
+                {
+                    if (i>=0 && i<mCapturedRef)
+                    {
+                        QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
+                        QFile file(filename);
+                        if (!file.open(QIODevice::WriteOnly)) {
+                            qDebug() << "Cannot open file for writing";
+                        }
+                        else{
+                            file.write(mDDRWaveformDatas.at(i));
+                            file.close();
+                        }
+                    }
+                }
+            }
+            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "波形数据已经全部存储到硬盘中！";
+        }
     }
 
-    mDataError = !ok;
+    mDataError = !okPkg;
+
+    // 检测能谱数据是否完整，并记录出错时序号
+    {
+        okPkg = true;
+        lastSeq = 0;
+        for (int i=0; i<this->mCapturedRef; ++i){
+            QByteArray pkgHead = PCIeCommSdk::reverseArray(mRAMSpectrumDatas.at(i).left(16), 16);
+            bool ok = false;
+            int currentSeq = pkgHead.mid(4, 2).toHex().toUInt(&ok, 16);
+            if ((currentSeq - lastSeq) != 1){
+                mErrorStart = i;
+                okPkg = false;
+                break;
+            }
+
+            lastSeq = currentSeq;
+        }
+
+        if (!okPkg){
+            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 能谱帧序号异常, 索引 = " << mErrorStart+1;
+            qCritical().nospace() << "[" << mCardIndex << "] " << ddrName << " 能谱帧序号异常, 索引 = " << mErrorStart+1;
+        }
+        else{
+            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 能谱正常";
+            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << " 能谱正常";
+        }
+
+        //存储异常数据
+        if (!okPkg){
+            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "能谱数据正在存储到硬盘中，请等待...";
+            for (int i = mErrorStart-5; i <= mErrorStart+5; ++i)
+            {
+                if (i>=0 && i<mCapturedRef)
+                {
+                    QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
+                    QFile file(filename);
+                    if (!file.open(QIODevice::WriteOnly)) {
+                        qDebug() << "Cannot open file for writing";
+                    }
+                    else{
+                        file.write(mRAMSpectrumDatas.at(i));
+                        file.close();
+                    }
+                }
+            }
+            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "能谱数据已经全部存储到硬盘中！";
+        }
+    }
+
+    mDataError = mDataError ? mDataError : !okPkg;
     return mDataError;
 }
 
-void CaptureThread::printDataError()
+void CaptureThread::printDebugInfo()
 {
     QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
     bool ok = true;
     int lastSeq = 0;
     int index = 0;
-    for (int i=0; i<this->mCapturedRef; ++i){
-        QByteArray data = DataCachPoolThread::reverseArray(mDDRWaveformDatas.at(i).left(96));
-        int currentSeq = (quint8)data[7];
-        if (ok && ((currentSeq - lastSeq) != 1)){
-            if (i>=255){
-                int currentSeq2 = 256 + currentSeq;
-                if ((currentSeq2 - lastSeq) == 1){
-                    lastSeq = currentSeq2;
-                    qDebug().nospace() << "[" << mCardIndex << "] "
-                                       << ddrName << " [" << i+1 << "] "
-                                       << data.left(12).toHex(' ');
-                    continue;
-                }
-            }
 
+    QFile logFile;
+    if (mDataError || mIsRegisterInvalid)
+        logFile.setFileName(QStringLiteral("%1/%2_%3_%4.err").arg(mSaveFilePath).arg(QDateTime::currentDateTime().toString("yyyyMMddhhmmss")).arg(mCardIndex).arg(ddrName));
+    else
+        logFile.setFileName(QStringLiteral("%1/%2_%3_%4.inf").arg(mSaveFilePath).arg(QDateTime::currentDateTime().toString("yyyyMMddhhmmss")).arg(mCardIndex).arg(ddrName));
+    logFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
+    QTextStream out(&logFile);
+    // out << QString::fromUtf8("\xEF\xBB\xBF");
+    // out.setCodec(QTextCodec::codecForName("utf8"));// "UTF-8");
+
+    // 先输出包头信息
+    for (int i=0; i<this->mCapturedRef; ++i){
+        QByteArray pkgHead = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).left(12));
+        QByteArray pkgTail = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).right(12));
+        int headSeq = (quint8)pkgHead[7];
+        int tailSeq = (quint8)pkgTail[7];
+
+        int currentSeq = (quint8)headSeq;
+        if (i>=255)
+            currentSeq += 256;
+
+        if (headSeq != tailSeq){
+            // 包头和包尾序号不一致
             index = i+1;
             ok = false;
-            qDebug().nospace() << "[" << mCardIndex << "] "
-                               << ddrName << " [" << i+1 << "] "
-                               << data.left(12).toHex(' ')
-                               << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx" ;
+            lastSeq = currentSeq;
+            out << "[" << mCardIndex << "] "
+                << ddrName << " [" << i+1 << "] "
+                << pkgHead.toHex(' ')
+                << " ... "
+                << pkgTail.toHex(' ')
+                << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  << "\n";
+        }
+
+        else if ((currentSeq - lastSeq) != 1){
+            index = i+1;
+            ok = false;
+            out << "[" << mCardIndex << "] "
+                << ddrName << " [" << i+1 << "] "
+                << pkgHead.toHex(' ')
+                << " ... "
+                << pkgTail.toHex(' ')
+                << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  << "\n";
         } else{
-            qDebug().nospace() << "[" << mCardIndex << "] "
-                               << ddrName << " [" << i+1 << "] "
-                               << data.left(12).toHex(' ');
+            out << "[" << mCardIndex << "] "
+                << ddrName << " [" << i+1 << "] "
+                << pkgHead.toHex(' ')
+                << " ... "
+                << pkgTail.toHex(' ')
+                << "\n";
         }
 
         lastSeq = currentSeq;
-        //     qDebug().noquote() << data.right(12).toHex(' ');
-        //     qDebug() << "";
+    }
+
+    out << "================================================================================================\n\n";
+    // 读寄存器时间
+    for (const auto &outerPair : mRAMReadTime.toStdMap()){
+        quint16 outerKey = outerPair.first;
+        const auto& pairVec = outerPair.second;
+        for (int idx=0; idx<pairVec.size(); ++idx){
+            const auto& pair = pairVec[idx];
+            out << "[" << mCardIndex << "] " << ddrName << " " << outerKey << " " <<
+                QStringLiteral(" 读寄存器时间：") << pair.first << "-" << pair.second.first <<
+                QStringLiteral(" 返回值：0x") << QString::number(pair.second.second, 16) << "\n";
+        }
+    }
+
+    out << "================================================================================================\n\n";
+    // 读数据时间
+    for (int i=1; i<=this->mCapturedRef; ++i){
+        out << "[" << mCardIndex << "] " << ddrName << " " << i <<
+            QStringLiteral(" 寄存器值变化时刻：") << mRamChangedTime[i] <<
+            QStringLiteral(" 创建读数据线程时刻") << mCreateThreadTime[i] <<
+            QStringLiteral(" 开始读数据时刻：") << mBeforeReadTime[i] <<
+            QStringLiteral(" 读完数据时刻：") << mAfterReadTime[i] <<
+            QStringLiteral(" 开始读延迟：") << (mRamChangedTime[i]-i*40) <<
+            QStringLiteral(" 读花费时间：") << (mAfterReadTime[i]-mBeforeReadTime[i]) <<
+            QStringLiteral(" 累积延迟：") << (mAfterReadTime[i]-i*40) << "\n";            
+    }
+
+    out << "================================================================================================\n\n";
+    if (!ok){
+        out << "[" << mCardIndex << "] " << ddrName << " frames sequence exception, index = " << index;
+    }
+
+    if (mIsRegisterInvalid){
+        out << "[" << mCardIndex << "] " << ddrName << " frames ramvalue exception, index = " << mRegisterInvalidPosition;
+    }
+
+    logFile.close();
+
+    for (int i = 0; i < mCapturedRef; ++i)
+    {
+        memset((char*)mDDRWaveformDatas.at(i).data(), 0, mDDRWaveformDatas.at(i).size());// 数据清0
+        memset((char*)mRAMSpectrumDatas.at(i).data(), 0, mRAMSpectrumDatas.at(i).size());// 数据清0
     }
 }
 
 bool CaptureThread::dataExistError()
 {
-    return mDataError;
+    return mDataError || mIsRegisterInvalid;
 }
 
 void CaptureThread::run()
@@ -1733,19 +1768,25 @@ void CaptureThread::run()
 
     QMutex timeMutex;
     QWaitCondition timeCond;
-    quint8 lastRegisterValue = 0x00; // 0~3
+    quint8 lastRegisterValue = 0x00; // 最后寄存器值 0~3
 
     // 启动数据缓存线程（确保事件循环启动）
     mDataCachPoolThread->start();
     qDebug().nospace() << "[" << mCardIndex << (mIsDDR1 ? "] DDR1" : "] DDR2") << " 数据采集线程 id:" << this->currentThreadId();
 
     // 创建线程池
-    QThreadPool* threadPool = new QThreadPool();
+    QThreadPool* threadPool = new QThreadPool(this);
     // 获取默认最大线程数（等于 CPU 核心数）
     int defaultThreads = QThreadPool::globalInstance()->maxThreadCount();
     // 为 I/O 密集型任务调整最大线程数
-    threadPool->setMaxThreadCount(defaultThreads*2);
+    threadPool->setMaxThreadCount(24);
+    threadPool->setExpiryTimeout(-1);//过期超时不收回
 	QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
+
+    mRamChangedTime.resize(500);// RAM值改变的时间
+    mBeforeReadTime.resize(500);// DDR读之前的时间
+    mAfterReadTime.resize(500);// DDR读之后的时间
+    mCreateThreadTime.resize(500);// DDR读之后的时间
 
     while (!mIsStopped)
     {
@@ -1764,54 +1805,116 @@ void CaptureThread::run()
         if (mIsDDR1){ // 1张卡只需要发一次开始测量指令
             startMeasure();
         }
+        else {
+            // 只测试DDR1
+            delay(500);
+        }
 
         elapsedTimer.restart();
         qDebug().nospace() << "[" << mCardIndex << "] "
                            << ddrName
-                           << " 开始测量>>>>>>>>>>>>>>>>>>>>>>>>";
+                           << " 开始测量>>>>>>>>>>>>>>>>>>>>>>>>"
+                           << elapsedTimer.elapsed();
 
         readBuf[0] = 0u;
-        bool isFirstPacket = true;
-        bool isOver = false;
-        bool isTimeout = false;
+        bool isFirstPacket = true;// 第一个数据包标识
+        bool isOver = false;// 结束指令标识
+        bool isTimeout = false;// 超时标识
+        bool isPrintedTimeoutInfo = false; // 超时消息是否已经打印过一次
 
         mCapturedRef = 1;
+        mIsRegisterInvalid = false;
+        mRegisterInvalidPosition = 0;
         lastRegisterValue = 0x00;
         quint64 offsetRegister = mIsDDR1 ? 0x0 : 0x10000;
+
+        mRamChangedTime.fill(0);
+        mBeforeReadTime.fill(0);
+        mAfterReadTime.fill(0);
+        mCreateThreadTime.fill(0);
+        mRAMReadTime.clear();
 
         for (;mCapturedRef <= this->mCaptureCount/* && !isTimeout*//*超时是否继续*/; ++mCapturedRef)
         {
             quint32 failCount = 0;
-            bool isTimeout = false;
+            isTimeout = false;
+
             while (true)
             {
                 readBuf[0] = 0u;
+                qint64 innerKey = elapsedTimer.elapsed();
                 if (PCIeCommSdk::readData(mUserHandle, offsetRegister, readBuf))
                 {
-                    if ((quint8)readBuf[0] == 0x10)
-                    {
-                    }
-                    else if ((quint8)readBuf[0] == 0x00)
-                    {
+                    // 记录读数前后时刻
+                    mRAMReadTime[mCapturedRef].push_back(qMakePair(innerKey, qMakePair(elapsedTimer.elapsed(), (quint8)readBuf[0])));
+                    if ((quint8)readBuf[0] == 0x00){
+                        // 数据还没准备好
                         if (!isFirstPacket){
-                            lastRegisterValue = 0x00;
+                            mRamChangedTime[mCapturedRef] = elapsedTimer.elapsed();
+                            lastRegisterValue = (quint8)readBuf[0];
                             isOver = true;
-                            mCapturedRef--;
+                            qDebug().noquote().nospace() << "[" << mCardIndex << "] "
+                                                  << ddrName
+                                                  << " 收到停止测量指令"
+                                                  << " 当前寄存器值:0x" << readBuf.toHex()
+                                                  << " 帧序号:" << mCapturedRef;// 测试停止，最后一个数据包序号无效，所以减1
                             break;
                         }
                     }
-                    else if (lastRegisterValue != (quint8)readBuf[0])
+                    else if ((quint8)readBuf[0] == 0x10){
+                        if (!isFirstPacket){
+                            // 第1个0x10表示数据准备中，从第2个开始表示第4块区域数据已经准备就绪
+                            if (lastRegisterValue != (quint8)readBuf[0]){
+                                // 寄存器值发生改变
+                                isFirstPacket = false;
+                                lastRegisterValue = (quint8)readBuf[0];
+                                mRamChangedTime[mCapturedRef] = elapsedTimer.elapsed();
+                                break;
+                            }
+                        }
+                    }
+                    else if ((quint8)readBuf[0] == 0x18)
                     {
+                        // 收到停止测量指令
+                        if (!isFirstPacket && mCapturedRef == 260/*极限值*/){
+                            mRamChangedTime[mCapturedRef] = elapsedTimer.elapsed();
+                            lastRegisterValue = (quint8)readBuf[0];
+                            qDebug().noquote().nospace() << "[" << mCardIndex << "] "
+                                                  << ddrName
+                                                  << " 收到停止测量指令"
+                                                  << " 当前寄存器值:0x" << readBuf.toHex()
+                                                  << " 帧序号:" << mCapturedRef;// 测试停止，最后一个数据包序号无效，所以减1
+                            break;
+                        }
+                    }
+                    else if (lastRegisterValue != (quint8)readBuf[0]){
+                        // 寄存器值发生改变
                         isFirstPacket = false;
                         lastRegisterValue = (quint8)readBuf[0];
+                        mRamChangedTime[mCapturedRef] = elapsedTimer.elapsed();
                         break;
                     }
-
+                }
+                else
+                {
+                    // 读数失败了(从未进入到这里，如果进入到这里，肯定是硬件出问题了)
+                    qCritical().nospace() << "[" << mCardIndex << "] "
+                                          << ddrName << "读寄存器失败，测量时刻：" << elapsedTimer.elapsed();
+                    break;
                 }
 
                 if (++failCount>=50)//50ms
                 {
                     isTimeout = true;
+                    mIsRegisterInvalid = true;
+                    if (!isPrintedTimeoutInfo){ //一旦超时，后面数据可能都超时，所以这里只打印一次消息即可
+                        isPrintedTimeoutInfo = true;
+                        mRegisterInvalidPosition = mCapturedRef;
+                        qCritical().noquote().nospace() << "[" << mCardIndex << "] "
+                                          << ddrName << "寄存器值异常"
+                                          << " 当前寄存器值:0x" << readBuf.toHex()
+                                          << " 帧序号:" << mCapturedRef;
+                    }
                     break;
                 }
 
@@ -1822,8 +1925,9 @@ void CaptureThread::run()
             if (isOver)
                 break;
 
-            if (isTimeout)
+            if (isTimeout){
                 continue;
+            }
 
 #if ENABLE_IOCP
             mPcieReader->submitReadRequestByStep(readBuf[0]);
@@ -1837,30 +1941,26 @@ void CaptureThread::run()
                 step = 1;
             else if (lastRegisterValue == 0x14)
                 step = 2;
-            else if (lastRegisterValue == 0x18)
+            else if (lastRegisterValue == 0x18 || lastRegisterValue == 0x10)
                 step = 3;
             else
                 continue;
 
+			mCreateThreadTime[capturedRef] = elapsedTimer.elapsed();
             threadPool->start([=](){
-                //读能谱数据
-                //qDebug() << "[" << mCardIndex << "] " << ddrName << capturedRef << " enter elapsedTimerStart=" <<tt1;
-                //读原始数据
-                //delay(60000);
                 SetThreadAffinityMask(QThread::currentThreadId(), step << 1ULL);
-                if (readWaveformData(step, mDDRWaveformDatas.at(capturedRef-1), memOffet + step * 0x07271400)){//0x07270E00 0x07271400
-                    //qDebug().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "] [" << mCardIndex << "] " << mCapturedRef << chunkStep << readBuf.toHex();
-                }
-
-                if (readSpectrumData(step, mRAMSpectrumDatas.at(capturedRef-1), memRamOffet + step * 0xA000)){
-
-                }
+                mBeforeReadTime[capturedRef] = elapsedTimer.elapsed();
+                //读波形数据
+                readWaveformData(step, mDDRWaveformDatas.at(capturedRef-1), memOffet + step * 0x07271400);
+                //读能谱数据
+                readSpectrumData(step, mRAMSpectrumDatas.at(capturedRef-1), memRamOffet + step * 0xA000);
+				mAfterReadTime[capturedRef] = elapsedTimer.elapsed();
 
             }, QThread::HighestPriority);
 #endif //ENABLE_IOCP
         }
 
-        if (!isOver)//非正常采集结束
+        if (!isOver)// 循环次数到了，最后一个异常采集结束
             mCapturedRef--;
 
         {
@@ -1871,51 +1971,49 @@ void CaptureThread::run()
             //emit reportCaptureFinished(mCardIndex, mIsDDR1);
 
             threadPool->waitForDone();
-            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据正在存储到硬盘中，请等待...";
-            for (int i = 0; i < mCapturedRef; ++i)
-            {
-                //emit reportCaptureData(mIsDDR1, i+1, mDDRWaveformDatas.at(i), mRAMSpectrumDatas.at(i)); //发给数据缓存处理线程
-                quint16 packref = i + 1;
-                threadPool->start([=](){
-                    //读能谱数据
-                    //qDebug() << "[" << mCardIndex << "] " << ddrName << capturedRef << " enter elapsedTimerStart=" <<tt1;
-                    //读原始数据
-                    //delay(60000);
-                    SetThreadAffinityMask(QThread::currentThreadId(), (packref % 16) << 1ULL);
+            // qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据正在存储到硬盘中，请等待...";
+            // for (int i = 0; i < mCapturedRef; ++i)
+            // {
+            //     //emit reportCaptureData(mIsDDR1, i+1, mDDRWaveformDatas.at(i), mRAMSpectrumDatas.at(i)); //发给数据缓存处理线程
+            //     quint16 packref = i + 1;
+            //     threadPool->start([=](){
+            //         SetThreadAffinityMask(QThread::currentThreadId(), (packref % 16) << 1ULL);
 
-                    {
-                        QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(packref/*++mPackref*/);
-                        QFile file(filename);
-                        if (!file.open(QIODevice::WriteOnly)) {
-                            qDebug() << "Cannot open file for writing";
-                        }
-                        else{
-                            file.write(mDDRWaveformDatas.at(i));
-                            file.close();
-                        }
-                    }
+            //         //写波形数据
+            //         {
+            //             QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(packref/*++mPackref*/);
+            //             QFile file(filename);
+            //             if (!file.open(QIODevice::WriteOnly)) {
+            //                 qDebug() << "Cannot open file for writing";
+            //             }
+            //             else{
+            //                 file.write(mDDRWaveformDatas.at(i));
+            //                 file.close();
+            //             }
+            //         }
 
-                    {
-                        QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg (packref/*mPackref*/);
-                        QFile file(filename);
-                        if (!file.open(QIODevice::WriteOnly)) {
-                            qDebug() << "Cannot open file for writing";
-                        }
-                        else{
-                            file.write(mRAMSpectrumDatas.at(i));
-                            file.close();
-                        }
+            //         //写能谱数据
+            //         {
+            //             QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg (packref/*mPackref*/);
+            //             QFile file(filename);
+            //             if (!file.open(QIODevice::WriteOnly)) {
+            //                 qDebug() << "Cannot open file for writing";
+            //             }
+            //             else{
+            //                 file.write(mRAMSpectrumDatas.at(i));
+            //                 file.close();
+            //             }
 
-                        qDebug() << "reportCaptureSpectrumData" << mCardIndex << mIsDDR1 << packref;
-                        emit reportCaptureSpectrumData(mCardIndex, mIsDDR1, packref, mRAMSpectrumDatas.at(i));
-                    }
-                });
-            }
-            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据已经全部存储到硬盘中！";
+            //             emit reportCaptureSpectrumData(mCardIndex, mIsDDR1, packref, mRAMSpectrumDatas.at(i));
+            //         }
+            //     });
+            // }
+            // qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据已经全部存储到硬盘中！";
+            //  threadPool->waitForDone();
 
             qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "采集结束，共采集：" << mCapturedRef;
 
-            //checkDataError();
+            checkDataError();
             emit reportCaptureFinished(mCardIndex, mIsDDR1);
 
             pause();

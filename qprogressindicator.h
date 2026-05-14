@@ -45,6 +45,7 @@ public:
 
     virtual QSize sizeHint() const;
     int heightForWidth(int w) const;
+
 public slots:
     /*! Starts the spin animation.
         \sa stopAnimation isAnimated
@@ -73,6 +74,9 @@ public slots:
         \sa color
      */
     void setColor(const QColor & color);
+
+    void setMessage(const QString & msg);
+
 protected:
     virtual void timerEvent(QTimerEvent * event);
     virtual void paintEvent(QPaintEvent * event);
@@ -82,6 +86,7 @@ private:
     int m_delay;
     bool m_displayedWhenStopped;
     QColor m_color;
+    QString m_message;
 };
 
 #endif // QPROGRESSINDICATOR_H

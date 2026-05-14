@@ -77,22 +77,12 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         }
     });
 
-    connect(&mPCIeCommSdk, &PCIeCommSdk::reportFileReadElapsedtime, this, [=](quint32 index, quint32 elapsedtime){
-        // QString time = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
-        // QString msg = QString("[%1] Device #%2 268435456 bytes received in %3ms").arg(time).arg(index).arg(elapsedtime);
-        // ui->plainTextEdit_log->append(msg);
-    });
-    connect(&mPCIeCommSdk, &PCIeCommSdk::reportFileWriteElapsedtime, this, [=](quint32 index, quint32 elapsedtime){
-        // QString time = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz");
-        // QString msg = QString("[%1] Device #%2 268435456 bytes written in %3ms").arg(time).arg(index).arg(elapsedtime);
-        // ui->plainTextEdit_log->append(msg);
-    });
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportCaptureFinished, this, [=](){
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
         bool testOk = mPCIeCommSdk.test();
+        mPCIeCommSdk.printDataError();
         if (!testOk){
-            mPCIeCommSdk.printDataError();
             ++mContinueMeasuerFailCount;
         }
 
@@ -1252,7 +1242,7 @@ void MainWindow::on_action_startMeasure_triggered()
         qint32 onePacketSize = 120*1000*1000;//打包大小基数
         QString cacheDir = ui->lineEdit_savePath->text();
         QDir dir(cacheDir);
-        qint64 diskFreeSpace = getDiskFreeSpace(dir.absoluteFilePath(cacheDir));
+        qint64 diskFreeSpace = getDiskFreeSpace(dir.absoluteFilePath(cacheDir).left(2));
         qint64 validDiskSpace = ui->spinBox_timeLength->value() / timeBase * onePacketSize;
         if (diskFreeSpace <= validDiskSpace){
             QMessageBox::information(this, tr("提示"), tr("磁盘空间不足！"));
@@ -1522,7 +1512,7 @@ qint64 MainWindow::getDiskFreeSpace(const QString& disk)
     qint64 ret = 0;
     QList<QStorageInfo> storageInfoList = QStorageInfo::mountedVolumes();
     for (auto storageInfo : storageInfoList){
-        if (disk.startsWith(storageInfo.rootPath())){
+        if (storageInfo.rootPath().startsWith(disk)){
             ret = storageInfo.bytesAvailable();// / (1024*1024);//返回MB
             break;
         }

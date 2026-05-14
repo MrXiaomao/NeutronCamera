@@ -18,6 +18,7 @@ temp/obj/pcieiocpreader.o
 temp/obj/qgaugepanel.o
 temp/obj/qprogressindicator.o
 temp/obj/switchbutton.o
+temp/obj/waitingspinnerwidget.o
 temp/obj/appender.o
 temp/obj/appenderskeleton.o
 temp/obj/basicconfigurator.o
@@ -155,6 +156,7 @@ temp/obj/moc_globalsettings.o
 temp/obj/moc_mainwindow.o
 temp/obj/moc_qprogressindicator.o
 temp/obj/moc_switchbutton.o
+temp/obj/moc_waitingspinnerwidget.o
 temp/obj/moc_qcustomplot.o
 temp/obj/moc_qcustomplothelper.o
 temp/obj/moc_lightstyle.o

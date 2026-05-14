@@ -3,6 +3,7 @@
 #include "globalsettings.h"
 #include "datacompresswindow.h"
 #include "qprogressindicator.h"
+#include "waitingspinnerwidget.h"
 #include "qcustomplothelper.h"
 #include <QElapsedTimer>
 
@@ -18,29 +19,36 @@ CpsStatisticsWindow::CpsStatisticsWindow(bool isDarkTheme, QWidget *parent)
 
     initUi();
     initWaveformPage();
+    initNGammaPage();
     initCpsPage();
 
     QActionGroup* actGroup = new QActionGroup(this);
     actGroup->addAction(ui->action_waveform);
     actGroup->addAction(ui->action_process);
+    actGroup->addAction(ui->action_ngamma);
     actGroup->addAction(ui->action_cps);
     ui->action_waveform->setChecked(true);
     emit ui->action_waveform->triggered(true);
 
+    connect(ui->toolButton_waveform, &QToolButton::clicked, this, &CpsStatisticsWindow::onWaveform);
+    connect(ui->toolButton_NGamma, &QToolButton::clicked, this, &CpsStatisticsWindow::onNGammaFilter);
+    connect(ui->toolButton_process, &QToolButton::clicked, this, &CpsStatisticsWindow::onDataProcess);
     connect(ui->toolButton_cps, &QToolButton::clicked, this, [=]{
         onCpsStatistics();
     });
-    connect(ui->toolButton_process, &QToolButton::clicked, this, &CpsStatisticsWindow::onDataProcess);
-    //connect(ui->toolButton_waveform, &QToolButton::clicked, this, &CpsStatisticsWindow::doWaveformPlot);
 
     //QStringList args = QCoreApplication::arguments();
     //this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
     this->applyColorTheme();
 
     connect(this, SIGNAL(doWriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
-    connect(this, SIGNAL(doCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)), this, SLOT(onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>)));
-    connect(this, SIGNAL(doSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>)), this, SLOT(onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>)));
-    
+    connect(this, SIGNAL(doWaveformPlot(quint8/*通道号*/,const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&)), this, SLOT(onWaveformPlot(quint8/*通道号*/,const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&)));
+    connect(this, SIGNAL(doSpectrumPlot(QMap<quint8/*通道号*/,QMap<quint16/*道址*/,quint32/*计数率*/>>)), this, SLOT(onSpectrumPlot(QMap<quint8/*通道号*/,QMap<quint16/*道址*/,quint32/*计数率*/>>)));
+    connect(this, SIGNAL(doCpsPlot(QMap<quint8/*通道号*/,QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>)), this, SLOT(onCpsPlot(QMap<quint8/*通道号*/,QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>)));
+    connect(this, SIGNAL(doPSDPlot(quint8,const QVector<double>&, const QVector<double>&, const QVector<double>&)), this,
+            SLOT(onPSDPlot(quint8,const QVector<double>&,const QVector<double>&,const QVector<double>&)));
+    connect(this, &CpsStatisticsWindow::doFoMPlot, this, &CpsStatisticsWindow::onFoMPlot);
+
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
         QGoodWindow::setAppCustomTheme(mIsDarkTheme,this->mThemeColor); // Must be >96
@@ -59,7 +67,18 @@ CpsStatisticsWindow::~CpsStatisticsWindow()
 
 void CpsStatisticsWindow::initUi()
 {
-    mProgressIndicator = new QProgressIndicator(this);
+    //mProgressIndicator = new QProgressIndicator(this);
+    mWaitingSpinnerWidget = new WaitingSpinnerWidget(this, true, true);
+    // 自定义外观
+    mWaitingSpinnerWidget->setRoundness(70.0);              // 设置线条圆润度，范围 0 至 100
+    mWaitingSpinnerWidget->setMinimumTrailOpacity(15.0);    // 设置尾部最淡处的不透明度百分比 (%)
+    mWaitingSpinnerWidget->setTrailFadePercentage(70.0);    // 设置渐隐区域占整体的百分比 (%)
+    mWaitingSpinnerWidget->setNumberOfLines(12);            // 绘制 12 条半径线条
+    mWaitingSpinnerWidget->setLineLength(40);               // 每条线条的长度（像素）
+    mWaitingSpinnerWidget->setLineWidth(10);                // 每条线条的宽度（像素）
+    mWaitingSpinnerWidget->setInnerRadius(50);              // 内圆半径（控制“死区”大小）
+    mWaitingSpinnerWidget->setRevolutionsPerSecond(1.5);    // 旋转速度：每秒转 1 圈
+    mWaitingSpinnerWidget->setColor(QColor(41, 4, 41));     // 设置线条颜色
 
     ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
     ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
@@ -277,15 +296,19 @@ void CpsStatisticsWindow::on_action_openfile_triggered()
 
         emit doWriteLog("实验炮号：" + mShotNum);
         if (mCurrentDetectorType == dtLBD){
+            ui->action_ngamma->setVisible(false);
             emit doWriteLog("探测器类型：LBD探测器");
         }
         else if (mCurrentDetectorType == dtLSD){
+            ui->action_ngamma->setVisible(true);
             emit doWriteLog("探测器类型：LSD探测器");
         }
         else if (mCurrentDetectorType == dtPSD){
+            ui->action_ngamma->setVisible(false);
             emit doWriteLog("探测器类型：PSD探测器");
         }
         else{
+            ui->action_ngamma->setVisible(false);
             emit doWriteLog("探测器类型：未知");
         }
     }
@@ -417,14 +440,16 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
             // 波形显示页面
             ui->line_waveform_startT_1->setText(QString::number((start_tm-1)*time_per));
             ui->line_waveform_endT_1->setText(QString::number((start_tm-1)*time_per+measureTime));
-            ui->spinBox_startT_1->setValue((start_tm-1)*time_per);
-            ui->spinBox_endT_1->setValue(start_tm*time_per);
 
             // 数据压缩处理页面
             ui->line_waveform_startT_2->setText(QString::number((start_tm-1)*time_per));
             ui->line_waveform_endT_2->setText(QString::number((start_tm-1)*time_per+measureTime));
             ui->spinBox_startT_2->setValue((start_tm-1)*time_per);
             ui->spinBox_endT_2->setValue((start_tm-1)*time_per+measureTime);
+
+            // n伽马甄别
+            ui->line_waveform_startT_4->setText(QString::number((start_tm-1)*time_per));
+            ui->line_waveform_endT_4->setText(QString::number((start_tm-1)*time_per+measureTime));
 
             // 计数率统计页面
             ui->line_waveform_startT_3->setText(QString::number((start_tm-1)*time_per));
@@ -837,50 +862,36 @@ void CpsStatisticsWindow::initWaveformPage()
     mGraphisColor.push_back(QColor::fromRgb(232,88,39));
 
     QCustomPlot *customPlotHor = new QCustomPlot(this);
+    customPlotHor->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
     QCustomPlotHelper* customPlotHelperHor = new QCustomPlotHelper(customPlotHor, this);
-    customPlotHor->legend->setVisible(true);
-    //customPlotHor->legend->setWrap(9);
-    customPlotHor->xAxis->setRange(QCPRange(0, 1000000));
-    customPlotHor->yAxis->setRange(QCPRange(0, 16000));
-    customPlotHor->setNoAntialiasingOnDrag(false);
-    for (int i=1; i<=11; ++i){
+    {
+        customPlotHor->legend->setVisible(true);
+        customPlotHor->xAxis->setRange(QCPRange(0, 1000000));
+        customPlotHor->yAxis->setRange(QCPRange(0, 16000));
+        customPlotHor->setNoAntialiasingOnDrag(false);
         QCPGraph *graph = customPlotHor->addGraph();
         graph->setLineStyle(QCPGraph::lsLine);
-        if (i<12){
-            graph->setName(QStringLiteral("HC %1").arg(i));
-            graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
-            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
-        }
-        else{
-            graph->setName(QStringLiteral("VC %1").arg(i));
-            graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
-            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
-        }
+        graph->setName(QStringLiteral("水平相机"));
+        graph->setPen(QPen(mGraphisColor[0], 2, Qt::PenStyle::SolidLine));
+        graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[0], 10));//显示散点图
+        customPlotHor->replot(QCustomPlot::rpQueuedReplot);
     }
-    customPlotHor->replot(QCustomPlot::rpQueuedReplot);
 
     QCustomPlot *customPlotVer = new QCustomPlot(this);
+    customPlotVer->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
     QCustomPlotHelper* customPlotHelperVer = new QCustomPlotHelper(customPlotVer, this);
-    customPlotVer->legend->setVisible(true);
-    //customPlotVer->legend->setWrap(9);
-    customPlotVer->xAxis->setRange(QCPRange(0, 1000000));
-    customPlotVer->yAxis->setRange(QCPRange(0, 16000));
-    customPlotVer->setNoAntialiasingOnDrag(false);
-    for (int i=12; i<=18; ++i){
+    {
+        customPlotVer->legend->setVisible(true);
+        customPlotVer->xAxis->setRange(QCPRange(0, 1000000));
+        customPlotVer->yAxis->setRange(QCPRange(0, 16000));
+        customPlotVer->setNoAntialiasingOnDrag(false);
         QCPGraph *graph = customPlotVer->addGraph();
         graph->setLineStyle(QCPGraph::lsLine);
-        if (i<12){
-            graph->setName(QStringLiteral("HC %1").arg(i));
-            graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::SolidLine));
-            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 10));//显示散点图
-        }
-        else{
-            graph->setName(QStringLiteral("VC %1").arg(i));
-            graph->setPen(QPen(mGraphisColor[i-1], 2, Qt::PenStyle::DashLine));
-            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 10));//显示散点图
-        }
+        graph->setName(QStringLiteral("垂直相机"));
+        graph->setPen(QPen(mGraphisColor[11], 2, Qt::PenStyle::DashLine));
+        graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[11], 10));//显示散点图
+        customPlotVer->replot(QCustomPlot::rpQueuedReplot);
     }
-    customPlotVer->replot(QCustomPlot::rpQueuedReplot);
 
     QVBoxLayout* vLayout = new QVBoxLayout(ui->pageInfoWidget_waveform);
     vLayout->setMargin(0);
@@ -889,6 +900,109 @@ void CpsStatisticsWindow::initWaveformPage()
     vLayout->addWidget(customPlotVer);
     ui->pageInfoWidget_waveform->setLayout(vLayout);
 
+    mWaveformHorPlot = customPlotHor;
+    mWaveformVerPlot = customPlotVer;
+
+}
+
+void CpsStatisticsWindow::initNGammaPage()
+{
+    auto initCustomPlot = [=](QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel){
+        QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
+        customPlot->setAntialiasedElements(QCP::aeAll);
+        customPlot->legend->setVisible(false);
+        customPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom/* | QCP::iSelectPlottables*/);
+        customPlot->xAxis->setTickLabelRotation(-45);
+        customPlot->xAxis->setLabel(axisXLabel);
+        customPlot->yAxis->setLabel(axisYLabel);
+        customPlot->axisRect()->setupFullAxesBox(true);
+
+        if (customPlot == ui->spectroMeter_horCamera_PSD || customPlot == ui->spectroMeter_verCamera_PSD){
+            QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
+            graph->setAntialiased(false);
+            graph->setLineStyle(QCPGraph::lsNone);
+            graph->setSelectable(QCP::SelectionType::stNone);
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssDisc, Qt::red, 3));//显示散点图
+
+            QCPColorMap *colorMap = new QCPColorMap(customPlot->xAxis, customPlot->yAxis);
+            colorMap->setName("colorMap");
+
+            colorMap->data()->setSize(100, 100);// 设置网格维度
+            colorMap->data()->setRange(QCPRange(0, 10000), QCPRange(0, 1.0));// 设置网格数据范围
+            colorMap->data()->fillAlpha(0);
+
+            QCPColorScale *colorScale = new QCPColorScale(customPlot);
+            customPlot->plotLayout()->addElement(0, 1, colorScale);
+            colorScale->setType(QCPAxis::atRight);
+            colorScale->setDataRange(QCPRange(0, 100));//颜色值取值范围
+
+            //重新定义色带 （蓝绿黄红）
+            QCPColorGradient gradient = QCPColorGradient::gpJet;
+            // gradient.setColorStopAt(0, QColor(0, 0, 200));
+            // gradient.setColorStopAt(1, QColor(255, 0, 0));
+            colorScale->setGradient(gradient);
+
+            colorMap->setColorScale(colorScale);// 色图与颜色条关联
+            colorMap->setGradient(gradient/*QCPColorGradient::gpSpectrum*/);
+            colorMap->rescaleDataRange();
+
+            QCPMarginGroup *marginGroup = new QCPMarginGroup(customPlot);
+            customPlot->axisRect()->setMarginGroup(QCP::msBottom|QCP::msTop, marginGroup);
+            colorScale->setMarginGroup(QCP::msBottom|QCP::msTop, marginGroup);
+            colorScale->setRangeDrag(false);
+            colorScale->setRangeZoom(false);
+            customPlot->rescaleAxes();
+        }
+        else if (customPlot == ui->spectroMeter_horCamera_FOM || customPlot == ui->spectroMeter_verCamera_FOM){
+            // QSharedPointer<QCPAxisTicker> ticker(new QCPAxisTicker);
+            // customPlot->yAxis->setTicker(ticker);
+            customPlot->xAxis->setRange(0, 10000);
+            customPlot->yAxis->setRange(0, 1);
+
+            QColor colors[] = {Qt::black, Qt::blue, Qt::red};
+            QString title[] = {"Original data", "Gamma", "Neutron"};
+            customPlot->legend->setVisible(true);
+            for (int i=0; i<3; ++i){
+                QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
+                graph->setAntialiased(false);
+                graph->setPen(QPen(colors[i]));
+                graph->selectionDecorator()->setPen(QPen(colors[i]));
+                if (i == 0){
+                    graph->setLineStyle(QCPGraph::lsNone);
+                    graph->setSelectable(QCP::SelectionType::stNone);
+                    graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
+                }
+                else {
+                    graph->setLineStyle(QCPGraph::lsLine);
+                    graph->setSmooth(true);
+                    graph->setSelectable(QCP::SelectionType::stNone);
+                }
+                graph->setName(title[i]);
+            }
+
+            // 添加标签显示品质因子
+            QCPItemText* itemText = new QCPItemText(customPlot);
+            itemText->setObjectName("itemText");
+            itemText->setLayer("overlay");
+            itemText->position->setType(QCPItemPosition::ptAxisRectRatio);
+            itemText->position->setCoords(0.12, 0.04);
+            itemText->setTextAlignment(Qt::AlignLeft);
+            itemText->setText("品质因子：-");
+        }
+
+        customPlot->replot();
+        connect(customPlot->xAxis, SIGNAL(rangeChanged(const QCPRange &)), customPlot->xAxis2, SLOT(setRange(const QCPRange &)));
+        connect(customPlot->yAxis, SIGNAL(rangeChanged(const QCPRange &)), customPlot->yAxis2, SLOT(setRange(const QCPRange &)));
+
+        // 是否允许X轴自适应缩放
+        connect(customPlot, SIGNAL(mousePress(QMouseEvent*)), this, SLOT(slotShowTracer(QMouseEvent*)));
+        connect(customPlot, SIGNAL(mouseRelease(QMouseEvent*)), this, SLOT(slotRestorePlot(QMouseEvent*)));
+    };
+
+    initCustomPlot(ui->spectroMeter_horCamera_PSD, tr("水平 n/γ Energy(MeVee) PSD图"), tr("PSD"));
+    initCustomPlot(ui->spectroMeter_horCamera_FOM, tr("水平 PSD FOM图"), tr("Counts"));
+    initCustomPlot(ui->spectroMeter_verCamera_PSD, tr("垂直 n/γ Energy(MeVee) PSD图"), tr("PSD"));
+    initCustomPlot(ui->spectroMeter_verCamera_FOM, tr("垂直 PSD FOM图"), tr("Counts"));
 }
 
 void CpsStatisticsWindow::initCpsPage()
@@ -916,7 +1030,7 @@ void CpsStatisticsWindow::initCpsPage()
         spectrumAxisRect->setMinimumMargins(QMargins(0,0,0,0));
         spectrumAxisRect->setMargins(QMargins(0,0,0,0));
         spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
-        spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("V"));
+        spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("幅度"));
         spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Channel"));
         spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 2000);
         spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 16384);
@@ -1181,7 +1295,7 @@ void CpsStatisticsWindow::initCpsPage()
             onCpsStatistics(minPeak, maxPeak);
         }
 
-        else if (axisRect == timeCountsAxisRect && range.size() >= 1){
+        else if (axisRect == timeCountsAxisRect  && range.size() >= 1){
             Q_UNUSED(range);
 
             QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
@@ -1332,6 +1446,188 @@ void CpsStatisticsWindow::initCpsPage()
     emit mCpsPlot->afterLayout();
 }
 
+#include <QtMath>
+void CpsStatisticsWindow::onWaveformPlot(quint8/*通道号*/ channel, const QMap<quint64/*时刻*/,qint16/*波形值*/>& mapPair)
+{
+    double yMax = 0;
+
+    // 计算当前组的x和y数据
+    QVector<double> xData, yData;
+    for (auto iterSub = mapPair.begin(); iterSub != mapPair.end(); ++iterSub){
+        xData.append(iterSub.key());
+        yData.append(iterSub.value());
+        yMax = qMax((double)yMax, (double)iterSub.value());
+    }
+
+    // 时间+计数率曲线
+    QCustomPlot* customPlot = nullptr;
+    if (channel <= 11){
+        customPlot = mWaveformHorPlot;
+    }
+    else{
+        customPlot = mWaveformVerPlot;
+    }
+
+    customPlot->graph(0)->setData(xData, yData);
+
+    // 队列刷新
+    customPlot->xAxis->rescale(true);
+    customPlot->yAxis->rescale(false);
+    customPlot->yAxis->setRange(QCPRange(0,  yMax * 1.1));
+}
+
+void CpsStatisticsWindow::onPSDPlot(quint8 cameraIndex, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density)
+{
+    // PSD分布密度图绘制
+    QCPColorMap* colorMap = nullptr;
+    QCustomPlot* customPlot = nullptr;
+    if (cameraIndex <= 11){
+        customPlot = ui->spectroMeter_horCamera_PSD;
+    }
+    else{
+        customPlot = ui->spectroMeter_verCamera_PSD;
+    }
+
+    colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
+    QCPColorScale *colorScale = colorMap->colorScale();
+    QCPColorGradient gradient = colorScale->gradient();
+
+    //归一化PSD分布密度图,范围0-100
+    double max_density = *std::max_element(std::begin(density), std::end(density));
+    // double min_density = *std::min_element(std::begin(density), std::end(density));
+    double min_density = 0.0;
+    double range_density = max_density - min_density;
+    QVector<double> normalized_density;
+    normalized_density.resize(density.size());
+    if (range_density > 0){
+        for (int i = 0; i < density.size(); i++){
+            normalized_density[i] = (density[i] - min_density) / range_density * 100.0;  // 归一化到 0~100
+        }
+    }
+    else{
+        normalized_density = density;
+    }
+
+    QVector<QColor> z;
+    z.reserve(normalized_density.size());
+    for (int i = 0; i < normalized_density.size(); i++){
+        z << gradient.color(normalized_density[i], QCPRange(0, 100), false);
+    }
+
+    // setData 需要 double 类型的数据，第三个参数是 QColor 向量
+    double max_x = *std::max_element(std::begin(psd_x), std::end(psd_x));
+    double min_x = *std::min_element(std::begin(psd_x), std::end(psd_x));
+    double max_y = *std::max_element(std::begin(psd_y), std::end(psd_y));
+    double min_y = *std::min_element(std::begin(psd_y), std::end(psd_y));
+    colorMap->data()->setRange(QCPRange(min_x, max_x), QCPRange(min_y, max_y));// 设置网格数据范围
+    customPlot->xAxis->rescale(true);
+    customPlot->yAxis->rescale(true);
+
+    customPlot->graph(0)->setData(psd_x, psd_y, z);
+    customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
+}
+
+void CpsStatisticsWindow::onFoMPlot(quint8 cameraIndex, QPair<double,double> xlim, const QVector<FOM_CurvePoint>& pairs, double fom)
+{
+    // FoM图绘
+    // 核密度图谱
+    QCustomPlot* customPlot = nullptr;
+    if (cameraIndex <= 11){
+        customPlot = ui->spectroMeter_horCamera_FOM;
+    }
+    else{
+        customPlot = ui->spectroMeter_verCamera_FOM;
+    }
+
+    // 绘制FoM散点曲线
+    {
+        QVector<double> x, y;
+        QVector<QColor> z;
+        for (auto pair : pairs){
+            x << pair.x;
+            y << pair.y1;
+            z << QColor::fromRgb(0x87,0xBA,0xDD);
+        }
+        customPlot->graph(0)->setData(x, y, z);
+    }
+
+    // 绘制拟合曲线1
+    {
+        QVector<double> x, y;
+        QVector<QColor> z;
+        for (auto pair : pairs){
+            x << pair.x;
+            y << pair.y2;
+            z << Qt::red;
+        }
+        customPlot->graph(1)->setData(x, y, z);
+    }
+
+    //绘制拟合曲线2
+    {
+        QVector<double> x, y;
+        QVector<QColor> z;
+        for (auto pair : pairs){
+            x << pair.x;
+            y << pair.y3;
+            z << Qt::black;
+        }
+        customPlot->graph(2)->setData(x, y, z);
+    }
+
+    QCPItemText* itemText = customPlot->findChild<QCPItemText*>("itemText");
+    if (itemText)
+        itemText->setText(QStringLiteral("品质因子：%1").arg(fom));
+
+    customPlot->xAxis->setRange(xlim.first, xlim.second);
+    customPlot->yAxis->rescale(true);
+    customPlot->replot(QCustomPlot::RefreshPriority::rpQueuedReplot);
+}
+
+void CpsStatisticsWindow::onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> mapPairs)
+{
+    QCPAxisRect *spectrumAxisRect = mCpsPlot->findChild<QCPAxisRect*>("spectrumAxisRect");
+    {
+        // 设置坐标轴范围
+        QCPAxis *keyAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atBottom);
+        QCPAxis *valueAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atLeft);
+        keyAxis->setRange(QCPRange(0, mapPairs[1].count()));
+    }
+
+    QVector<double> keys;
+    QVector<double> values;
+    double yMax = 0;
+
+    for (auto iter = mapPairs.begin(); iter != mapPairs.end(); ++iter){
+        int channel = iter.key();
+        QMap<quint16/*时刻*/,quint32/*计数率*/> mapPair = iter.value();
+
+        keys << iter.key();
+        values << 0;
+
+        // 计算当前组的x和y数据
+        QVector<double> xData, yData;
+        for (auto iterSub = mapPair.begin(); iterSub != mapPair.end(); ++iterSub){
+            xData.append(iterSub.key());
+            yData.append(iterSub.value());
+            yMax = qMax((double)yMax, (double)iterSub.value());
+        }
+
+        // 时间+计数率曲线
+        QCPGraph *graph = nullptr;
+        if (channel <= 11)
+            graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("HC %1").arg(channel));
+        else
+            graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("VC %1").arg(channel));
+        graph->setData(xData, yData);
+    }
+
+    // 队列刷新
+    spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(QCPRange(0,  yMax * 1.1));
+    mCpsPlot->replot(QCustomPlot::rpQueuedReplot);
+}
+
+
 void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs)
 {
     QCPAxisRect *timeCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("timeCountsAxisRect");
@@ -1421,54 +1717,6 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
     mCpsPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-#include <QtMath>
-void CpsStatisticsWindow::onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> mapPairs)
-{
-    QCPAxisRect *spectrumAxisRect = mCpsPlot->findChild<QCPAxisRect*>("spectrumAxisRect");
-    {
-        // 设置坐标轴范围
-        QCPAxis *keyAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atBottom);
-        QCPAxis *valueAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atLeft);
-        keyAxis->setRange(QCPRange(0, mapPairs[1].count()));
-    }
-
-    QVector<double> keys;
-    QVector<double> values;
-    QVector<QPen> barPen;
-    QVector<QBrush> barBrush;
-    double yMax = 0;
-
-    for (auto iter = mapPairs.begin(); iter != mapPairs.end(); ++iter){
-        int channel = iter.key();
-        QMap<quint16/*时刻*/,quint32/*计数率*/> mapPair = iter.value();
-
-        keys << iter.key();
-        values << 0;
-        barPen << QPen(Qt::black);
-        barBrush << QBrush(mGraphisColor[channel-1]);
-
-        // 计算当前组的x和y数据
-        QVector<double> xData, yData;
-        for (auto iterSub = mapPair.begin(); iterSub != mapPair.end(); ++iterSub){
-            xData.append(iterSub.key());
-            yData.append(iterSub.value());
-            yMax = qMax((double)yMax, (double)iterSub.value());
-        }
-
-        // 时间+计数率曲线
-        QCPGraph *graph = nullptr;
-        if (channel <= 11)
-            graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("HC %1").arg(channel));
-        else
-            graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("VC %1").arg(channel));
-        graph->setData(xData, yData);
-    }
-
-    // 队列刷新
-    spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(QCPRange(0,  yMax * 1.1));
-    mCpsPlot->replot(QCustomPlot::rpQueuedReplot);
-}
-
 QString CpsStatisticsWindow::joinFilename(const int& cameraIndex)
 {
     QString filename;
@@ -1528,6 +1776,11 @@ void CpsStatisticsWindow::on_action_process_triggered()
     ui->optionStackedWidget->setCurrentWidget(ui->page_process);
 }
 
+void CpsStatisticsWindow::on_action_ngamma_triggered()
+{
+    ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_ngamma);
+    ui->optionStackedWidget->setCurrentWidget(ui->page_ngamma);
+}
 
 void CpsStatisticsWindow::on_action_cps_triggered()
 {
@@ -1536,27 +1789,61 @@ void CpsStatisticsWindow::on_action_cps_triggered()
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
-void CpsStatisticsWindow::doWaveformPlot()
+void CpsStatisticsWindow::onWaveform()
 {
-    // // 计数率统计
-    // //提取有效波形参数
-    // int timeLength = ui->spinBox_time1->value(); // 默认值 1ms
-    // int timeStart = ui->spinBox_startT->value(); // 开始时刻
-    // int timeStop = ui->spinBox_endT->value(); // 截止时刻
+    // 获取数据目录路径
+    QString dataDir = ui->textBrowser_filepath->toPlainText();
+    if (dataDir.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("数据目录路径为空"), QtWarningMsg);
+        return;
+    }
 
-    // // 查找目录下的h5文件
-    // QString h5FilePath = mFileDir + "/waveform_data.h5";
-    // QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPairs;
-    // if (QFileInfo::exists(h5FilePath) && !mPCIeCommSdk.analyzeHistoryCpsData(timeLength, timeStart, timeStop, h5FilePath, [&](QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> mapPair){
-    //         for (auto iter = mapPair.begin(); iter!=mapPair.end(); ++iter){
-    //             mapPairs[iter.key()] = iter.value();
-    //         }
-    //     }))
-    // {
-    //     QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
-    // }
+    mWaveformHorPlot->graph(0)->data()->clear();
+    mWaveformVerPlot->graph(0)->data()->clear();
+    mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+    mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
 
-    //emit reportWavePlot(mapPairs);
+    //提取有效波形参数
+    int timeStart = ui->spinBox_startT_1->value(); // 开始时刻
+    int timeStop = ui->spinBox_endT_1->value(); // 截止时刻
+    quint8 horCameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+    quint8 verCameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
+
+    //mProgressIndicator->startAnimation();
+    mWaitingSpinnerWidget->start();
+    std::thread producer([=]{
+
+        //mProgressIndicator->setMessage(QStringLiteral("正在处理水平相机数据，请等待..."));
+        mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
+
+        // 水平相机
+        mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, timeStart, timeStop, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+
+            onWaveformPlot(horCameraIndex, mapPair);
+            // QMetaObject::invokeMethod(this, [=](){
+            //      mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+            // }, Qt::QueuedConnection);
+
+        });
+
+        //mProgressIndicator->setMessage(QStringLiteral("正在处理垂直相机数据，请等待..."));
+        mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
+
+        // 垂直相机
+        mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, timeStart, timeStop, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+
+            onWaveformPlot(verCameraIndex, mapPair);
+            QMetaObject::invokeMethod(this, [=](){
+                mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+                mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
+                //mProgressIndicator->stopAnimation();
+                mWaitingSpinnerWidget->stop();
+            }, Qt::QueuedConnection);
+
+        });
+
+    });
+    producer.detach();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1620,7 +1907,10 @@ void CpsStatisticsWindow::onDataProcess()
         emit doWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
     }
 
-    mProgressIndicator->startAnimation();
+    // mProgressIndicator->startAnimation();
+    // mProgressIndicator->setMessage(QStringLiteral("数据压缩处理中，请耐心等待..."));
+    mWaitingSpinnerWidget->start();
+    mWaitingSpinnerWidget->setText(QStringLiteral("数据压缩处理中，请耐心等待..."));
 
     // 创建并启动工作线程
     // 如果已有线程在运行，先停止并清理
@@ -1758,7 +2048,8 @@ void CpsStatisticsWindow::onAnalysisFinished(bool success, const QString& messag
         mAnalysisThread = nullptr;
     }
 
-    mProgressIndicator->stopAnimation();
+    //mProgressIndicator->stopAnimation();
+    mWaitingSpinnerWidget->stop();
 
     // 重新加载h5文件列表
     // 仅过滤 .h5 文件
@@ -1783,9 +2074,353 @@ void CpsStatisticsWindow::onAnalysisError(const QString& error)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
+#include "n_gamma.h"
+void CpsStatisticsWindow::onNGammaFilter()
+{
+    QList<QCustomPlot*> listPlots;
+    listPlots << ui->spectroMeter_horCamera_PSD;
+    listPlots << ui->spectroMeter_verCamera_PSD;
+    listPlots << ui->spectroMeter_horCamera_FOM;
+    listPlots << ui->spectroMeter_horCamera_FOM;
+    for (auto& customPlot : listPlots){
+        for (int i = 0; i < customPlot->graphCount(); ++i){
+            customPlot->graph(i)->data().clear();
+            customPlot->replot(QCustomPlot::rpQueuedReplot);
+        }
+    }
+
+    QElapsedTimer totalTimer;
+    totalTimer.start();
+
+    //提取有效波形参数
+    int threshold = ui->spinBox_threshold_4->value();
+    int pre_points = 20;
+    int post_points = 512 - pre_points - 1;
+
+    int startT = ui->spinBox_startT_4->value();
+    int endT = ui->spinBox_endT_4->value();
+    if(startT >= endT){
+        QMessageBox::information(this, tr("提示"), tr("起始时间不能大于结束时间！"));
+        return;
+    }
+    if(startT < 0 || endT > ui->line_waveform_endT_4->text().toInt()){
+        QMessageBox::information(this, tr("提示"), tr("起始时间不能小于0或大于测量时长！"));
+        return;
+    }
+
+    qApp->setOverrideCursor(QCursor(Qt::WaitCursor));
+
+    int time_per = 40;
+    //计算起始文件索引
+    int fileIndex = floor(startT / time_per) + 1;
+    //计算结束文件索引
+    int endFileIndex = floor((endT-1) / time_per) + 1;
+    //获取水平相机序号
+    QList<quint8> cameras = QList<quint8>() << ui->comboBox_horCamera_4->currentIndex() + 1 << ui->comboBox_verCamera_4->currentIndex() + 12;
+
+    //mProgressIndicator->startAnimation();
+    mWaitingSpinnerWidget->start();
+
+    emit doWriteLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
+    foreach (quint8 cameraIndex, cameras) {
+        quint32 deviceIndex = (cameraIndex + 3) / 4;
+        //根据相机序号计算出是第几块光纤卡
+        int channelIndex = (cameraIndex - 1) % 4 + 1;// 1、2、3、4
+        if (cameraIndex<=11){
+            //mProgressIndicator->setMessage(QStringLiteral("正在处理水平相机数据，请等待..."));
+            mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
+            emit doWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
+        }
+        else{
+            //mProgressIndicator->setMessage(QStringLiteral("正在处理垂直相机数据，请等待..."));
+            mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
+            emit doWriteLog(QString("垂直相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
+        }
+
+        emit doWriteLog(QString("需要处理的文件数量：%1 (从文件%2到%3)").arg(endFileIndex - fileIndex + 1).arg(fileIndex).arg(endFileIndex),QtInfoMsg);
+
+        // 提取该通道有效波形数据，并进行合并
+        qint64 totalFileReadTime = 0;
+        qint64 totalBaselineTime = 0;
+        qint64 totalWaveExtractTime = 0;
+        int processedFileCount = 0;
+
+        QVector<std::array<qint16, H5_DATA_COLS>> ch_all_valid_wave;
+
+        // === 读盘-计算流水线：尽量让磁盘持续顺序读 ===
+        QThreadPool* pool = QThreadPool::globalInstance();
+        // 计算线程池：建议 2~4 起步（单盘更稳；NVMe 可再加）
+        int maxTh = int(QThread::idealThreadCount() * 0.5*0.8); //使用80%物理核CPU资源，因为一般计算机都是超线程，所以乘以0.5
+        pool->setMaxThreadCount(maxTh);
+
+        // 队列容量：2~4（每个文件256MB）
+        const int queueCapacity = 1;
+        BoundedFileQueue queue(queueCapacity);
+
+        QMutex mergeMutex;
+        std::atomic<int> doneFiles{0};
+
+        // 用于等待所有任务完成
+        std::atomic<int> pendingTasks{0};
+        QMutex pendingMutex;
+        QWaitCondition pendingCond;
+
+        // 生产者：单线程顺序读文件（把磁盘拉满）
+        std::thread producer([&]() {
+            for (int i = fileIndex; i <= endFileIndex; ++i) {
+                const QString filePath =
+                    QString("%1/%2data%3.bin")
+                        .arg(ui->textBrowser_filepath->toPlainText())
+                        .arg(joinFilename(cameraIndex))
+                        .arg(i);
+
+                QFile f(filePath);
+                if (!f.open(QIODevice::ReadOnly)) {
+                    emit doWriteLog(QString("文件打开失败：%1").arg(filePath), QtWarningMsg);
+                    continue;
+                }
+
+                const qint64 size = f.size();
+                if (size <= 0) {
+                    emit doWriteLog(QString("文件大小异常：%1").arg(filePath), QtWarningMsg);
+                    continue;
+                }
+
+                QElapsedTimer readTimer;
+                readTimer.start();
+                QByteArray buf = f.readAll();
+                const qint64 readMs = readTimer.elapsed();
+                totalFileReadTime += readMs;
+
+                if (buf.isEmpty()) {
+                    emit doWriteLog(QString("文件读取不完整：%1 ")
+                                        .arg(filePath),
+                                    QtWarningMsg);
+                    continue;
+                }
+
+                FileJob job;
+                job.filePath = filePath;
+                job.deviceIndex = static_cast<quint8>(deviceIndex);
+
+                // ✅ 修复 packerStartTime：必须随 i 变化
+                job.packerStartTime = static_cast<quint32>((i - 1) * time_per);
+
+                job.data = std::move(buf);
+
+                queue.push(std::move(job));
+            }
+
+            queue.stop();
+        });
+
+        // 消费者：从队列取内存数据，丢给线程池做“解交织+基线+阈值提取”
+        // 只处理 cameraIndex 对应的单通道（ExtractValidWaveformFromBufferTask 已支持）
+        QElapsedTimer consumerWall;
+        consumerWall.start();                 // ✅ 消费者阶段开始（墙钟）
+
+        FileJob job;
+        while (queue.pop(job)) {
+            pendingTasks.fetch_add(1, std::memory_order_relaxed);
+
+            auto onFinished = [&]() {
+                const int left = pendingTasks.fetch_sub(1, std::memory_order_acq_rel) - 1;
+                if (left == 0) {
+                    QMutexLocker lk(&pendingMutex);
+                    pendingCond.wakeAll();
+                }
+            };
+
+            auto cb = [&](quint32 /*packerCurrentTime*/,
+                          quint8 /*channelIdx*/,
+                          QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch) {
+                QMutexLocker locker(&mergeMutex);
+                ch_all_valid_wave.append(wave_ch);
+            };
+
+            auto* task = new ExtractValidWaveformFromBufferTask(
+                std::move(job),
+                static_cast<quint8>(cameraIndex), // ✅ 单相机（单通道）
+                threshold,
+                pre_points,
+                post_points,
+                cb,
+                [&]() {
+                    doneFiles.fetch_add(1, std::memory_order_relaxed);
+                    onFinished();
+                });
+
+            pool->start(task);
+        }
+
+        if (producer.joinable()) producer.join();
+
+        // 等待所有任务完成
+        {
+            QMutexLocker lk(&pendingMutex);
+            while (pendingTasks.load(std::memory_order_acquire) > 0) {
+                pendingCond.wait(&pendingMutex, 20);
+                qApp->processEvents();
+            }
+        }
+
+        // pool->waitForDone();                  // ✅ 所有消费者任务都结束
+        qint64 consumerTotalMs = consumerWall.elapsed();   // ✅ 消费者阶段总耗时（系统时间）
+
+        // 统计
+        processedFileCount = doneFiles.load(std::memory_order_relaxed);
+
+        emit doWriteLog(QString("=== 文件处理阶段统计 ==="),QtInfoMsg);
+        emit doWriteLog(QString("处理文件总数：%1").arg(processedFileCount),QtInfoMsg);
+        emit doWriteLog(QString("  文件读取总耗时：%1 ms (%2 秒)")
+                            .arg(totalFileReadTime)
+                            .arg(totalFileReadTime / 1000.0, 0, 'f', 2),
+                        QtInfoMsg
+                        );
+
+        emit doWriteLog(QString("  基线计算、波形提取总耗时：%1 ms (%2 秒)")
+                            .arg(consumerTotalMs)
+                            .arg(consumerTotalMs / 1000.0, 0, 'f', 2),
+                        QtInfoMsg
+                        );
+
+        emit doWriteLog(QString("  波形提取总耗时：%1 ms (%2 秒)")
+                            .arg(totalWaveExtractTime)
+                            .arg(totalWaveExtractTime / 1000.0, 0, 'f', 2),
+                        QtInfoMsg
+                        );
+        emit doWriteLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
+
+        n_gamma neutron;
+        //计算PSD
+        QElapsedTimer psdTimer;
+        psdTimer.start();
+        emit doWriteLog(QString("开始计算PSD，有效波形数量：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
+        QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);
+        qint64 psdTime = psdTimer.elapsed();
+        emit doWriteLog(QString("PSD计算耗时：%1 ms (%2 秒)，得到 %2 个数据点").arg(psdTime).arg(psdTime / 1000.0, 0, 'f', 2).arg(data.size()),QtInfoMsg);
+
+        // 计算密度
+        QElapsedTimer densityTimer;
+        densityTimer.start();
+        emit doWriteLog(QString("开始计算密度分布"),QtInfoMsg);
+        QVector<float> den = neutron.computeDensity(data, 200);
+        qint64 densityTime = densityTimer.elapsed();
+        emit doWriteLog(QString("密度计算耗时：%1 ms (%2 秒)").arg(densityTime).arg(densityTime / 1000.0, 0, 'f', 2),QtInfoMsg);
+
+        // 提取 Energy 和 PSD 向量用于绘图，转换为 double（setData 需要 double）
+        QElapsedTimer convertTimer;
+        convertTimer.start();
+        QVector<double> energyVec, psdVec;
+        QVector<double> denDouble;  // 将 float 转换为 double
+        energyVec.reserve(data.size());
+        psdVec.reserve(data.size());
+        denDouble.reserve(den.size());
+        for (const auto& pair : data) {
+            energyVec.append(static_cast<double>(pair.first));   // Energy: float -> double
+            psdVec.append(static_cast<double>(pair.second));     // PSD: float -> double
+        }
+        for (float d : den) {
+            denDouble.append(static_cast<double>(d));
+        }
+        qint64 convertTime = convertTimer.elapsed();
+        emit doWriteLog(QString("数据类型转换耗时：%1 ms").arg(convertTime),QtInfoMsg);
+
+        // 绘制PSD图表
+        QElapsedTimer plotTimer;
+        plotTimer.start();
+        emit doPSDPlot(cameraIndex, energyVec, psdVec, denDouble);
+        qint64 plotTime = plotTimer.elapsed();
+        emit doWriteLog(QString("PSD图表绘制耗时：%1 ms").arg(plotTime),QtInfoMsg);
+
+        // 计算FoM
+        QElapsedTimer fomTimer;
+        fomTimer.start();
+        emit doWriteLog(QString("开始计算FoM"),QtInfoMsg);
+        n_gamma::HistResult histCount = neutron.selectAndHist(data);
+        qint64 histTime = fomTimer.elapsed();
+        emit doWriteLog(QString("  直方图计算耗时：%1 ms").arg(histTime),QtInfoMsg);
+
+        QElapsedTimer fomCalcTimer;
+        fomCalcTimer.start();
+        n_gamma::FOM FOM_data = neutron.GetFOM(histCount.psd_x, histCount.count_y);
+        qint64 fomCalcTime = fomCalcTimer.elapsed();
+        qint64 fomTotalTime = fomTimer.elapsed();
+        emit doWriteLog(QString("  FoM拟合计算耗时：%1 ms").arg(fomCalcTime),QtInfoMsg);
+        emit doWriteLog(QString("FoM计算总耗时：%1 ms (%2 秒)").arg(fomTotalTime).arg(fomTotalTime / 1000.0, 0, 'f', 2),QtInfoMsg);
+
+        QPair<double,double> xLim;
+        if(FOM_data.R1 < 0.90 || FOM_data.R2 < 0.90){
+            QMessageBox::information(this, tr("提示"), tr("FoM拟合不成功，请调整阈值或延长测量时间！"));
+            emit doWriteLog(QString("FoM拟合不成功，请调整阈值或延长测量时间！"),QtWarningMsg);
+            xLim.first  = histCount.psd_x[0];
+            xLim.second = histCount.psd_x.back();
+        }
+        else{
+            //拟合成功，取出绘图范围
+            xLim.first  = FOM_data.xlim[0];
+            xLim.second = FOM_data.xlim[1];
+        }
+
+        // 存储FoM绘图数据
+        QElapsedTimer fomPlotTimer;
+        fomPlotTimer.start();
+        QVector<FOM_CurvePoint> curveData;
+        for (size_t i = 0; i < histCount.psd_x.size(); ++i) {
+            curveData.push_back(FOM_CurvePoint(histCount.psd_x[i], FOM_data.Y[i], FOM_data.Y_fit1[i], FOM_data.Y_fit2[i]));
+        }
+
+        // 绘制FoM图表
+        emit doFoMPlot(cameraIndex, xLim, curveData, FOM_data.fom);
+        qApp->restoreOverrideCursor();
+        qint64 fomPlotTime = fomPlotTimer.elapsed();
+        emit doWriteLog(QString("FoM图表绘制耗时：%1 ms").arg(fomPlotTime),QtInfoMsg);
+
+        qint64 totalTime = totalTimer.elapsed();
+        emit doWriteLog(QString("=== n-gamma甄别模式总耗时统计 ==="),QtInfoMsg);
+        emit doWriteLog(QString("总耗时：%1 ms (%2 秒)").arg(totalTime).arg(totalTime / 1000.0, 0, 'f', 2),QtInfoMsg);
+        emit doWriteLog(QString("  文件处理阶段：%1 ms (%2%)")
+                            .arg(totalFileReadTime)
+                            .arg(totalTime > 0 ? (100.0 * totalFileReadTime / totalTime) : 0.0, 0, 'f', 2),
+                        QtInfoMsg);
+        emit doWriteLog(QString("  PSD计算阶段：%1 ms (%2%)")
+                            .arg(psdTime)
+                            .arg(totalTime > 0 ? (100.0 * psdTime / totalTime) : 0.0, 0, 'f', 2),
+                        QtInfoMsg
+                        );
+
+        emit doWriteLog(QString("  密度计算阶段：%1 ms (%2%)")
+                            .arg(densityTime)
+                            .arg(totalTime > 0 ? (100.0 * densityTime / totalTime) : 0.0, 0, 'f', 1),
+                        QtInfoMsg
+                        );
+
+        emit doWriteLog(QString("  FoM计算阶段：%1 ms (%2%)")
+                            .arg(fomTotalTime)
+                            .arg(totalTime > 0 ? (100.0 * fomTotalTime / totalTime) : 0.0, 0, 'f', 1),
+                        QtInfoMsg
+                        );
+
+        const auto otherTime = totalTime - totalFileReadTime - psdTime - densityTime - fomTotalTime;
+        emit doWriteLog(QString("  其它（转换、绘图等）：%1 ms (%2%)")
+                            .arg(otherTime)
+                            .arg(totalTime > 0 ? (100.0 * otherTime / totalTime) : 0.0, 0, 'f', 1),
+                        QtInfoMsg
+                        );
+    }
+
+    //mProgressIndicator->stopAnimation();
+    mWaitingSpinnerWidget->stop();
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
 void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
 {
-    mProgressIndicator->startAnimation();
+    //mProgressIndicator->startAnimation();
+    //mProgressIndicator->setMessage(QStringLiteral("计数率统计中，请等待..."));
+    mWaitingSpinnerWidget->start();
+    mWaitingSpinnerWidget->setText(QStringLiteral("计数率统计中，请等待..."));
+
     // 计数率统计
     //提取有效波形参数
     int timeWidth = ui->spinBox_time1->value(); // 默认值 1ms
@@ -1814,7 +2449,8 @@ void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
 	            }
 	        }, minPeak, maxPeak))
 	    {
-	        mProgressIndicator->stopAnimation();
+            //mProgressIndicator->stopAnimation();
+            mWaitingSpinnerWidget->stop();
 	        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
 	        return;
 	    }
@@ -1826,7 +2462,8 @@ void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
 		    if (0==minPeak && 16384==maxPeak)//如果是选择能谱范围就不要重新刷新能谱图了
 		        emit doSpectrumPlot(spectrumMapPairs);
 		
-		    mProgressIndicator->stopAnimation();
+            //mProgressIndicator->stopAnimation();
+            mWaitingSpinnerWidget->stop();
         }, Qt::QueuedConnection);
     });
     producer.detach();

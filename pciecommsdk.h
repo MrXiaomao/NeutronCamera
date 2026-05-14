@@ -29,69 +29,6 @@ typedef int HANDLE;
 #include <QWaitCondition>
 #include <QThreadPool>
 
-class WriteFileTask : public QObject, public QRunnable{
-    Q_OBJECT
-public:
-    explicit WriteFileTask(quint32 index, quint32 packref, const QString& saveFilePath, QByteArray& data)
-        : mIndex(index)
-        , mPackref(packref)
-        , mSaveFilePath(saveFilePath)
-        , mData(data)
-    {
-        this->setAutoDelete(true);
-    }
-
-    void run() override{
-        QElapsedTimer elapsedTimer;
-        elapsedTimer.start();
-        QDateTime now = QDateTime::currentDateTime();
-        QString filename = QString("%1/%2data%3.bin").arg(mSaveFilePath).arg(mIndex).arg(mPackref++);
-        QFile file(filename);
-        if (!file.open(QIODevice::WriteOnly)) {
-            qDebug() << "Cannot open file for writing";
-        }
-        else{
-            file.write(mData);
-            file.close();
-        }
-
-        emit reportFileWriteElapsedtime(mIndex,elapsedTimer.elapsed());
-    }
-
-    Q_SIGNAL void reportFileWriteElapsedtime(quint32,quint32);
-
-private:
-    quint32 mIndex;
-    quint32 mPackref;
-    QString mSaveFilePath;
-    QByteArray mData;
-};
-
-#include <functional>
-typedef std::function<void(void/*HANDLE fd, quint64 offset, const QByteArray& data*/)> task_cb;
-class ReadFileTask : public QObject, public QRunnable{
-    Q_OBJECT
-public:
-    explicit ReadFileTask()
-    {
-        this->setAutoDelete(true);
-    }
-
-    void run() override{
-        if (call){
-            call();
-        }
-    }
-
-    void setCallback(task_cb cb)
-    {
-        call = cb;
-    }
-
-private:
-    task_cb call;
-};
-
 class DataCachPoolThread : public QThread {
     Q_OBJECT
 public:
@@ -159,7 +96,7 @@ public:
     void run() override;
     void delay(quint32 us);
     bool checkDataError();
-    void printDataError();
+    void printDebugInfo();
     bool dataExistError();
 
     void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds);
@@ -214,8 +151,6 @@ public:
     Q_SIGNAL void reportCaptureData(bool isDDR1, quint8 packref, const QByteArray& waveformData, const QByteArray& spectrumData);
     Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
     Q_SIGNAL void reportCaptureSpectrumData(quint8,bool,quint32,const QByteArray& data);
-    Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
-    Q_SIGNAL void reportFileWriteElapsedtime(quint32, quint32);
     Q_SIGNAL void reportCaptureFinished(quint32, bool);
 
 private:
@@ -229,13 +164,14 @@ private:
 #endif // ENABLE_IOCP
     HANDLE mRAMHandle[4];//RAM句柄
     HANDLE mUserHandle;//用户句柄
+    bool mIsRegisterInvalid = false;
+    int mRegisterInvalidPosition = 0;
 
     QString mSaveFilePath;//保存路径
     quint32 mCaptureCount = 1;//需要采集的总包数据
     quint32 mCapturedRef = 1;//已经采集的包数
     quint32 mTimeout = 5000;//超时微秒
-    bool mIsException = false;
-    std::atomic<quint32> mTaskingRef = 0;
+    bool mIsException = false;//数据是否出现异常
     QVector<QByteArray> mDDRWaveformDatas;
     QVector<QByteArray> mRAMSpectrumDatas;
 
@@ -248,8 +184,14 @@ private:
 
     SharedData mIrq1Trigger, mIrq2Trigger;
     bool mDataError = false;
-    qint8 mErrorStart = 0;
-    QMutex mReadLocker;    
+    qint16 mErrorStart = 0;
+    QMutex mReadLocker;
+
+    QVector<qint64> mRamChangedTime;// RAM值改变的时间
+    QVector<qint64> mBeforeReadTime;// DDR读之前的时间
+    QVector<qint64> mAfterReadTime;// DDR读之后的时间
+    QVector<qint64> mCreateThreadTime;// 创建线程时间
+    QMap<quint16/*包序号*/, QVector<QPair<qint64/*读寄存器前时刻*/, QPair<qint64/*读寄存器前时刻*/, quint8/*寄存器值*/>>>> mRAMReadTime;//记录RAM读取时间
 };
 
 #define CAMNUMBER_DDR_PER   3   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
@@ -281,8 +223,6 @@ public:
     Q_SIGNAL void reportNotFoundDevices();
     Q_SIGNAL void reportOpenDeviceFail(quint8);
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
-    Q_SIGNAL void reportFileReadElapsedtime(quint32, quint32);
-    Q_SIGNAL void reportFileWriteElapsedtime(quint32, quint32);
     Q_SIGNAL void reportCaptureFinished();
     Q_SIGNAL void doWaveform(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
@@ -322,12 +262,14 @@ public:
     
     bool analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
 
-    bool analyzeHistoryWaveformData(const quint32 timeStart/*开始时刻ms*/,
-                               const quint32 timeStop/*结束时刻ms*/,
-                               const QString& filePath/*H5文件路径*/,
-                               std::function<void(
-                                   QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint16/*数值*/>>
-                                   )> callback);
+    bool analyzeHistoryWaveformData(
+                                const quint8& cameraIndex,
+                                const quint32& timeStart/*开始时刻ms*/,
+                                const quint32& timeStop/*结束时刻ms*/,
+                                const QString& filePath/*文件存储路径*/,
+                                std::function<void(
+                                    const QMap<quint64/*时刻（ns）*/,qint16/*数值*/>&
+                                    )> callback);
 
     bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
                                const quint32 timeWidth/*时间宽度ms（统计计数率用）*/,
@@ -335,7 +277,7 @@ public:
                                const quint32 timeStop/*结束时刻ms*/,
                                const QString& filePath/*H5文件路径*/,
                                std::function<void(
-                                   QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>>,
+                                   QMap<quint8/*通道号*/, QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>,
                                    QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>
                                    )> callback,
                                 const quint32 minPeak = 0/*最小峰值0*/,
@@ -346,6 +288,9 @@ public:
     void writeDeathTime(quint16);
     //触发阈值
     void writeTriggerThold(quint16);
+
+    static QByteArray reverseArray(const QByteArray& data, quint8 offset = 12);
+
     /*********************************************************
      波形基本配置
     ***********************************************************/

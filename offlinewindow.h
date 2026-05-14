@@ -94,6 +94,8 @@ namespace Ui {
 class OfflineWindow;
 }
 
+#ifndef FOM_CURVEPOINT
+#define FOM_CURVEPOINT
 // 定义结构体：每个x对应多条曲线的y值
 struct FOM_CurvePoint {
     double x;          // 公共的x坐标
@@ -105,6 +107,7 @@ struct FOM_CurvePoint {
     FOM_CurvePoint(double x_ = 0, double y1_ = 0, double y2_ = 0, double y3_ = 0)
         : x(x_), y1(y1_), y2(y2_), y3(y3_) {}
 };
+#endif
 
 ///// 自定义X轴格式化器：将数值转换为CH1-CH18的标签
 //class QValue3DAxisFormatterX: public QtDataVisualization::QValue3DAxisFormatter

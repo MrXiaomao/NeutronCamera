@@ -1664,9 +1664,6 @@
     <property name="title">
      <string>文件(&amp;F)</string>
     </property>
-    <addaction name="action_open"/>
-    <addaction name="separator"/>
-    <addaction name="action_data_compress"/>
     <addaction name="action_cps_statistics"/>
     <addaction name="separator"/>
     <addaction name="action_exit"/>
@@ -2080,7 +2077,7 @@
      <normaloff>:/resource/image/3Dsurface.png</normaloff>:/resource/image/3Dsurface.png</iconset>
    </property>
    <property name="text">
-    <string>数据分析-计数率统计</string>
+    <string>数据综合分析</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

@@ -43,6 +43,7 @@ bool QProgressIndicator::isDisplayedWhenStopped() const
 void QProgressIndicator::startAnimation()
 {
     m_angle = 0;
+    m_message.clear();
 
     if (m_timerId == -1)
         m_timerId = startTimer(m_delay);
@@ -80,9 +81,15 @@ void QProgressIndicator::setColor(const QColor & color)
     update();
 }
 
+void QProgressIndicator::setMessage(const QString & msg)
+{
+    m_message = msg;
+    update();
+}
+
 QSize QProgressIndicator::sizeHint() const
 {
-    return QSize(160, 240);
+    return QSize(400, 240);
 }
 
 int QProgressIndicator::heightForWidth(int w) const
@@ -102,7 +109,7 @@ void QProgressIndicator::paintEvent(QPaintEvent * /*event*/)
     if (!m_displayedWhenStopped && !isAnimated())
         return;
 
-    int width = qMin(this->width(), this->height());
+    int width = 160;//qMin(this->width(), this->height());
 
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
@@ -129,5 +136,5 @@ void QProgressIndicator::paintEvent(QPaintEvent * /*event*/)
     }
 
     p.setPen(Qt::black);
-    p.drawText(0, this->height() - 40, width, 40, Qt::AlignCenter, "系统忙，请耐心等待...");
+    p.drawText(0, this->height() - 40, this->width(), 40, Qt::AlignCenter, m_message);
 }
