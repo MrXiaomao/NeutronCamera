@@ -1764,27 +1764,6 @@
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_open">
-   <property name="icon">
-    <iconset resource="../3rdParty/resource/resource.qrc">
-     <normaloff>:/open.png</normaloff>:/open.png</iconset>
-   </property>
-   <property name="text">
-    <string>离线版-波形数据分析</string>
-   </property>
-   <property name="iconText">
-    <string>离线版-波形数据分析</string>
-   </property>
-   <property name="toolTip">
-    <string>离线版-波形数据分析</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+O</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
   <action name="action_exit">
    <property name="icon">
     <iconset resource="../3rdParty/resource/resource.qrc">

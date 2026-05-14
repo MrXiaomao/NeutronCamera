@@ -2472,3 +2472,24 @@ void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
     });
     producer.detach();
 }
+
+#include <QLocalSocket>
+void CpsStatisticsWindow::on_action_home_triggered()
+{
+    const QString SERVER_KEY = "neutroncamera.online.singleInstance";
+    QLocalSocket socket;
+    socket.connectToServer(SERVER_KEY);
+    if (socket.waitForConnected(1000))
+    {
+        // 发送激活指令（发送任意内容即可，这里用固定字符串）
+        socket.write("ACTIVATE");
+        socket.waitForBytesWritten();
+    }
+    else{
+        QTimer::singleShot(0, [&]{
+            QString program = QCoreApplication::applicationFilePath();
+            QProcess::startDetached(program, QStringList());
+        });
+    }
+}
+

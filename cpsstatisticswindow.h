@@ -253,6 +253,8 @@ private slots:
 
     void on_action_cps_triggered();
 
+    void on_action_home_triggered();
+
 private:
     Ui::CpsStatisticsWindow *ui;
     bool mIsDarkTheme = true;

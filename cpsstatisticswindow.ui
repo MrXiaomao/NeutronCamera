@@ -1976,6 +1976,8 @@
     </property>
     <addaction name="action_openfile"/>
     <addaction name="separator"/>
+    <addaction name="action_home"/>
+    <addaction name="separator"/>
     <addaction name="action_exit"/>
    </widget>
    <widget class="QMenu" name="menu_help">
@@ -2177,6 +2179,18 @@
    </property>
    <property name="text">
     <string>n-γ甄别</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_home">
+   <property name="icon">
+    <iconset resource="../3rdParty/resource/resource.qrc">
+     <normaloff>:/logo.png</normaloff>:/logo.png</iconset>
+   </property>
+   <property name="text">
+    <string>返回主程序</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

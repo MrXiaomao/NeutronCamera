@@ -1197,22 +1197,7 @@ void MainWindow::on_action_exit_triggered()
     mainWindow->close();
 }
 
-void MainWindow::on_action_open_triggered()
-{
-    QString program = QCoreApplication::applicationFilePath();
-    QStringList arguments;
-    arguments.append("-m");
-    arguments.append("offline");
-
-    static int num = 0;
-    arguments.append("-num");
-    arguments.append(QString::number(num));
-    num++;
-    QProcess::startDetached(program, arguments);
-
-    qInfo().noquote() << tr("打开离线数据分析程序");
-}
-
+#include <QLocalSocket>
 void MainWindow::on_action_data_compress_triggered()
 {
     QString program = QCoreApplication::applicationFilePath();
@@ -2192,16 +2177,29 @@ void MainWindow::on_pushButton_2_clicked()
 
 void MainWindow::on_action_cps_statistics_triggered()
 {
-    QString program = QCoreApplication::applicationFilePath();
-    QStringList arguments;
-    arguments.append("-m");
-    arguments.append("cps");
+    const QString SERVER_KEY = "neutroncamera.offline.singleInstance";
+    QLocalSocket socket;
+    socket.connectToServer(SERVER_KEY);
+    if (socket.waitForConnected(1000))
+    {
+        // 发送激活指令（发送任意内容即可，这里用固定字符串）
+        socket.write("ACTIVATE");
+        socket.waitForBytesWritten();
+    }
+    else{
+        QTimer::singleShot(0, [&]{
+            QString program = QCoreApplication::applicationFilePath();
+            QStringList arguments;
+            arguments.append("-m");
+            arguments.append("cps");
 
-    static int num = 0;
-    arguments.append("-num");
-    arguments.append(QString::number(num));
-    num++;
-    QProcess::startDetached(program, arguments);
+            static int num = 0;
+            arguments.append("-num");
+            arguments.append(QString::number(num));
+            num++;
+            QProcess::startDetached(program, arguments);
 
-    qInfo().noquote() << tr("打开离线数据计数率统计程序");
+            qInfo().noquote() << tr("打开离线数据综合分析程序");
+        });
+    }
 }

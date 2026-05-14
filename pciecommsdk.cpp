@@ -1225,7 +1225,7 @@ CaptureThread::CaptureThread(const quint32 cardIndex, const QString& devicePath,
     }
 #endif //ENABLE_IOCP
 
-    int capacity = 280;// 40ms, 4s共100帧，10s共250帧
+    int capacity = 4;// 40ms, 4s共100帧，10s共250帧
     mDDRWaveformDatas.reserve(capacity);
     mRAMSpectrumDatas.reserve(capacity);
     try{
