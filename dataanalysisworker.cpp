@@ -281,7 +281,7 @@ QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quin
             for (int j = i - pre_points; j <= i; ++j) {
                 sum += data[j];
             }
-            double mean_value = static_cast<double>(sum) / 21.0;
+            double mean_value = static_cast<double>(sum) / (pre_points + 1);
 
             if (mean_value < threshold) {
                 cross_indices.append(i);

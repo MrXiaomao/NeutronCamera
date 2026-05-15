@@ -417,7 +417,7 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
     // 根据文件名统计整个目录下文件的测量时长（仅已第1张卡的DDR1作为参考）
     {
         //统计测量时长，选取光纤口1数据来统计
-        int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "Adata") / 3;//正常情况下是3张卡（每张卡分A、B两面，所以这里除以3）
+        int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "1Adata");//正常情况下是3张卡（每张卡分A、B两面，所以这里除以3）
 
         // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
         const int time_per = 40;
@@ -479,6 +479,9 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
     for (auto item : fileinfoList){
         ui->comboBox_h5Files->addItem(item.baseName());
     }
+
+    if (ui->comboBox_h5Files->count() > 0)
+        emit ui->comboBox_h5Files->currentIndexChanged(0);
 
     if (fileinfoList.size() == 0)
         emit doWriteLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
@@ -1280,7 +1283,7 @@ void CpsStatisticsWindow::initCpsPage()
 
     // 右键菜单项
     customPlotHelper->onContextMenu = [=](const QCPAxisRect* axisRect, bool& allow){
-        if (axisRect == timeCountsAxisRect || axisRect == spectrumAxisRect)
+        if (axisRect == timeCountsAxisRect || axisRect == spectrumAxisRect || axisRect == channelCountsAxisRect)
             allow = true;
         else
             allow = false;
@@ -2429,8 +2432,10 @@ void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
     //提取有效波形参数
     int timeWidth = ui->spinBox_time1->value(); // 默认值 1ms
     int timeStart = ui->spinBox_startT_3->value(); // 开始时刻
-    int timeStop = ui->spinBox_endT_3->value(); // 截止时刻
+    int timeStop = ui->spinBox_endT_3->value();
     int channels = ui->comboBox_channels->currentText().toInt();
+    if (timeStop == ui->line_waveform_endT_3->text().toInt())
+        timeStop--; // 截止时刻(区间，所以这里-1)
 
     std::thread producer([=]{
         // 查找目录下的h5文件

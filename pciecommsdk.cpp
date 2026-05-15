@@ -634,7 +634,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
 
     //根据开始时间和结束时间，过滤掉不在时间范围内的文件
     int startFileId = timeStart / PACKET_TIMELENGTH + 1;
-    int endFileId = (timeStop + PACKET_TIMELENGTH - 1) / PACKET_TIMELENGTH;
+    int endFileId = startFileId + (timeStop - timeStart - 1) / PACKET_TIMELENGTH;
     //根据通道号判断是板卡的A面还是B面
     QString sideFile = "B";
     if ((cameraIndex % 6) >= 1 && (cameraIndex % 6) <= 3)
@@ -672,10 +672,10 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
             DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, board_index, cameraNo + 1);
 
             //提取通道号的数据cameraNo
-            QVector<qint16> waveform = ch[cameraNo].mid(timeFrom, timeTo);
+            QVector<qint16> waveform = ch[cameraNo].mid(timeFrom, timeTo-timeFrom);
 
             for (int i=0;i<waveform.size();++i)
-                waveformPair.insert(i*2, waveform[i]);
+                waveformPair.insert(timeStart * 1000 * 1000 / 2 + i*2, waveform[i]);
         }
     }
 
@@ -776,11 +776,11 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                             continue;
 
                         if (time > timeStop)
-                            break;
+                            continue;
 
                         quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
                         if (peak >= minPeak && peak <= maxPeak)
-                            cpsMapPair[cameraIndex][(timeStart + time) / timeWidth * timeWidth] += 1;
+                            cpsMapPair[cameraIndex][timeStart + (time - timeStart) / timeWidth * timeWidth] += 1;
                     }
                 }
 
@@ -802,7 +802,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                             continue;
 
                         if (time > timeStop)
-                            break;
+                            continue;
 
                         quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
                         quint16 channel = peak / channelWidth;// 道址
