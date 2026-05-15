@@ -128,6 +128,35 @@ quint32 PCIeCommSdk::numberOfDevices()
     return mDevices.count();
 }
 
+/*输出设备信息*/
+void PCIeCommSdk::printDevicesInfomation()
+{
+    if (0 == numberOfDevices())
+        qCritical().noquote() << QStringLiteral("未发现数据采集卡，请检查卡是否松动或是已被禁用！");
+    else{
+        QStringList lst;
+        for (int i=1; i<=3; ++i)
+        {
+            if (boardExists(i))
+                lst << QStringLiteral("卡%1").arg(i);
+        }
+
+        qInfo().noquote() << QStringLiteral("发现数据采集卡：") << lst.join(',');
+    }
+}
+
+/*判断板卡是否存在*/
+bool PCIeCommSdk::boardExists(const quint8& index/*板卡序号1-3*/)
+{
+    QStringList lst = QStringList() << QStringLiteral("B189E7&0&0020") << QStringLiteral("10D89B97&0&0020") << QStringLiteral("18EC5E6B&0&0020");
+    foreach(QString name, mDevices){
+        if (name.toUpper().contains(lst[index-1]))
+            return true;
+    }
+
+    return false;
+}
+
 #ifdef _WIN32
 #include <processtopologyapi.h> //SetThreadGroupAffinity
 #endif
@@ -165,13 +194,7 @@ void PCIeCommSdk::stopCapture(quint32 index)
 
 void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeSeconds,  QString shotNum/*炮号*/)
 {
-    //initCaptureThreads();
-
-#if ENABLE_DDR2
     for (int index = 1; index <= numberOfDevices() * 2; ++index)
-#else
-    for (int index = 1; index <= numberOfDevices(); ++index)
-#endif
     {
         startCapture(index, fileSavePath, captureTimeSeconds, shotNum);
     }
@@ -179,11 +202,7 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeSecon
 
 void PCIeCommSdk::stopAllCapture()
 {
-#if ENABLE_DDR2
     for (int index = 1; index <= numberOfDevices() * 2; ++index)
-#else
-    for (int index = 1; index <= numberOfDevices(); ++index)
-#endif
     {
         stopCapture(index);
     }
@@ -228,8 +247,6 @@ void PCIeCommSdk::reset()
 
 bool PCIeCommSdk::test()
 {
-    // QByteArray buffer;
-    // replyCaptureWaveformData(1, 1, buffer);
     bool allOk = true;
     for (int index = 1; index <= mDevices.size()*2; ++index){
         if (mMapCaptureThread[index]->dataExistError())
@@ -411,9 +428,7 @@ void PCIeCommSdk::replyCaptureSpectrumData(quint8 cardIndex/*PCIe卡序号*/, bo
                             data.append(qMakePair(i/2, amplitude));
                         }
 
-                        qDebug() << "reportGammaSpectrum" << timeIndex << cameraIndex;
-
-                        emit reportGammaSpectrum(timeIndex, cameraIndex, data);
+                       emit reportGammaSpectrum(timeIndex, cameraIndex, data);
                     }
 
                     {
@@ -1083,32 +1098,48 @@ HANDLE PCIeCommSdk::getHandle(QString path, quint32 dwDesiredAccess, quint32 dwF
     return fd;
 }
 
+/*根据卡名称判断卡序号*/
+quint8 PCIeCommSdk::boardNameToBoardIndex(const QString& name)
+{
+    // if (i==0)
+    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&B189E7&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
+    // else if (i==1)
+    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&10D89B97&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
+    // else if (i==2)
+    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
+
+    if (name.toUpper().contains(QStringLiteral("B189E7&0&0020")))
+        return 1;
+    else if (name.toUpper().contains(QStringLiteral("10D89B97&0&0020")))
+        return 2;
+    else if (name.toUpper().contains(QStringLiteral("18EC5E6B&0&0020")))
+        return 3;
+    else
+        return 0;
+}
+
+
 void PCIeCommSdk::initCaptureThreads()
 {
-#if ENABLE_DDR2
     for (int index = 1; index <= numberOfDevices() * 2; ++index)
-#else
-    for (int index = 1; index <= numberOfDevices(); ++index)
-#endif
     {
         bool isDDR1 = index <= numberOfDevices();
         quint8 cardIndex = (index - 1) % numberOfDevices() + 1;
+        quint8 boardIndex = boardNameToBoardIndex(mDevices.at((index - 1) % numberOfDevices()));//(index - 1) % numberOfDevices() + 1;
+        if (boardIndex == 0)
+            continue;
 
-        CaptureThread *captureThread = new CaptureThread(cardIndex, mDevices.at(cardIndex-1), isDDR1);
+        CaptureThread *captureThread = new CaptureThread(boardIndex, mDevices.at(cardIndex-1), isDDR1);
         captureThread->setPriority(QThread::Priority::HighPriority);
         connect(captureThread, &CaptureThread::reportThreadExit, this, [=](quint32 index){
             mMapCaptureThread.remove(index);
             mThreadRunning[index] = false;
         });
         connect(captureThread, &CaptureThread::reportCaptureFinished, this, [=](quint32 cardIndex, bool isDDR1){
-            mThreadRunning[isDDR1 ? cardIndex : (numberOfDevices() + cardIndex)] = false;
+            mThreadRunning[index] = false;
 
             bool allCaptureFinished = true;
-#if ENABLE_DDR2
             for (int index = 1; index <= numberOfDevices() * 2; ++index)
-#else
-            for (int index = 1; index <= numberOfDevices(); ++index)
-#endif
             {
                 if (mThreadRunning[index])
                 {
@@ -1225,7 +1256,7 @@ CaptureThread::CaptureThread(const quint32 cardIndex, const QString& devicePath,
     }
 #endif //ENABLE_IOCP
 
-    int capacity = 4;// 40ms, 4s共100帧，10s共250帧
+    int capacity = 260;// 40ms, 4s共100帧，10s共250帧
     mDDRWaveformDatas.reserve(capacity);
     mRAMSpectrumDatas.reserve(capacity);
     try{
@@ -1364,25 +1395,25 @@ bool CaptureThread::checkDataError()
             }
 
             //存储异常数据
-            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "波形数据正在存储到硬盘中，请等待...";
-            if (!okPkg){
-                for (int i = mErrorStart-5; i < mErrorStart+5; ++i)
-                {
-                    if (i>=0 && i<mCapturedRef)
-                    {
-                        QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
-                        QFile file(filename);
-                        if (!file.open(QIODevice::WriteOnly)) {
-                            qDebug() << "Cannot open file for writing";
-                        }
-                        else{
-                            file.write(mDDRWaveformDatas.at(i));
-                            file.close();
-                        }
-                    }
-                }
-            }
-            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "波形数据已经全部存储到硬盘中！";
+            // qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "波形数据正在存储到硬盘中，请等待...";
+            // if (!okPkg){
+            //     for (int i = mErrorStart-5; i < mErrorStart+5; ++i)
+            //     {
+            //         if (i>=0 && i<mCapturedRef)
+            //         {
+            //             QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
+            //             QFile file(filename);
+            //             if (!file.open(QIODevice::WriteOnly)) {
+            //                 qDebug() << "Cannot open file for writing";
+            //             }
+            //             else{
+            //                 file.write(mDDRWaveformDatas.at(i));
+            //                 file.close();
+            //             }
+            //         }
+            //     }
+            // }
+            // qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "波形数据已经全部存储到硬盘中！";
         }
     }
 
@@ -1415,25 +1446,25 @@ bool CaptureThread::checkDataError()
         }
 
         //存储异常数据
-        if (!okPkg){
-            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "能谱数据正在存储到硬盘中，请等待...";
-            for (int i = mErrorStart-5; i <= mErrorStart+5; ++i)
-            {
-                if (i>=0 && i<mCapturedRef)
-                {
-                    QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
-                    QFile file(filename);
-                    if (!file.open(QIODevice::WriteOnly)) {
-                        qDebug() << "Cannot open file for writing";
-                    }
-                    else{
-                        file.write(mRAMSpectrumDatas.at(i));
-                        file.close();
-                    }
-                }
-            }
-            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "能谱数据已经全部存储到硬盘中！";
-        }
+        // if (!okPkg){
+        //     qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "能谱数据正在存储到硬盘中，请等待...";
+        //     for (int i = mErrorStart-5; i <= mErrorStart+5; ++i)
+        //     {
+        //         if (i>=0 && i<mCapturedRef)
+        //         {
+        //             QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
+        //             QFile file(filename);
+        //             if (!file.open(QIODevice::WriteOnly)) {
+        //                 qDebug() << "Cannot open file for writing";
+        //             }
+        //             else{
+        //                 file.write(mRAMSpectrumDatas.at(i));
+        //                 file.close();
+        //             }
+        //         }
+        //     }
+        //     qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "能谱数据已经全部存储到硬盘中！";
+        // }
     }
 
     mDataError = mDataError ? mDataError : !okPkg;
@@ -1774,45 +1805,45 @@ void CaptureThread::run()
             //emit reportCaptureFinished(mCardIndex, mIsDDR1);
 
             threadPool->waitForDone();
-            // qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据正在存储到硬盘中，请等待...";
-            // for (int i = 0; i < mCapturedRef; ++i)
-            // {
-            //     //emit reportCaptureData(mIsDDR1, i+1, mDDRWaveformDatas.at(i), mRAMSpectrumDatas.at(i)); //发给数据缓存处理线程
-            //     quint16 packref = i + 1;
-            //     threadPool->start([=](){
-            //         SetThreadAffinityMask(QThread::currentThreadId(), (packref % 16) << 1ULL);
+            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据正在存储到硬盘中，请等待...";
+            for (int i = 0; i < mCapturedRef; ++i)
+            {
+                //emit reportCaptureData(mIsDDR1, i+1, mDDRWaveformDatas.at(i), mRAMSpectrumDatas.at(i)); //发给数据缓存处理线程
+                quint16 packref = i + 1;
+                threadPool->start([=](){
+                    SetThreadAffinityMask(QThread::currentThreadId(), (packref % 16) << 1ULL);
 
-            //         //写波形数据
-            //         {
-            //             QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(packref/*++mPackref*/);
-            //             QFile file(filename);
-            //             if (!file.open(QIODevice::WriteOnly)) {
-            //                 qDebug() << "Cannot open file for writing";
-            //             }
-            //             else{
-            //                 file.write(mDDRWaveformDatas.at(i));
-            //                 file.close();
-            //             }
-            //         }
+                    //写波形数据
+                    {
+                        QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(packref/*++mPackref*/);
+                        QFile file(filename);
+                        if (!file.open(QIODevice::WriteOnly)) {
+                            qDebug() << "Cannot open file for writing";
+                        }
+                        else{
+                            file.write(mDDRWaveformDatas.at(i));
+                            file.close();
+                        }
+                    }
 
-            //         //写能谱数据
-            //         {
-            //             QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg (packref/*mPackref*/);
-            //             QFile file(filename);
-            //             if (!file.open(QIODevice::WriteOnly)) {
-            //                 qDebug() << "Cannot open file for writing";
-            //             }
-            //             else{
-            //                 file.write(mRAMSpectrumDatas.at(i));
-            //                 file.close();
-            //             }
+                    //写能谱数据
+                    {
+                        QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg (packref/*mPackref*/);
+                        QFile file(filename);
+                        if (!file.open(QIODevice::WriteOnly)) {
+                            qDebug() << "Cannot open file for writing";
+                        }
+                        else{
+                            file.write(mRAMSpectrumDatas.at(i));
+                            file.close();
+                        }
 
-            //             emit reportCaptureSpectrumData(mCardIndex, mIsDDR1, packref, mRAMSpectrumDatas.at(i));
-            //         }
-            //     });
-            // }
-            // qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据已经全部存储到硬盘中！";
-            //  threadPool->waitForDone();
+                        emit reportCaptureSpectrumData(mCardIndex, mIsDDR1, packref, mRAMSpectrumDatas.at(i));
+                    }
+                });
+            }
+            threadPool->waitForDone();
+            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据已经全部存储到硬盘中！";
 
             qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "采集结束，共采集：" << mCapturedRef;
 

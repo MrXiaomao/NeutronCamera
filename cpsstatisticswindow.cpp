@@ -2,7 +2,6 @@
 #include "ui_cpsstatisticswindow.h"
 #include "globalsettings.h"
 #include "datacompresswindow.h"
-#include "qprogressindicator.h"
 #include "waitingspinnerwidget.h"
 #include "qcustomplothelper.h"
 #include <QElapsedTimer>
@@ -37,8 +36,7 @@ CpsStatisticsWindow::CpsStatisticsWindow(bool isDarkTheme, QWidget *parent)
         onCpsStatistics();
     });
 
-    //QStringList args = QCoreApplication::arguments();
-    //this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
+    this->setWindowTitle(QApplication::applicationName() + " - " + APP_VERSION);
     this->applyColorTheme();
 
     connect(this, SIGNAL(doWriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
@@ -57,6 +55,8 @@ CpsStatisticsWindow::CpsStatisticsWindow(bool isDarkTheme, QWidget *parent)
             mainWindow->fixMenuBarWidth();
         }
     });
+
+    this->setAcceptDrops(true);// 开启拖放功能
 }
 
 CpsStatisticsWindow::~CpsStatisticsWindow()
@@ -67,7 +67,6 @@ CpsStatisticsWindow::~CpsStatisticsWindow()
 
 void CpsStatisticsWindow::initUi()
 {
-    //mProgressIndicator = new QProgressIndicator(this);
     mWaitingSpinnerWidget = new WaitingSpinnerWidget(this, true, true);
     // 自定义外观
     mWaitingSpinnerWidget->setRoundness(70.0);              // 设置线条圆润度，范围 0 至 100
@@ -80,9 +79,10 @@ void CpsStatisticsWindow::initUi()
     mWaitingSpinnerWidget->setRevolutionsPerSecond(1.5);    // 旋转速度：每秒转 1 圈
     mWaitingSpinnerWidget->setColor(QColor(41, 4, 41));     // 设置线条颜色
 
-    ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
-    ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    // ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
+    // ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     ui->tableWidget_filelist->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    ui->tableWidget_file->horizontalHeader()->setStretchLastSection(true);
 
     //////////////////////////////////////////////////////////////////////
     //布局
@@ -228,6 +228,42 @@ bool CpsStatisticsWindow::eventFilter(QObject *watched, QEvent *event){
     return QWidget::eventFilter(watched, event);
 }
 
+void CpsStatisticsWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    // 仅允许接收文件/文件夹URL格式的拖拽数据
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void CpsStatisticsWindow::dropEvent(QDropEvent *event)
+{
+    const QList<QUrl> urls = event->mimeData()->urls();
+    for(const QUrl& url : urls) {
+        QString localPath = url.toLocalFile();
+        QFileInfo fileInfo(localPath);
+
+        QString resultPath;
+        if (fileInfo.isFile()) {
+            // 如果是文件，输出文件所在的目录
+            resultPath = fileInfo.absolutePath();
+        } else if (fileInfo.isDir()) {
+            // 如果是目录，直接输出目录路径
+            resultPath = fileInfo.absoluteFilePath();
+        }
+
+        // 加载文件
+        loadRelatedFiles(resultPath);
+
+        //多个目录只取其中一个
+        break;
+    }
+
+    event->acceptProposedAction();
+}
+
 void CpsStatisticsWindow::onWriteLog(const QString &msg, QtMsgType msgType/* = QtDebugMsg*/)
 {
 #if 0
@@ -273,6 +309,28 @@ void CpsStatisticsWindow::onWriteLog(const QString &msg, QtMsgType msgType/* = Q
     }
 }
 
+void CpsStatisticsWindow::on_action_about_triggered()
+{
+    QString filename = QFileInfo(QCoreApplication::applicationFilePath()).baseName();
+    QMessageBox::about(this, tr("关于"),
+                       QString("<p>") +
+                           tr("版本") +
+                           QString("</p><span style='color:blue;'>%1</span><p>").arg(filename).arg(APP_VERSION) +
+                           tr("提交") +
+                           QString("</p><span style='color:blue;'>%1: %2</span><p>").arg(GIT_BRANCH).arg(GIT_HASH) +
+                           tr("日期") +
+                           QString("</p><span style='color:blue;'>%1</span><p>").arg(GIT_DATE) +
+                           tr("开发者") +
+                           QString("</p><span style='color:blue;'>MaoXiaoqing</span><p>") +
+                           "</p><p>四川大学物理学院 版权所有 (C) 2025</p>"
+                       );
+}
+
+void CpsStatisticsWindow::on_action_aboutQt_triggered()
+{
+    QMessageBox::aboutQt(this);
+}
+
 void CpsStatisticsWindow::on_action_openfile_triggered()
 {
     GlobalSettings settings;
@@ -283,6 +341,113 @@ void CpsStatisticsWindow::on_action_openfile_triggered()
     if (dirPath.isEmpty())
         return;
 
+    //加载目录下所有文件，罗列在表格中，统计给出文件大小
+    loadRelatedFiles(dirPath);
+}
+
+void CpsStatisticsWindow::on_action_exit_triggered()
+{
+    mainWindow->close();
+}
+
+
+void CpsStatisticsWindow::on_action_lightTheme_triggered()
+{
+    if(!mIsDarkTheme) return;
+    mIsDarkTheme = false;
+    qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
+    if(mThemeColorEnable) QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
+    GlobalSettings settings;
+    settings.setValue("Global/Offline/Startup/darkTheme","false");
+    applyColorTheme();
+}
+
+
+void CpsStatisticsWindow::on_action_darkTheme_triggered()
+{
+    if(mIsDarkTheme) return;
+    mIsDarkTheme = true;
+    qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
+    if(mThemeColorEnable) QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
+    GlobalSettings settings;
+    settings.setValue("Global/Offline/Startup/darkTheme","true");
+    applyColorTheme();
+}
+
+void CpsStatisticsWindow::on_action_colorTheme_triggered()
+{
+    GlobalSettings settings;
+    QColor color = QColorDialog::getColor(mThemeColor, this, tr("选择颜色"));
+    if (color.isValid()) {
+        mThemeColor = color;
+        mThemeColorEnable = true;
+        qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
+        QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
+        settings.setValue("Global/Offline/Startup/themeColor",mThemeColor);
+    } else {
+        mThemeColorEnable = false;
+        qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
+    }
+    settings.setValue("Global/Offline/Startup/themeColorEnable",mThemeColorEnable);
+    applyColorTheme();
+}
+
+void CpsStatisticsWindow::applyColorTheme()
+{
+    QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
+    for (auto customPlot : customPlots){
+        QPalette palette = customPlot->palette();
+        if (mIsDarkTheme)
+        {
+            if (this->mThemeColorEnable)
+            {
+                CustomColorDarkStyle darkStyle(mThemeColor);
+                darkStyle.polish(palette);
+            }
+            else
+            {
+                DarkStyle darkStyle;
+                darkStyle.polish(palette);
+            }
+        }
+        else
+        {
+            if (this->mThemeColorEnable)
+            {
+                CustomColorLightStyle lightStyle(mThemeColor);
+                lightStyle.polish(palette);
+            }
+            else
+            {
+                LightStyle lightStyle;
+                lightStyle.polish(palette);
+            }
+        }
+
+        // 窗体背景色
+        customPlot->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
+        // 四边安装轴并显示
+        customPlot->axisRect()->setupFullAxesBox();
+        customPlot->axisRect()->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
+
+        customPlot->replot();
+    }
+}
+
+
+// 计算文件信息列表的总大小
+qint64 CpsStatisticsWindow::calculateTotalSize(const QFileInfoList& fileinfoList)
+{
+    qint64 totalSize = 0;
+    for (const QFileInfo& fi : fileinfoList) {
+        totalSize += fi.size();
+    }
+    return totalSize;
+}
+
+void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
+{
+    GlobalSettings settings;
     settings.setValue("Global/Offline/LastFileDir", dirPath);
     ui->textBrowser_filepath->setText(dirPath);
     if (!QFileInfo::exists(dirPath+"/device_config.ini")){
@@ -291,10 +456,9 @@ void CpsStatisticsWindow::on_action_openfile_triggered()
     }
     else {
         GlobalSettings settings(dirPath+"/device_config.ini");
-        mShotNum = settings.value("Global/ShotNum", "00000").toString();
         mCurrentDetectorType = (DetectorType)settings.value("Global/DetectType", 0).toUInt();
 
-        emit doWriteLog("实验炮号：" + mShotNum);
+        emit doWriteLog("实验炮号：" + settings.value("Global/ShotNum", "00000").toString());
         if (mCurrentDetectorType == dtLBD){
             ui->action_ngamma->setVisible(false);
             emit doWriteLog("探测器类型：LBD探测器");
@@ -313,22 +477,6 @@ void CpsStatisticsWindow::on_action_openfile_triggered()
         }
     }
 
-    //加载目录下所有文件，罗列在表格中，统计给出文件大小
-    loadRelatedFiles(dirPath);
-}
-
-// 计算文件信息列表的总大小
-qint64 CpsStatisticsWindow::calculateTotalSize(const QFileInfoList& fileinfoList)
-{
-    qint64 totalSize = 0;
-    for (const QFileInfo& fi : fileinfoList) {
-        totalSize += fi.size();
-    }
-    return totalSize;
-}
-
-void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
-{
     mFileDir = dirPath;
     ui->tableWidget_file->setRowCount(0);
 
@@ -369,10 +517,10 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
 
         // 列设置：只需要设一次
         // 例：列0 文件名，列1 大小(bytes)，列2 可读大小，列3 最后修改时间
-        if (ui->tableWidget_filelist->columnCount() != 4) {
-            ui->tableWidget_filelist->setColumnCount(4);
+        if (ui->tableWidget_filelist->columnCount() != 6) {
+            ui->tableWidget_filelist->setColumnCount(6);
             ui->tableWidget_filelist->setHorizontalHeaderLabels(
-                {"文件名", "大小(bytes)", "大小(MB)", "修改时间"}
+                {"文件名", "大小(bytes)", "大小(MB)", "创建时间", "修改时间", "访问时间"}
                 );
         }
 
@@ -381,33 +529,45 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
             const QFileInfo& fi = fileinfoList.at(i);
 
             auto *itemName = new QTableWidgetItem(fi.fileName());
-            itemName->setFlags(itemName->flags() ^ Qt::ItemIsEditable);
 
             auto *itemBytes = new QTableWidgetItem(locale.toString(fi.size()));
             itemBytes->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            itemBytes->setFlags(itemBytes->flags() ^ Qt::ItemIsEditable);
 
             auto *itemHuman = new QTableWidgetItem(humanReadableSize(fi.size()));
-            itemHuman->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);            
-            itemHuman->setFlags(itemHuman->flags() ^ Qt::ItemIsEditable);
+            itemHuman->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
-            auto *itemTime = new QTableWidgetItem(fi.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
-            itemHuman->setTextAlignment(Qt::AlignCenter);
-            itemTime->setFlags(itemTime->flags() ^ Qt::ItemIsEditable);
+            auto *itemBirthTime = new QTableWidgetItem(fi.birthTime().toString("yyyy-MM-dd HH:mm:ss"));
+            itemBirthTime->setTextAlignment(Qt::AlignCenter);
+
+            auto *itemModifiedTime = new QTableWidgetItem(fi.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
+            itemModifiedTime->setTextAlignment(Qt::AlignCenter);
+
+            auto *itemReadTime = new QTableWidgetItem(fi.lastRead().toString("yyyy-MM-dd HH:mm:ss"));
+            itemReadTime->setTextAlignment(Qt::AlignCenter);
 
             ui->tableWidget_filelist->setItem(i, 0, itemName);
             ui->tableWidget_filelist->setItem(i, 1, itemBytes);
             ui->tableWidget_filelist->setItem(i, 2, itemHuman);
-            ui->tableWidget_filelist->setItem(i, 3, itemTime);
+            ui->tableWidget_filelist->setItem(i, 3, itemBirthTime);
+            ui->tableWidget_filelist->setItem(i, 4, itemModifiedTime);
+            ui->tableWidget_filelist->setItem(i, 5, itemReadTime);
         }
 
         // 表头美化（可选）
-        ui->tableWidget_filelist->horizontalHeader()->setMinimumWidth(200);
-        ui->tableWidget_filelist->horizontalHeader()->setStretchLastSection(true);
-        ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+        // 整行选择模式
         ui->tableWidget_filelist->setSelectionBehavior(QAbstractItemView::SelectRows);
+        // 表格内容禁止编辑
         ui->tableWidget_filelist->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        // 奇偶行颜色交替显示
         ui->tableWidget_filelist->setAlternatingRowColors(true);
+        // 先让所有列适配内容宽度
+        //ui->tableWidget_filelist->resizeColumnsToContents();
+
+        ui->tableWidget_filelist->horizontalHeader()->setMinimumWidth(300);
+        // 每一列都自动拉伸
+        ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        // 开启最后一列自动填充剩余空间
+        //ui->tableWidget_filelist->horizontalHeader()->setStretchLastSection(true);
 
         emit doWriteLog(QString("bin文件数量: %1, 总大小: %2").arg(fileCount).arg(humanReadableSize(totalSize)), QtDebugMsg);
         ui->lineEdit_binCount->setText(QString::number(fileCount));
@@ -417,7 +577,11 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
     // 根据文件名统计整个目录下文件的测量时长（仅已第1张卡的DDR1作为参考）
     {
         //统计测量时长，选取光纤口1数据来统计
-        int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "1Adata");//正常情况下是3张卡（每张卡分A、B两面，所以这里除以3）
+        int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "1Adata");//正常情况下是3张卡（依次判断3张卡数据的存在）
+        if (count1data==0)
+            count1data = DataCompressWindow::countFilesByPrefix(mfileList, "2Adata");
+        else if (count1data==0)
+            count1data = DataCompressWindow::countFilesByPrefix(mfileList, "3Adata");
 
         // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
         const int time_per = 40;
@@ -487,96 +651,6 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
         emit doWriteLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
     else
         emit doWriteLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(fileinfoList.size()));
-}
-
-
-void CpsStatisticsWindow::on_action_exit_triggered()
-{
-    mainWindow->close();
-}
-
-
-void CpsStatisticsWindow::on_action_lightTheme_triggered()
-{
-    if(!mIsDarkTheme) return;
-    mIsDarkTheme = false;
-    qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
-    if(mThemeColorEnable) QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
-    GlobalSettings settings;
-    settings.setValue("Global/Offline/Startup/darkTheme","false");
-    applyColorTheme();
-}
-
-
-void CpsStatisticsWindow::on_action_darkTheme_triggered()
-{
-    if(mIsDarkTheme) return;
-    mIsDarkTheme = true;
-    qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
-    if(mThemeColorEnable) QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
-    GlobalSettings settings;
-    settings.setValue("Global/Offline/Startup/darkTheme","true");
-    applyColorTheme();
-}
-
-void CpsStatisticsWindow::applyColorTheme()
-{
-    QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
-    for (auto customPlot : customPlots){
-        QPalette palette = customPlot->palette();
-        if (mIsDarkTheme)
-        {
-            if (this->mThemeColorEnable)
-            {
-                CustomColorDarkStyle darkStyle(mThemeColor);
-                darkStyle.polish(palette);
-            }
-            else
-            {
-                DarkStyle darkStyle;
-                darkStyle.polish(palette);
-            }
-        }
-        else
-        {
-            if (this->mThemeColorEnable)
-            {
-                CustomColorLightStyle lightStyle(mThemeColor);
-                lightStyle.polish(palette);
-            }
-            else
-            {
-                LightStyle lightStyle;
-                lightStyle.polish(palette);
-            }
-        }
-
-        // 窗体背景色
-        customPlot->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
-        // 四边安装轴并显示
-        customPlot->axisRect()->setupFullAxesBox();
-        customPlot->axisRect()->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
-
-        customPlot->replot();
-    }
-}
-
-void CpsStatisticsWindow::on_action_colorTheme_triggered()
-{
-    GlobalSettings settings;
-    QColor color = QColorDialog::getColor(mThemeColor, this, tr("选择颜色"));
-    if (color.isValid()) {
-        mThemeColor = color;
-        mThemeColorEnable = true;
-        qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
-        QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
-        settings.setValue("Global/Offline/Startup/themeColor",mThemeColor);
-    } else {
-        mThemeColorEnable = false;
-        qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
-    }
-    settings.setValue("Global/Offline/Startup/themeColorEnable",mThemeColorEnable);
-    applyColorTheme();
 }
 
 QPixmap CpsStatisticsWindow::maskPixmap(QPixmap pixmap, QSize sz, QColor clrMask)
@@ -1286,7 +1360,7 @@ void CpsStatisticsWindow::initCpsPage()
         if (axisRect == timeCountsAxisRect || axisRect == spectrumAxisRect || axisRect == channelCountsAxisRect)
             allow = true;
         else
-            allow = false;
+            allow = false;//除了热度图，其它坐标轴都可以移动
     };
 
     connect(customPlotHelper, &QCustomPlotHelper::selectRangeChanged, this, [=](const QCPAxisRect *axisRect, const QCPRange& range){
@@ -1720,36 +1794,6 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
     mCpsPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-QString CpsStatisticsWindow::joinFilename(const int& cameraIndex)
-{
-    QString filename;
-
-    switch (cameraIndex){
-    case 1: filename = "1A"; break;
-    case 2: filename = "1A"; break;
-    case 3: filename = "1A"; break;
-    case 4: filename = "1B"; break;
-    case 5: filename = "1B"; break;
-    case 6: filename = "1B"; break;
-
-    case 7: filename = "2A"; break;
-    case 8: filename = "2A"; break;
-    case 9: filename = "2A"; break;
-    case 10: filename = "2B"; break;
-    case 11: filename = "2B"; break;
-    case 12: filename = "2B"; break;
-
-    case 13: filename = "3A"; break;
-    case 14: filename = "3A"; break;
-    case 15: filename = "3A"; break;
-    case 16: filename = "3B"; break;
-    case 17: filename = "3B"; break;
-    case 18: filename = "3B"; break;
-    }
-
-    return filename;
-}
-
 void CpsStatisticsWindow::on_comboBox_h5Files_currentTextChanged(const QString &arg1)
 {
     QString filePath = mFileDir + "/" + arg1 + ".h5";
@@ -1771,6 +1815,7 @@ void CpsStatisticsWindow::on_action_waveform_triggered()
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_waveform);
     ui->optionStackedWidget->setCurrentWidget(ui->page_waveform);
     ui->page_waveform->layout()->addWidget(ui->logWidget);
+    ui->action_save->setVisible(false);
 }
 
 
@@ -1779,6 +1824,7 @@ void CpsStatisticsWindow::on_action_process_triggered()
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_process);
     ui->optionStackedWidget->setCurrentWidget(ui->page_process);
     ui->page_process->layout()->addWidget(ui->logWidget);
+    ui->action_save->setVisible(false);
 }
 
 void CpsStatisticsWindow::on_action_ngamma_triggered()
@@ -1786,6 +1832,7 @@ void CpsStatisticsWindow::on_action_ngamma_triggered()
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_ngamma);
     ui->optionStackedWidget->setCurrentWidget(ui->page_ngamma);
     ui->page_ngamma->layout()->addWidget(ui->logWidget);
+    ui->action_save->setVisible(false);
 }
 
 void CpsStatisticsWindow::on_action_cps_triggered()
@@ -1793,6 +1840,7 @@ void CpsStatisticsWindow::on_action_cps_triggered()
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_cps);
     ui->optionStackedWidget->setCurrentWidget(ui->page_cps);
     ui->page_cps->layout()->addWidget(ui->logWidget);
+    ui->action_save->setVisible(true);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1816,12 +1864,10 @@ void CpsStatisticsWindow::onWaveform()
     quint8 horCameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
     quint8 verCameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
 
-    //mProgressIndicator->startAnimation();
     mWaitingSpinnerWidget->start();
     std::thread producer([=]{
 
-        //mProgressIndicator->setMessage(QStringLiteral("正在处理水平相机数据，请等待..."));
-        mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
+       mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
 
         // 水平相机
         mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, timeStart, timeStop, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
@@ -1833,7 +1879,6 @@ void CpsStatisticsWindow::onWaveform()
 
         });
 
-        //mProgressIndicator->setMessage(QStringLiteral("正在处理垂直相机数据，请等待..."));
         mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
 
         // 垂直相机
@@ -1843,7 +1888,6 @@ void CpsStatisticsWindow::onWaveform()
             QMetaObject::invokeMethod(this, [=](){
                 mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
                 mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
-                //mProgressIndicator->stopAnimation();
                 mWaitingSpinnerWidget->stop();
             }, Qt::QueuedConnection);
 
@@ -1914,8 +1958,6 @@ void CpsStatisticsWindow::onDataProcess()
         emit doWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
     }
 
-    // mProgressIndicator->startAnimation();
-    // mProgressIndicator->setMessage(QStringLiteral("数据压缩处理中，请耐心等待..."));
     mWaitingSpinnerWidget->start();
     mWaitingSpinnerWidget->setText(QStringLiteral("数据压缩处理中，请耐心等待..."));
 
@@ -2055,7 +2097,6 @@ void CpsStatisticsWindow::onAnalysisFinished(bool success, const QString& messag
         mAnalysisThread = nullptr;
     }
 
-    //mProgressIndicator->stopAnimation();
     mWaitingSpinnerWidget->stop();
 
     // 重新加载h5文件列表
@@ -2125,7 +2166,6 @@ void CpsStatisticsWindow::onNGammaFilter()
     //获取水平相机序号
     QList<quint8> cameras = QList<quint8>() << ui->comboBox_horCamera_4->currentIndex() + 1 << ui->comboBox_verCamera_4->currentIndex() + 12;
 
-    //mProgressIndicator->startAnimation();
     mWaitingSpinnerWidget->start();
 
     emit doWriteLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
@@ -2134,12 +2174,10 @@ void CpsStatisticsWindow::onNGammaFilter()
         //根据相机序号计算出是第几块光纤卡
         int channelIndex = (cameraIndex - 1) % 4 + 1;// 1、2、3、4
         if (cameraIndex<=11){
-            //mProgressIndicator->setMessage(QStringLiteral("正在处理水平相机数据，请等待..."));
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
             emit doWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         }
         else{
-            //mProgressIndicator->setMessage(QStringLiteral("正在处理垂直相机数据，请等待..."));
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
             emit doWriteLog(QString("垂直相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         }
@@ -2175,10 +2213,40 @@ void CpsStatisticsWindow::onNGammaFilter()
         // 生产者：单线程顺序读文件（把磁盘拉满）
         std::thread producer([&]() {
             for (int i = fileIndex; i <= endFileIndex; ++i) {
+                auto indexToPrefix = [=](const int& cameraIndex)
+                {
+                    QString filename;
+
+                    switch (cameraIndex){
+                    case 1: filename = "1A"; break;
+                    case 2: filename = "1A"; break;
+                    case 3: filename = "1A"; break;
+                    case 4: filename = "1B"; break;
+                    case 5: filename = "1B"; break;
+                    case 6: filename = "1B"; break;
+
+                    case 7: filename = "2A"; break;
+                    case 8: filename = "2A"; break;
+                    case 9: filename = "2A"; break;
+                    case 10: filename = "2B"; break;
+                    case 11: filename = "2B"; break;
+                    case 12: filename = "2B"; break;
+
+                    case 13: filename = "3A"; break;
+                    case 14: filename = "3A"; break;
+                    case 15: filename = "3A"; break;
+                    case 16: filename = "3B"; break;
+                    case 17: filename = "3B"; break;
+                    case 18: filename = "3B"; break;
+                    }
+
+                    return filename;
+                };
+
                 const QString filePath =
                     QString("%1/%2data%3.bin")
                         .arg(ui->textBrowser_filepath->toPlainText())
-                        .arg(joinFilename(cameraIndex))
+                        .arg(indexToPrefix(cameraIndex))
                         .arg(i);
 
                 QFile f(filePath);
@@ -2416,15 +2484,12 @@ void CpsStatisticsWindow::onNGammaFilter()
                         );
     }
 
-    //mProgressIndicator->stopAnimation();
     mWaitingSpinnerWidget->stop();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
 {
-    //mProgressIndicator->startAnimation();
-    //mProgressIndicator->setMessage(QStringLiteral("计数率统计中，请等待..."));
     mWaitingSpinnerWidget->start();
     mWaitingSpinnerWidget->setText(QStringLiteral("计数率统计中，请等待..."));
 
@@ -2458,20 +2523,18 @@ void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
 	            }
 	        }, minPeak, maxPeak))
 	    {
-            //mProgressIndicator->stopAnimation();
             mWaitingSpinnerWidget->stop();
 	        QMessageBox::information(this, tr("提示" ), tr("文件格式错误，加载失败！"));
 	        return;
 	    }
 
-        // 在std::thread中，拿到接收对象的指针后，通过QMetaObject invokeMethod投递，否则槽函数无法响应
+        // 在std::thread中，拿到接收对象的指针后，通过QMetaObject invokeMethod投递，否则直接用emit槽函数无法响应
         QMetaObject::invokeMethod(this, [=](){
 		    emit doCpsPlot(cpsMapPairs);
 		
 		    if (0==minPeak && 16384==maxPeak)//如果是选择能谱范围就不要重新刷新能谱图了
 		        emit doSpectrumPlot(spectrumMapPairs);
 		
-            //mProgressIndicator->stopAnimation();
             mWaitingSpinnerWidget->stop();
         }, Qt::QueuedConnection);
     });
@@ -2496,5 +2559,90 @@ void CpsStatisticsWindow::on_action_home_triggered()
             QProcess::startDetached(program, QStringList());
         });
     }
+}
+
+void CpsStatisticsWindow::on_action_save_triggered()
+{
+    QString dirPath = QFileDialog::getExistingDirectory(this, tr("选择测量数据存放目录"));
+    if (dirPath.isEmpty())
+        return ;
+
+    // 能谱
+    {
+        QCPAxisRect *spectrumAxisRect = mCpsPlot->findChild<QCPAxisRect*>("spectrumAxisRect");
+        QFile file(dirPath + "/能谱.csv");
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+            return;
+
+        bool firstLine = true;
+        QTextStream stream(&file);
+        for (int channel = 1; channel <= 18; ++channel){
+            QCPGraph *graph = nullptr;
+            if (channel <= 11)
+                graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("HC %1").arg(channel));
+            else
+                graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("VC %1").arg(channel));
+
+            if (graph){
+                if (firstLine){
+                    // 第一行，输出横坐标对应的道址值
+                    firstLine = false;
+                    stream << "CH,";
+                    for (int i=0; i<graph->dataCount(); ++i)
+                        stream << graph->data()->at(i)->key << ",";
+                    stream << "\n";
+                }
+
+                // 从第2行开始输出通道号+道址对应的幅度
+                stream << channel << ",";
+                for (int i=0; i<graph->dataCount(); ++i){
+                    stream << graph->data()->at(i)->value << ",";
+                }
+                stream << "\n";
+            }
+        }
+        file.close();
+    }
+
+
+    // 计数率
+    {
+        QCPAxisRect *timeCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("timeCountsAxisRect");
+        QFile file(dirPath + "/计数率.csv");
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+            return;
+
+        bool firstLine = true;
+        QTextStream stream(&file);
+        for (int channel = 1; channel <= 18; ++channel){
+            QCPGraph *graph = nullptr;
+            if (channel <= 11)
+                graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("HC %1").arg(channel));
+            else
+                graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("VC %1").arg(channel));
+
+            if (graph){
+                if (firstLine){
+                    // 第一行，输出横坐标对应的道址值
+                    firstLine = false;
+                    stream << "time,";
+                    for (int i=0; i<graph->dataCount(); ++i)
+                        stream << graph->data()->at(i)->key << ",";
+                    stream << "\n";
+                }
+
+                // 从第2行开始输出通道号+道址对应的幅度
+                stream << channel << ",";
+                for (int i=0; i<graph->dataCount(); ++i){
+                    stream << graph->data()->at(i)->value << ",";
+                }
+                stream << "\n";
+            }
+        }
+        file.close();
+    }
+
+    // 累积计数
+    QCPAxisRect *channelCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("channelCountsAxisRect");
 }
 

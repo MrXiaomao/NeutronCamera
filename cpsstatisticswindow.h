@@ -168,7 +168,6 @@ struct FOM_CurvePoint {
 #endif
 
 class QCustomPlot;
-class QProgressIndicator;
 class WaitingSpinnerWidget;
 class CpsStatisticsWindow : public QMainWindow
 {
@@ -186,7 +185,7 @@ public:
 
     void initUi();
     void initWaveformPage(); // 原始波形
-    void initNGammaPage();
+    void initNGammaPage();// nγ甄别
     void initCpsPage(); // 计数率
 
     qint64 calculateTotalSize(const QFileInfoList& fileinfoList);
@@ -196,13 +195,16 @@ public:
     QPixmap roundPixmap(QSize sz, QColor clrOut = Qt::gray);//单圆
     QPixmap dblroundPixmap(QSize sz, QColor clrIn, QColor clrOut = Qt::gray);//双圆
 
+    // 虚函数
     virtual void closeEvent(QCloseEvent *event) override;
     virtual bool eventFilter(QObject *watched, QEvent *event) override;
+    virtual void dragEnterEvent(QDragEnterEvent *event) override;
+    virtual void dropEvent(QDropEvent *event) override;
 
     // 波形显示
     Q_SLOT void onWaveform();
 
-    // 数据处理相关的槽函数
+    // 数据压缩处理
     QString humanReadableSize(qint64 bytes);
     Q_SLOT void onDataProcess();
     Q_SLOT void onAnalysisLogMessage(const QString& msg, QtMsgType msgType);
@@ -233,6 +235,10 @@ signals:
     void doCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>);
 
 private slots:
+    void on_action_about_triggered();
+
+    void on_action_aboutQt_triggered();
+
     void on_action_openfile_triggered();
 
     void on_action_exit_triggered();
@@ -255,33 +261,34 @@ private slots:
 
     void on_action_home_triggered();
 
+    void on_action_save_triggered();
+
 private:
     Ui::CpsStatisticsWindow *ui;
-    bool mIsDarkTheme = true;
-    bool mThemeColorEnable = true;
-    QColor mThemeColor = QColor(255,255,255);
+    bool mIsDarkTheme = true;// 深色主题
+    bool mThemeColorEnable = true;// 启用主题色
+    QColor mThemeColor = QColor(255,255,255);// 主题色
     class QGoodWindowHelper *mainWindow = nullptr;
     PCIeCommSdk mPCIeCommSdk;
-    QString mShotNum;
-    DetectorType mCurrentDetectorType;
-    QVector<QColor> mGraphisColor;
+    DetectorType mCurrentDetectorType;// 探测器类型
+    QVector<QColor> mGraphisColor;// 图像中探测器对应的点/线条颜色
 
-    //QProgressIndicator *mProgressIndicator = nullptr;
-    WaitingSpinnerWidget *mWaitingSpinnerWidget = nullptr;
-    QStringList mfileList;
+    WaitingSpinnerWidget *mWaitingSpinnerWidget = nullptr;// 处理系统忙时的等待对话框
+    QString mFileDir;// 当初出路数据的目录
+    QStringList mfileList;// 当前目录下的文件列表
+
     void applyColorTheme();
 
+    // 波形显示
     QCustomPlot* mWaveformHorPlot; //水平相机
     QCustomPlot* mWaveformVerPlot; //垂直相机
-    QCustomPlot* mCpsPlot; //计数率
-    QVector<QColor> mBarColor;
-    QString mFileDir;
-
-    QString joinFilename(const int& cameraIndex); // 拼接文件名
 
     // 数据处理线程
     QThread* mAnalysisThread;
     DataAnalysisWorker* mAnalysisWorker;
+
+    // 计数率
+    QCustomPlot* mCpsPlot;
 };
 
 #endif // CPSSTATISTICSWINDOW_H

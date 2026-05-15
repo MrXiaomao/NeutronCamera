@@ -124,10 +124,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         }
     });
     QTimer::singleShot(0, this, [=]{
-        if (0 == mPCIeCommSdk.numberOfDevices())
-            qCritical().noquote() << "数据采集卡：" << mPCIeCommSdk.numberOfDevices() << "张";
-        else
-            qInfo().noquote() << "数据采集卡：" << mPCIeCommSdk.numberOfDevices() << "张";
+        mPCIeCommSdk.printDevicesInfomation();
     });
 }
 

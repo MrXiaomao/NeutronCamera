@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
         server.listen(SERVER_KEY);
     }
 
-    QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
+    //QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
     QGoodWindowHelper w;
     if (args.contains("-m") && args.contains("compress")){
         QApplication::setApplicationName(QObject::tr("中子相机数据压缩与上传"));
@@ -221,6 +221,7 @@ int main(int argc, char *argv[])
         // 创建主窗体
         mMainWindow = new MainWindow(isDarkTheme, &w);
     }
+    mMainWindow->setWindowIcon(QIcon(":/logo.ico"));
     w.setupUiHelper(mMainWindow, isDarkTheme);
 
     // 当有新的客户端连接时，触发激活窗口

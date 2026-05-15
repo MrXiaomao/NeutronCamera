@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>中子相机</string>
   </property>
+  <property name="windowIcon">
+   <iconset resource="../3rdParty/resource/resource.qrc">
+    <normaloff>:/logo.ico</normaloff>:/logo.ico</iconset>
+  </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout_2">
     <property name="spacing">

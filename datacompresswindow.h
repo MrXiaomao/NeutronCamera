@@ -24,7 +24,7 @@ class DataCompressWindow;
 }
 
 class QCustomPlot;
-class QProgressIndicator;
+class WaitingSpinnerWidget;
 class DataCompressWindow : public QMainWindow
 {
     Q_OBJECT
@@ -104,7 +104,7 @@ private:
     QThread* mAnalysisThread;
     DataAnalysisWorker* mAnalysisWorker;
 
-    QProgressIndicator *mProgressIndicator = nullptr;
+    WaitingSpinnerWidget *mWaitingSpinnerWidget = nullptr;
     void applyColorTheme();
 };
 

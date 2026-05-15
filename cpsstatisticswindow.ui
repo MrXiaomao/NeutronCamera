@@ -289,12 +289,24 @@
     <item>
      <widget class="QStackedWidget" name="centralStackedWidget">
       <property name="currentIndex">
-       <number>3</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="pageInfoWidget_cps"/>
       <widget class="QWidget" name="pageInfoWidget_waveform"/>
       <widget class="QWidget" name="pageInfoWidget_process">
        <layout class="QGridLayout" name="gridLayout_3">
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
         <item row="0" column="0">
          <widget class="QTableWidget" name="tableWidget_filelist">
           <property name="sizePolicy">
@@ -338,7 +350,7 @@
           </attribute>
           <column>
            <property name="text">
-            <string>文件列表</string>
+            <string>文件信息列表</string>
            </property>
           </column>
          </widget>
@@ -749,6 +761,9 @@
                <widget class="QSpinBox" name="spinBox_startT_1">
                 <property name="maximum">
                  <number>10000</number>
+                </property>
+                <property name="value">
+                 <number>0</number>
                 </property>
                </widget>
               </item>
@@ -2026,6 +2041,8 @@
    <addaction name="action_ngamma"/>
    <addaction name="action_cps"/>
    <addaction name="separator"/>
+   <addaction name="action_save"/>
+   <addaction name="separator"/>
    <addaction name="action_exit"/>
   </widget>
   <action name="action_exit">
@@ -2191,6 +2208,18 @@
    </property>
    <property name="text">
     <string>返回主程序</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_save">
+   <property name="icon">
+    <iconset resource="../3rdParty/resource/resource.qrc">
+     <normaloff>:/daochu.png</normaloff>:/daochu.png</iconset>
+   </property>
+   <property name="text">
+    <string>导出数据</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

@@ -8,11 +8,6 @@ CONFIG += c++17
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
-DEFINES +=
-DEFINES += _VER_2_1=1
-DEFINES += ENABLE_DDR2=1
-#DEFINES += NORAM=1
-DEFINES += NO_READ_REGISTER=0   #不读寄存器值
 DEFINES += ENABLE_IOCP=0   #启用IO完成端口
 
 SOURCES += \
@@ -29,7 +24,6 @@ SOURCES += \
     pciecommsdk.cpp \
     pcieiocpreader.cpp \
     qgaugepanel.cpp \
-    qprogressindicator.cpp \
     switchbutton.cpp \
     waitingspinnerwidget.cpp
 
@@ -47,7 +41,6 @@ HEADERS += \
     qlitethread.h \
     globalsettings.h \
     mainwindow.h \
-    qprogressindicator.h \
     switchbutton.h \
     waitingspinnerwidget.h
 
@@ -117,7 +110,7 @@ DEFINES += GIT_BRANCH=\"\\\"$$GIT_BRANCH\\\"\"
 DEFINES += GIT_DATE=\"\\\"$$GIT_DATE\\\"\"
 DEFINES += GIT_HASH=\"\\\"$$GIT_HASH\\\"\"
 DEFINES += GIT_VERSION=\"\\\"$$GIT_VERSION\\\"\"
-DEFINES += APP_VERSION="\\\"V1.0.1\\\""
+DEFINES += APP_VERSION="\\\"V3.0.1\\\""
 DEFINES +=_WIN32_WINNT=0x0601
 
 windows {

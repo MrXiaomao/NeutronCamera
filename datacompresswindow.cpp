@@ -9,7 +9,7 @@
 #include <QFile>
 #include <QDir>
 #include "globalsettings.h"
-#include "qprogressindicator.h"
+#include "waitingspinnerwidget.h"
 
 #include <array>
 #include <QVector>
@@ -28,7 +28,18 @@ DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
     ui->setupUi(this);
     applyColorTheme();
 
-    mProgressIndicator = new QProgressIndicator(this);
+    mWaitingSpinnerWidget = new WaitingSpinnerWidget(this, true, true);
+    // 自定义外观
+    mWaitingSpinnerWidget->setRoundness(70.0);              // 设置线条圆润度，范围 0 至 100
+    mWaitingSpinnerWidget->setMinimumTrailOpacity(15.0);    // 设置尾部最淡处的不透明度百分比 (%)
+    mWaitingSpinnerWidget->setTrailFadePercentage(70.0);    // 设置渐隐区域占整体的百分比 (%)
+    mWaitingSpinnerWidget->setNumberOfLines(12);            // 绘制 12 条半径线条
+    mWaitingSpinnerWidget->setLineLength(40);               // 每条线条的长度（像素）
+    mWaitingSpinnerWidget->setLineWidth(10);                // 每条线条的宽度（像素）
+    mWaitingSpinnerWidget->setInnerRadius(50);              // 内圆半径（控制“死区”大小）
+    mWaitingSpinnerWidget->setRevolutionsPerSecond(1.5);    // 旋转速度：每秒转 1 圈
+    mWaitingSpinnerWidget->setColor(QColor(41, 4, 41));     // 设置线条颜色
+
     ui->tableWidget_file->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Stretch);
     ui->tableWidget_file->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
@@ -294,7 +305,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
     ui->progressBar_2->setValue(0);
     ui->progressBar_2->setMaximum(wave_CH1.size());
 
-    mProgressIndicator->startAnimation();
+    mWaitingSpinnerWidget->start();
     // 保存到数据库
     {
         QString sql = "INSERT INTO Spectrum (shotNum, timestamp,";
@@ -378,7 +389,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
         ui->pushButton_startUpload->setEnabled(true);
     }
 
-    mProgressIndicator->stopAnimation();
+    mWaitingSpinnerWidget->stop();
 }
 
 void DataCompressWindow::on_action_choseDir_triggered()
@@ -660,7 +671,7 @@ void DataCompressWindow::on_action_analyze_triggered()
     onWriteLog("开始数据压缩分析", QtInfoMsg);
     onWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
 
-    mProgressIndicator->startAnimation();
+    mWaitingSpinnerWidget->start();
 
     // 创建HDF5文件路径（在数据目录下） 
     QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
@@ -929,7 +940,7 @@ void DataCompressWindow::onAnalysisFinished(bool success, const QString& message
         mAnalysisThread = nullptr;
     }
 
-    mProgressIndicator->stopAnimation();
+    mWaitingSpinnerWidget->stop();
 }
 
 void DataCompressWindow::onAnalysisError(const QString& error)

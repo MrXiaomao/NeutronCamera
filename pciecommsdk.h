@@ -206,8 +206,17 @@ public:
     /*获取设备数量*/
     quint32 numberOfDevices();
 
+    /*输出设备信息*/
+    void printDevicesInfomation();
+
+    /*判断板卡是否存在*/
+    bool boardExists(const quint8& index/*板卡序号1-3*/);
+
     /*获取设备列表*/
     QStringList enumDevices();
+
+    /*根据卡名称判断卡序号*/
+    quint8 boardNameToBoardIndex(const QString& name);
 
     /*初始化*/
     void initCaptureThreads();

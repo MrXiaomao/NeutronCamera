@@ -313,25 +313,7 @@ QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quin
             // 创建固定大小的波形数组
             std::array<qint16, H5_DATA_COLS> segment_data;
             std::fill(segment_data.begin(), segment_data.end(), 0);
-            // 前4个数据预留给波形触发时刻，0-1表示ms，2-3表示ns，正式数据从第5个开始
-//            segment_data[0] = packerStartTime & 0xFFFF;
-//            segment_data[1] = ((start_idx*2) >> 16) & 0xFFFF;
-//            segment_data[2] = (start_idx*2) & 0xFFFF;
-//            segment_data[3] = 0;
             segment_data[0] = packerStartTime + (start_idx*2) / 1e6;// 将时间转换为毫秒
-//            // 小端序拆分
-//            for (int i = 0; i < 4; ++i) {
-//                // 每次提取对应位置的16位，掩码0xFFFF保留低16位
-//                segment_data[i] = static_cast<qint16>((currentPackerTime >> (i * 16)) & 0xFFFF);
-//            }
-            /*
-                for (int i = 0; i < 4; ++i) {
-                    // 1. 先把有符号qint16转成无符号quint16，截断保留低16位，清除符号位影响
-                    quint16 unsigned16 = static_cast<quint16>(segment_data[i]);
-                    // 2. 再转成quint64后左移对应位数，拼接到结果上
-                    currentPackerTime |= static_cast<quint64>(unsigned16) << (i * 16);
-                }
-            */
 
             // 提取波形段
             qint16 peak = 0;
