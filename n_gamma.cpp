@@ -441,7 +441,8 @@ n_gamma::FOM n_gamma::GetFOM(const QVector<double> &psd_x,
     n_gamma::PeaksResult out;
 
     const int N = psd_x.size();
-    if (N == 0 || count_y.size() != N) return fom;
+    if (N == 0 || count_y.size() != N)
+        return fom;
 
     // 获取count_y的最大值
     float max_y = 0.0f;
@@ -465,6 +466,7 @@ n_gamma::FOM n_gamma::GetFOM(const QVector<double> &psd_x,
         fom.xlim[1] = 1.0;
         fom.R1 = 0.0;
         fom.R2 = 0.0;
+        fom.fom = 0.0;
         return fom;
     }
     

@@ -81,6 +81,13 @@ CONFIG(debug, debug|release) {
     TARGET = NeutronCamera
 }
 
+CONFIG += ONLY_SAVE_ERRORDATA
+contains(CONFIG, ONLY_SAVE_ERRORDATA){
+    DEFINES += ONLY_SAVE_ERRORDATA=1
+    TARGET = NeutronCameradv3
+} else {
+}
+
 #指定编译产生的文件分门别类放到对应目录
 MOC_DIR     = temp/moc
 RCC_DIR     = temp/rcc
@@ -155,6 +162,7 @@ include($$PWD/../3rdParty/QGoodWindow/QGoodCentralWidget/QGoodCentralWidget.pri)
 include($$PWD/../3rdParty/QGoodWindow/QGoodWindowHelper/QGoodWindowHelper.pri)
 include($$PWD/../3rdParty/hdf5/C++/hdf5Wrapper.pri)
 include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
+include($$PWD/../3rdParty/cv2pdb/generate_pdb.pri)
 
 # 添加config配置
 # CONFIG += precompile_header

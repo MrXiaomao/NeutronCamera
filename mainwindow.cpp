@@ -2146,11 +2146,14 @@ void MainWindow::on_action_status_triggered(bool checked)
     }
 }
 
-
+#include <QtConcurrent>
 void MainWindow::on_action_reset_triggered()
 {
     // PCIe重置
-    mPCIeCommSdk.reset();
+    qInfo().nospace() << "复位中，请等待...";
+    QtConcurrent::run([this]() {
+        mPCIeCommSdk.reset();
+    });
 }
 
 

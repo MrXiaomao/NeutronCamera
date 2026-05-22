@@ -289,7 +289,7 @@
     <item>
      <widget class="QStackedWidget" name="centralStackedWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="pageInfoWidget_cps"/>
       <widget class="QWidget" name="pageInfoWidget_waveform"/>
@@ -1982,7 +1982,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>18</height>
+     <height>17</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">

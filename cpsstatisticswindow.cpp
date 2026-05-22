@@ -1062,8 +1062,10 @@ void CpsStatisticsWindow::initNGammaPage()
             itemText->setObjectName("itemText");
             itemText->setLayer("overlay");
             itemText->position->setType(QCPItemPosition::ptAxisRectRatio);
-            itemText->position->setCoords(0.12, 0.04);
+            itemText->position->setCoords(0.06, 0.04);
             itemText->setTextAlignment(Qt::AlignLeft);
+            itemText->setPositionAlignment(Qt::AlignTop | Qt::AlignLeft);
+            itemText->position->setAxisRect(customPlot->axisRect()); // 绑定到当前轴矩形
             itemText->setText("品质因子：-");
         }
 
@@ -1832,7 +1834,7 @@ void CpsStatisticsWindow::on_action_ngamma_triggered()
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_ngamma);
     ui->optionStackedWidget->setCurrentWidget(ui->page_ngamma);
     ui->page_ngamma->layout()->addWidget(ui->logWidget);
-    ui->action_save->setVisible(false);
+    ui->action_save->setVisible(true);
 }
 
 void CpsStatisticsWindow::on_action_cps_triggered()
@@ -2567,82 +2569,113 @@ void CpsStatisticsWindow::on_action_save_triggered()
     if (dirPath.isEmpty())
         return ;
 
-    // 能谱
-    {
-        QCPAxisRect *spectrumAxisRect = mCpsPlot->findChild<QCPAxisRect*>("spectrumAxisRect");
-        QFile file(dirPath + "/能谱.csv");
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-            return;
+    if (ui->action_ngamma->isChecked()){
 
-        bool firstLine = true;
-        QTextStream stream(&file);
-        for (int channel = 1; channel <= 18; ++channel){
-            QCPGraph *graph = nullptr;
-            if (channel <= 11)
-                graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("HC %1").arg(channel));
-            else
-                graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("VC %1").arg(channel));
+        // 水平PSD
+        {
+            QFile file(dirPath + QString("/CH%1-PSD.csv").arg(ui->comboBox_horCamera->currentIndex() + 1));
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+                return;
 
-            if (graph){
-                if (firstLine){
-                    // 第一行，输出横坐标对应的道址值
-                    firstLine = false;
-                    stream << "CH,";
-                    for (int i=0; i<graph->dataCount(); ++i)
-                        stream << graph->data()->at(i)->key << ",";
+            QTextStream stream(&file);
+            QCustomPlot* customPlot = ui->spectroMeter_horCamera_PSD;
+            for (int i=0; i<customPlot->graph(0)->dataCount(); ++i)
+                stream << customPlot->graph(0)->data()->at(i)->key << "," << customPlot->graph(0)->data()->at(i)->value << "\n";
+            file.close();
+        }
+
+        // 垂直PSD
+        {
+            QFile file(dirPath + QString("/CH%1-PSD.csv").arg(ui->comboBox_verCamera->currentIndex() + 12));
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+                return;
+
+            QTextStream stream(&file);
+            QCustomPlot* customPlot = ui->spectroMeter_verCamera_PSD;
+            for (int i=0; i<customPlot->graph(0)->dataCount(); ++i)
+                stream << customPlot->graph(0)->data()->at(i)->key << "," << customPlot->graph(0)->data()->at(i)->value << "\n";
+            file.close();
+        }
+
+    } else {
+
+        // 能谱
+        {
+            QCPAxisRect *spectrumAxisRect = mCpsPlot->findChild<QCPAxisRect*>("spectrumAxisRect");
+            QFile file(dirPath + "/能谱.csv");
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+                return;
+
+            bool firstLine = true;
+            QTextStream stream(&file);
+            for (int channel = 1; channel <= 18; ++channel){
+                QCPGraph *graph = nullptr;
+                if (channel <= 11)
+                    graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("HC %1").arg(channel));
+                else
+                    graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("VC %1").arg(channel));
+
+                if (graph){
+                    if (firstLine){
+                        // 第一行，输出横坐标对应的道址值
+                        firstLine = false;
+                        stream << "CH,";
+                        for (int i=0; i<graph->dataCount(); ++i)
+                            stream << graph->data()->at(i)->key << ",";
+                        stream << "\n";
+                    }
+
+                    // 从第2行开始输出通道号+道址对应的幅度
+                    stream << channel << ",";
+                    for (int i=0; i<graph->dataCount(); ++i){
+                        stream << graph->data()->at(i)->value << ",";
+                    }
                     stream << "\n";
                 }
-
-                // 从第2行开始输出通道号+道址对应的幅度
-                stream << channel << ",";
-                for (int i=0; i<graph->dataCount(); ++i){
-                    stream << graph->data()->at(i)->value << ",";
-                }
-                stream << "\n";
             }
+            file.close();
         }
-        file.close();
-    }
 
 
-    // 计数率
-    {
-        QCPAxisRect *timeCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("timeCountsAxisRect");
-        QFile file(dirPath + "/计数率.csv");
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-            return;
+        // 计数率
+        {
+            QCPAxisRect *timeCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("timeCountsAxisRect");
+            QFile file(dirPath + "/计数率.csv");
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+                return;
 
-        bool firstLine = true;
-        QTextStream stream(&file);
-        for (int channel = 1; channel <= 18; ++channel){
-            QCPGraph *graph = nullptr;
-            if (channel <= 11)
-                graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("HC %1").arg(channel));
-            else
-                graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("VC %1").arg(channel));
+            bool firstLine = true;
+            QTextStream stream(&file);
+            for (int channel = 1; channel <= 18; ++channel){
+                QCPGraph *graph = nullptr;
+                if (channel <= 11)
+                    graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("HC %1").arg(channel));
+                else
+                    graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("VC %1").arg(channel));
 
-            if (graph){
-                if (firstLine){
-                    // 第一行，输出横坐标对应的道址值
-                    firstLine = false;
-                    stream << "time,";
-                    for (int i=0; i<graph->dataCount(); ++i)
-                        stream << graph->data()->at(i)->key << ",";
+                if (graph){
+                    if (firstLine){
+                        // 第一行，输出横坐标对应的道址值
+                        firstLine = false;
+                        stream << "time,";
+                        for (int i=0; i<graph->dataCount(); ++i)
+                            stream << graph->data()->at(i)->key << ",";
+                        stream << "\n";
+                    }
+
+                    // 从第2行开始输出通道号+道址对应的幅度
+                    stream << channel << ",";
+                    for (int i=0; i<graph->dataCount(); ++i){
+                        stream << graph->data()->at(i)->value << ",";
+                    }
                     stream << "\n";
                 }
-
-                // 从第2行开始输出通道号+道址对应的幅度
-                stream << channel << ",";
-                for (int i=0; i<graph->dataCount(); ++i){
-                    stream << graph->data()->at(i)->value << ",";
-                }
-                stream << "\n";
             }
+            file.close();
         }
-        file.close();
-    }
 
-    // 累积计数
-    QCPAxisRect *channelCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("channelCountsAxisRect");
+        // 累积计数
+        QCPAxisRect *channelCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("channelCountsAxisRect");
+    }
 }
 

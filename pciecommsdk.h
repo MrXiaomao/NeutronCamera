@@ -29,6 +29,15 @@ typedef int HANDLE;
 #include <QWaitCondition>
 #include <QThreadPool>
 
+// pciecommsdk.h 头文件
+class NoBufferingFile : public QFile
+{
+public:
+    // 去掉override，使用正确的参数类型
+    bool open(const QString &fileName, QIODevice::OpenMode mode);
+};
+
+
 #include <cstring>
 class CaptureThread : public QThread {
     Q_OBJECT
@@ -60,6 +69,7 @@ public:
     bool checkDataError();
     void printDebugInfo();
     bool dataExistError();
+    bool writeFileWithNoBuffering(const QString &filePath, const char *data, qint64 size);
 
     void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds);
 
@@ -308,7 +318,7 @@ public:
     inline static bool readData(HANDLE hFile, quint64 offset, const QByteArray& data);
 
     HANDLE getHandle(quint8 cardIndex, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
-    static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
+    static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_FLAG_NO_BUFFERING);//O_RDWR
 
     enum MeasureMode{
         mmContinue,// 连续测量
