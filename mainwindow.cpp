@@ -34,8 +34,6 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     ui->setupUi(this);
     setWindowTitle(QApplication::applicationName() + " - " + APP_VERSION);
 
-    mCommHelper = CommHelper::instance();
-
     initUi();
     restoreSettings();
     applyColorTheme();
@@ -78,23 +76,23 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     });
 
     connect(&mPCIeCommSdk, &PCIeCommSdk::reportCaptureFinished, this, [=](){
+        SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
         bool testOk = mPCIeCommSdk.test();
-        mPCIeCommSdk.printDataError();
         if (!testOk){
             ++mContinueMeasuerFailCount;
         }
 
+        emit ui->pushButton_preview->clicked();
         if (ui->checkBox_autoIncrease->isChecked()){
             ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
         }
 
         if (mEnableContinueMeasuer){
-            doWriteLog(QString("已完成自动测量次数：%1，异常次数:%2").arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
+            doWriteLog(QString("连续测量次数：%1，累计次数：%2，累计异常次数:%3").arg(++mCurrentMeasuerCount).arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
             if (testOk){
                 QTimer::singleShot(ui->spinBox_intervalSeconds->value() * 1000, this, [=](){
-                    mPCIeCommSdk.reset();
                     QTimer::singleShot(3000, this, [=](){
                         emit ui->action_startMeasure->trigger();
                     });
@@ -150,14 +148,12 @@ MainWindow::~MainWindow()
 
 void MainWindow::initUi()
 {
-    mDetSettingWindow = new DetSettingWindow();
-    mDetSettingWindow->setWindowFlags(Qt::Widget | Qt::WindowStaysOnTopHint);
-    mDetSettingWindow->hide();
-    connect(mDetSettingWindow, &DetSettingWindow::reportSettingFinished, &mPCIeCommSdk, &PCIeCommSdk::replySettingFinished);
+    mSettingWindow = new SettingWindow();
+    mSettingWindow->setWindowFlags(Qt::Widget | Qt::WindowStaysOnTopHint);
+    mSettingWindow->hide();
+    connect(mSettingWindow, &SettingWindow::reportSettingFinished, &mPCIeCommSdk, &PCIeCommSdk::replySettingFinished);
 
-    mNetSettingWindow = new NetSettingWindow();
-    mNetSettingWindow->setWindowFlags(Qt::Widget | Qt::WindowStaysOnTopHint);
-    mNetSettingWindow->hide();
+    mCommHelper = CommHelper::instance();
 
     {
         ui->tableWidget_status->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -1252,6 +1248,7 @@ void MainWindow::on_action_startMeasure_triggered()
 
     qInfo().noquote() << tr("本次实验数据存储路径：") << fileSaveDir;
     this->mCurrentSavePath = fileSaveDir;
+    ::SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
     // 保存本地测量参数信息
     if (ui->action_typeLSD->isChecked())
@@ -1267,14 +1264,20 @@ void MainWindow::on_action_startMeasure_triggered()
     settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
     settings.setValue("Global/DetectType", mCurrentDetectorType);
     QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
-
-    mPCIeCommSdk.setMeasureMode(mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle);
+    int measureMode = mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle;//mMeasureMode
+    if (ui->action_test->isChecked())
+        measureMode |= PCIeCommSdk::mmTest;
+    mPCIeCommSdk.setMeasureMode((PCIeCommSdk::MeasureMode)measureMode);
 
     // 发送指令集
     //mPCIeCommSdk.writeStartMeasure();
     mPCIeCommSdk.setCaptureParamter(ui->comboBox_horCamera->currentIndex() + 1,
                                     ui->comboBox_verCamera->currentIndex() + 12,
                                     QVector<quint32>() <<ui->spinBox_time1->value() << ui->spinBox_time2->value() << ui->spinBox_time3->value());
+
+    // 先发送PSD甄别阈值
+    if (ui->action_typeLSD->isChecked())
+        mPCIeCommSdk.setPSDThreshold();
 
     mPCIeCommSdk.startAllCapture(fileSaveDir,
                             ui->spinBox_timeLength->value(),
@@ -1621,43 +1624,7 @@ void MainWindow::on_pushButton_closeVoltage_2_clicked()
 
 void MainWindow::on_action_cfgParam_triggered()
 {
-    mDetSettingWindow->show();
-}
-
-
-void MainWindow::on_action_cfgNet_triggered()
-{
-    //@01*999*GET*01*#
-    //@01*999*GETR*01*
-    /*
-    -----Voltage &Current Data-----
-    IHA238_01 = 0.00V, 0.00mA
-    IHA238_02 = 0.00V, 0.00mA
-    IHA238_03 = 0.00V, 0.00mA
-    IHA238_04 = 0.00V, 0.00mA
-    IHA238_05 = 0.00V. 0.00mA
-    IHA238_06 = 0.00V, 0.00mA
-    IHA238_07 = 0.00V, 0.00mA
-    IHA238_08 = 0.00V, 0.00mA
-    THA238_09 = 0.00V, 0.00mA
-    THA238_10 = 0.00V, 0.00mA
-    IHA238_11 = 0.00V, 0.00mA
-    IHA238_12 = 0.00V, 0.00mA
-
-    -----Temperature Data-----
-    DS18B20_01 = 0.00°C
-    DS18B20_02 = 0.00°C
-    DS18B20_03 = 0.00°C
-    DS18B20_04 = 0.00°C
-
-    -----Device Info-----
-    UTD = 0x3938353834315100002F0017
-    FeSoftV=Unknown
-    FeHardy=Unknown
-    FeAddr = 01
-    #
-    */
-    mNetSettingWindow->show();
+    mSettingWindow->show();
 }
 
 
@@ -1905,7 +1872,10 @@ void MainWindow::on_pushButton_preview_clicked()
 
 
     {
-        QVector<quint32> tmMeasure = QVector<quint32>() << ui->spinBox_time1->value() << ui->spinBox_time2->value() << ui->spinBox_time3->value();
+        QVector<quint32> tmMeasure = QVector<quint32>() << ui->spinBox_time1->value();
+        if (!ui->action_typeLBD->isChecked())
+            tmMeasure << ui->spinBox_time2->value() << ui->spinBox_time3->value();
+
         // 发送指令集
         mPCIeCommSdk.setCaptureParamter(ui->comboBox_horCamera->currentIndex() + 1,
                                         ui->comboBox_verCamera->currentIndex() + 12,
@@ -2070,6 +2040,7 @@ void MainWindow::on_pushButton_preview_clicked()
 void MainWindow::on_action_init_triggered()
 {
     if (mCommHelper->connectServer()){
+        mPCIeCommSdk.init();
         qInfo().noquote() << tr("初始化成功");
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
@@ -2150,6 +2121,7 @@ void MainWindow::on_action_status_triggered(bool checked)
 void MainWindow::on_action_reset_triggered()
 {
     // PCIe重置
+    mCurrentMeasuerCount = 0;
     qInfo().nospace() << "复位中，请等待...";
     QtConcurrent::run([this]() {
         mPCIeCommSdk.reset();
@@ -2161,7 +2133,6 @@ void MainWindow::on_pushButton_clicked()
 {
     //mPCIeCommSdk.test();
     mPCIeCommSdk.setMeasureMode(PCIeCommSdk::mmContinue);
-    mContinueMeasuerCount = 0;
     mContinueMeasuerFailCount = 0;
     mEnableContinueMeasuer = true;
     ui->pushButton->setEnabled(false);

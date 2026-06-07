@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
     QApplication a(argc, argv);
-    QApplication::setApplicationName("中子相机");
+    QApplication::setApplicationName("中子伽马相机软件");
     QApplication::setOrganizationName("Copyright (c) 2025");
     QApplication::setOrganizationDomain("");
     QApplication::setApplicationVersion(APP_VERSION);
@@ -215,14 +215,14 @@ int main(int argc, char *argv[])
         server.listen(SERVER_KEY);
     }
 
-    //QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
+    QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
     QGoodWindowHelper w;
     if (args.contains("-m") && args.contains("compress")){
-        QApplication::setApplicationName(QObject::tr("中子相机数据压缩与上传"));
+        QApplication::setApplicationName(QObject::tr("中子伽马相机软件数据压缩与上传"));
         mMainWindow = new DataCompressWindow(isDarkTheme, &w);
     }
     else if (args.contains("-m") && args.contains("cps")){
-        QApplication::setApplicationName(QObject::tr("中子相机离线数据综合分析"));
+        QApplication::setApplicationName(QObject::tr("中子伽马相机软件离线数据综合分析"));
         mMainWindow = new CpsStatisticsWindow(isDarkTheme, &w);
     }
     else{

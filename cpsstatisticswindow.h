@@ -1,4 +1,5 @@
-﻿#ifndef CPSSTATISTICSWINDOW_H
+﻿void on_action_cfgParam_triggered();
+#ifndef CPSSTATISTICSWINDOW_H
 #define CPSSTATISTICSWINDOW_H
 
 #include <QMainWindow>
@@ -262,6 +263,8 @@ private slots:
     void on_action_home_triggered();
 
     void on_action_save_triggered();
+
+    void on_action_cfgParam_triggered();
 
 private:
     Ui::CpsStatisticsWindow *ui;

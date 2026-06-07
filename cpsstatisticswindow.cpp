@@ -489,143 +489,146 @@ void CpsStatisticsWindow::loadRelatedFiles(const QString& dirPath)
             result.append(item);
     }
 
-    QCollator collator;
-    collator.setNumericMode(true);
-    auto compareFilename = [&](const QFileInfo& A, const QFileInfo& B){
-        return collator.compare(A.fileName(), B.fileName()) < 0;
-    };
-    std::sort(result.begin(), result.end(), compareFilename);
-
-    for (int i = 0; i < result.size(); ++i) {
-        const QFileInfo& fi = result.at(i);
-
-        int row = ui->tableWidget_file->rowCount();
-        ui->tableWidget_file->insertRow(row);
-        ui->tableWidget_file->setItem(row, 0, new QTableWidgetItem(fi.fileName()));
-    }
-    // 使用静态函数提取文件名列表
-    mfileList = DataCompressWindow::extractFileNames(result);
+    if (result.size() > 0)
     {
-        qint64 totalSize = calculateTotalSize(fileinfoList);
-        int fileCount = fileinfoList.count();
+        QCollator collator;
+        collator.setNumericMode(true);
+        auto compareFilename = [&](const QFileInfo& A, const QFileInfo& B){
+            return collator.compare(A.fileName(), B.fileName()) < 0;
+        };
+        std::sort(result.begin(), result.end(), compareFilename);
 
-        //统计文件详细信息
-        // ==== 填表 ====
-        ui->tableWidget_filelist->setSortingEnabled(false);  // 填表时关闭排序避免抖动
-        ui->tableWidget_filelist->clearContents();
-        ui->tableWidget_filelist->setRowCount(fileCount);
+        for (int i = 0; i < result.size(); ++i) {
+            const QFileInfo& fi = result.at(i);
 
-        // 列设置：只需要设一次
-        // 例：列0 文件名，列1 大小(bytes)，列2 可读大小，列3 最后修改时间
-        if (ui->tableWidget_filelist->columnCount() != 6) {
-            ui->tableWidget_filelist->setColumnCount(6);
-            ui->tableWidget_filelist->setHorizontalHeaderLabels(
-                {"文件名", "大小(bytes)", "大小(MB)", "创建时间", "修改时间", "访问时间"}
-                );
+            int row = ui->tableWidget_file->rowCount();
+            ui->tableWidget_file->insertRow(row);
+            ui->tableWidget_file->setItem(row, 0, new QTableWidgetItem(fi.fileName()));
         }
+        // 使用静态函数提取文件名列表
+        mfileList = DataCompressWindow::extractFileNames(result);
+        {
+            qint64 totalSize = calculateTotalSize(fileinfoList);
+            int fileCount = fileinfoList.count();
 
-        QLocale locale(QLocale::English);
-        for (int i = 0; i < fileCount; ++i) {
-            const QFileInfo& fi = fileinfoList.at(i);
+            //统计文件详细信息
+            // ==== 填表 ====
+            ui->tableWidget_filelist->setSortingEnabled(false);  // 填表时关闭排序避免抖动
+            ui->tableWidget_filelist->clearContents();
+            ui->tableWidget_filelist->setRowCount(fileCount);
 
-            auto *itemName = new QTableWidgetItem(fi.fileName());
-
-            auto *itemBytes = new QTableWidgetItem(locale.toString(fi.size()));
-            itemBytes->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-
-            auto *itemHuman = new QTableWidgetItem(humanReadableSize(fi.size()));
-            itemHuman->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
-
-            auto *itemBirthTime = new QTableWidgetItem(fi.birthTime().toString("yyyy-MM-dd HH:mm:ss"));
-            itemBirthTime->setTextAlignment(Qt::AlignCenter);
-
-            auto *itemModifiedTime = new QTableWidgetItem(fi.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
-            itemModifiedTime->setTextAlignment(Qt::AlignCenter);
-
-            auto *itemReadTime = new QTableWidgetItem(fi.lastRead().toString("yyyy-MM-dd HH:mm:ss"));
-            itemReadTime->setTextAlignment(Qt::AlignCenter);
-
-            ui->tableWidget_filelist->setItem(i, 0, itemName);
-            ui->tableWidget_filelist->setItem(i, 1, itemBytes);
-            ui->tableWidget_filelist->setItem(i, 2, itemHuman);
-            ui->tableWidget_filelist->setItem(i, 3, itemBirthTime);
-            ui->tableWidget_filelist->setItem(i, 4, itemModifiedTime);
-            ui->tableWidget_filelist->setItem(i, 5, itemReadTime);
-        }
-
-        // 表头美化（可选）
-        // 整行选择模式
-        ui->tableWidget_filelist->setSelectionBehavior(QAbstractItemView::SelectRows);
-        // 表格内容禁止编辑
-        ui->tableWidget_filelist->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        // 奇偶行颜色交替显示
-        ui->tableWidget_filelist->setAlternatingRowColors(true);
-        // 先让所有列适配内容宽度
-        //ui->tableWidget_filelist->resizeColumnsToContents();
-
-        ui->tableWidget_filelist->horizontalHeader()->setMinimumWidth(300);
-        // 每一列都自动拉伸
-        ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-        // 开启最后一列自动填充剩余空间
-        //ui->tableWidget_filelist->horizontalHeader()->setStretchLastSection(true);
-
-        emit doWriteLog(QString("bin文件数量: %1, 总大小: %2").arg(fileCount).arg(humanReadableSize(totalSize)), QtDebugMsg);
-        ui->lineEdit_binCount->setText(QString::number(fileCount));
-        ui->lineEdit_binTotal->setText(humanReadableSize(totalSize));
-    }
-
-    // 根据文件名统计整个目录下文件的测量时长（仅已第1张卡的DDR1作为参考）
-    {
-        //统计测量时长，选取光纤口1数据来统计
-        int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "1Adata");//正常情况下是3张卡（依次判断3张卡数据的存在）
-        if (count1data==0)
-            count1data = DataCompressWindow::countFilesByPrefix(mfileList, "2Adata");
-        else if (count1data==0)
-            count1data = DataCompressWindow::countFilesByPrefix(mfileList, "3Adata");
-
-        // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
-        const int time_per = 40;
-        int measureTime = DataCompressWindow::calculateMeasureTime(count1data, time_per);
-
-        // 获取第一个文件名打包序号作为开始时间，如：1Adata27.bin
-        QString file_name = mfileList.first();
-        // 查找data起始位置
-        int data_start = file_name.indexOf("data");
-        if (data_start != -1) {
-            // 跳过data，从后续字符中提取开头的连续数字
-            QString sub_str = file_name.mid(data_start + 4); // data长度为4，所以偏移4
-            int digit_end = 0;
-            while (digit_end < sub_str.length() && sub_str[digit_end].isDigit()) {
-                digit_end++;
+            // 列设置：只需要设一次
+            // 例：列0 文件名，列1 大小(bytes)，列2 可读大小，列3 最后修改时间
+            if (ui->tableWidget_filelist->columnCount() != 6) {
+                ui->tableWidget_filelist->setColumnCount(6);
+                ui->tableWidget_filelist->setHorizontalHeaderLabels(
+                    {"文件名", "大小(bytes)", "大小(MB)", "创建时间", "修改时间", "访问时间"}
+                    );
             }
-            QString result_str = sub_str.left(digit_end); // 得到"27"
-            int start_tm = result_str.toInt();
 
-            // 波形显示页面
-            ui->line_waveform_startT_1->setText(QString::number((start_tm-1)*time_per));
-            ui->line_waveform_endT_1->setText(QString::number((start_tm-1)*time_per+measureTime));
+            QLocale locale(QLocale::English);
+            for (int i = 0; i < fileCount; ++i) {
+                const QFileInfo& fi = fileinfoList.at(i);
 
-            // 数据压缩处理页面
-            ui->line_waveform_startT_2->setText(QString::number((start_tm-1)*time_per));
-            ui->line_waveform_endT_2->setText(QString::number((start_tm-1)*time_per+measureTime));
-            ui->spinBox_startT_2->setValue((start_tm-1)*time_per);
-            ui->spinBox_endT_2->setValue((start_tm-1)*time_per+measureTime);
+                auto *itemName = new QTableWidgetItem(fi.fileName());
 
-            // n伽马甄别
-            ui->line_waveform_startT_4->setText(QString::number((start_tm-1)*time_per));
-            ui->line_waveform_endT_4->setText(QString::number((start_tm-1)*time_per+measureTime));
+                auto *itemBytes = new QTableWidgetItem(locale.toString(fi.size()));
+                itemBytes->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
-            // 计数率统计页面
-            ui->line_waveform_startT_3->setText(QString::number((start_tm-1)*time_per));
-            ui->line_waveform_endT_3->setText(QString::number((start_tm-1)*time_per+measureTime));
-            ui->spinBox_startT_3->setValue((start_tm-1)*time_per);
-            ui->spinBox_endT_3->setValue(start_tm*time_per);
+                auto *itemHuman = new QTableWidgetItem(humanReadableSize(fi.size()));
+                itemHuman->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+
+                auto *itemBirthTime = new QTableWidgetItem(fi.birthTime().toString("yyyy-MM-dd HH:mm:ss"));
+                itemBirthTime->setTextAlignment(Qt::AlignCenter);
+
+                auto *itemModifiedTime = new QTableWidgetItem(fi.lastModified().toString("yyyy-MM-dd HH:mm:ss"));
+                itemModifiedTime->setTextAlignment(Qt::AlignCenter);
+
+                auto *itemReadTime = new QTableWidgetItem(fi.lastRead().toString("yyyy-MM-dd HH:mm:ss"));
+                itemReadTime->setTextAlignment(Qt::AlignCenter);
+
+                ui->tableWidget_filelist->setItem(i, 0, itemName);
+                ui->tableWidget_filelist->setItem(i, 1, itemBytes);
+                ui->tableWidget_filelist->setItem(i, 2, itemHuman);
+                ui->tableWidget_filelist->setItem(i, 3, itemBirthTime);
+                ui->tableWidget_filelist->setItem(i, 4, itemModifiedTime);
+                ui->tableWidget_filelist->setItem(i, 5, itemReadTime);
+            }
+
+            // 表头美化（可选）
+            // 整行选择模式
+            ui->tableWidget_filelist->setSelectionBehavior(QAbstractItemView::SelectRows);
+            // 表格内容禁止编辑
+            ui->tableWidget_filelist->setEditTriggers(QAbstractItemView::NoEditTriggers);
+            // 奇偶行颜色交替显示
+            ui->tableWidget_filelist->setAlternatingRowColors(true);
+            // 先让所有列适配内容宽度
+            //ui->tableWidget_filelist->resizeColumnsToContents();
+
+            ui->tableWidget_filelist->horizontalHeader()->setMinimumWidth(300);
+            // 每一列都自动拉伸
+            ui->tableWidget_filelist->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+            // 开启最后一列自动填充剩余空间
+            //ui->tableWidget_filelist->horizontalHeader()->setStretchLastSection(true);
+
+            emit doWriteLog(QString("bin文件数量: %1, 总大小: %2").arg(fileCount).arg(humanReadableSize(totalSize)), QtDebugMsg);
+            ui->lineEdit_binCount->setText(QString::number(fileCount));
+            ui->lineEdit_binTotal->setText(humanReadableSize(totalSize));
         }
-        else {
-            ui->line_measure_startT_3->setText("0");
-            ui->line_measure_endT_3->setText(QString::number(measureTime));
-            ui->spinBox_time1->setMinimum(0);
-            ui->spinBox_time1->setMaximum(measureTime);
+
+        // 根据文件名统计整个目录下文件的测量时长（仅已第1张卡的DDR1作为参考）
+        {
+            //统计测量时长，选取光纤口1数据来统计
+            int count1data = DataCompressWindow::countFilesByPrefix(mfileList, "1Adata");//正常情况下是3张卡（依次判断3张卡数据的存在）
+            if (count1data==0)
+                count1data = DataCompressWindow::countFilesByPrefix(mfileList, "2Adata");
+            if (count1data==0)
+                count1data = DataCompressWindow::countFilesByPrefix(mfileList, "3Adata");
+
+            // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
+            const int time_per = 40;
+            int measureTime = DataCompressWindow::calculateMeasureTime(count1data, time_per);
+
+            // 获取第一个文件名打包序号作为开始时间，如：1Adata27.bin
+            QString file_name = mfileList.first();
+            // 查找data起始位置
+            int data_start = file_name.indexOf("data");
+            if (data_start != -1) {
+                // 跳过data，从后续字符中提取开头的连续数字
+                QString sub_str = file_name.mid(data_start + 4); // data长度为4，所以偏移4
+                int digit_end = 0;
+                while (digit_end < sub_str.length() && sub_str[digit_end].isDigit()) {
+                    digit_end++;
+                }
+                QString result_str = sub_str.left(digit_end); // 得到文件序号如："27"
+                int start_tm = result_str.toInt();
+
+                // 波形显示页面
+                ui->line_waveform_startT_1->setText(QString::number((start_tm-1)*time_per));
+                ui->line_waveform_endT_1->setText(QString::number((start_tm-1)*time_per+measureTime));
+
+                // 数据压缩处理页面
+                ui->line_waveform_startT_2->setText(QString::number((start_tm-1)*time_per));
+                ui->line_waveform_endT_2->setText(QString::number((start_tm-1)*time_per+measureTime));
+                ui->spinBox_startT_2->setValue((start_tm-1)*time_per);
+                ui->spinBox_endT_2->setValue((start_tm-1)*time_per+measureTime);
+
+                // n伽马甄别
+                ui->line_waveform_startT_4->setText(QString::number((start_tm-1)*time_per));
+                ui->line_waveform_endT_4->setText(QString::number((start_tm-1)*time_per+measureTime));
+
+                // 计数率统计页面
+                ui->line_waveform_startT_3->setText(QString::number((start_tm-1)*time_per));
+                ui->line_waveform_endT_3->setText(QString::number((start_tm-1)*time_per+measureTime));
+                ui->spinBox_startT_3->setValue((start_tm-1)*time_per);
+                ui->spinBox_endT_3->setValue(start_tm*time_per);
+            }
+            else {
+                ui->line_measure_startT_3->setText("0");
+                ui->line_measure_endT_3->setText(QString::number(measureTime));
+                ui->spinBox_time1->setMinimum(0);
+                ui->spinBox_time1->setMaximum(measureTime);
+            }
         }
     }
 
@@ -1730,7 +1733,7 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
     const int channels = 18;
     const int pointsPerGroup = ui->spinBox_endT_3->value();
     int keySize = ui->spinBox_endT_3->value() - ui->spinBox_startT_3->value();
-    colorMap->data()->setSize(keySize, channels);// 范围不要超出坐标轴范围，否则坐标轴会被覆盖
+    colorMap->data()->setSize(keySize+1, channels);// 范围不要超出坐标轴范围，否则坐标轴会被覆盖
     colorMap->data()->setRange(QCPRange(ui->spinBox_startT_3->value()/* + 1*/, ui->spinBox_endT_3->value()), QCPRange(0, channels));
 
     QVector<double> keys;
@@ -1740,6 +1743,7 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
     double yMax = 0;
     double yMax2 = 0;
 
+    int index = 0;
     for (auto iter = mapPairs.begin(); iter != mapPairs.end(); ++iter){
         int channel = iter.key();
         QMap<quint16/*时刻*/,quint32/*计数率*/> mapPair = iter.value();
@@ -1763,8 +1767,8 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
             z = iterSub.value();
             colorMap->data()->setCell(keyIndex, valueIndex, z);
 
-            values[channel-1] += iterSub.value();
-            yMax2 = qMax((double)yMax2, (double)values[channel-1]);
+            values[index] += iterSub.value();
+            yMax2 = qMax((double)yMax2, (double)values[index]);
         }
 
         // 时间+计数率曲线
@@ -1774,6 +1778,8 @@ void CpsStatisticsWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时�
         else
             graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("VC %1").arg(channel));
         graph->setData(xData, yData);
+
+        ++index;
     }
 
     colorMap->setInterpolate(true);// 颜色平滑过度
@@ -2144,8 +2150,8 @@ void CpsStatisticsWindow::onNGammaFilter()
 
     //提取有效波形参数
     int threshold = ui->spinBox_threshold_4->value();
-    int pre_points = 20;
-    int post_points = 512 - pre_points - 1;
+    int pre_points = RISING_WIDTH;
+    int post_points = WAVEFORM_LENGTH - pre_points - 1;
 
     int startT = ui->spinBox_startT_4->value();
     int endT = ui->spinBox_endT_4->value();
@@ -2251,30 +2257,35 @@ void CpsStatisticsWindow::onNGammaFilter()
                         .arg(indexToPrefix(cameraIndex))
                         .arg(i);
 
-                QFile f(filePath);
-                if (!f.open(QIODevice::ReadOnly)) {
-                    emit doWriteLog(QString("文件打开失败：%1").arg(filePath), QtWarningMsg);
+                if (!QFile::exists(filePath)){
                     continue;
                 }
 
-                const qint64 size = f.size();
-                if (size <= 0) {
-                    emit doWriteLog(QString("文件大小异常：%1").arg(filePath), QtWarningMsg);
-                    continue;
-                }
+                // QFile f(filePath);
+                // if (!f.open(QIODevice::ReadOnly)) {
+                //     if (QFile::exists(filePath))
+                //         emit doWriteLog(QString("文件打开失败：%1").arg(filePath), QtWarningMsg);
+                //     continue;
+                // }
+
+                // const qint64 size = f.size();
+                // if (size <= 0) {
+                //     emit doWriteLog(QString("文件大小异常：%1").arg(filePath), QtWarningMsg);
+                //     continue;
+                // }
 
                 QElapsedTimer readTimer;
                 readTimer.start();
-                QByteArray buf = f.readAll();
+                //QByteArray buf = f.readAll();
                 const qint64 readMs = readTimer.elapsed();
                 totalFileReadTime += readMs;
 
-                if (buf.isEmpty()) {
-                    emit doWriteLog(QString("文件读取不完整：%1 ")
-                                        .arg(filePath),
-                                    QtWarningMsg);
-                    continue;
-                }
+                // if (buf.isEmpty()) {
+                //     emit doWriteLog(QString("文件读取不完整：%1 ")
+                //                         .arg(filePath),
+                //                     QtWarningMsg);
+                //     continue;
+                // }
 
                 FileJob job;
                 job.filePath = filePath;
@@ -2283,7 +2294,7 @@ void CpsStatisticsWindow::onNGammaFilter()
                 // ✅ 修复 packerStartTime：必须随 i 变化
                 job.packerStartTime = static_cast<quint32>((i - 1) * time_per);
 
-                job.data = std::move(buf);
+                //job.data = std::move(buf);
 
                 queue.push(std::move(job));
             }
@@ -2677,5 +2688,15 @@ void CpsStatisticsWindow::on_action_save_triggered()
         // 累积计数
         QCPAxisRect *channelCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("channelCountsAxisRect");
     }
+}
+
+#include "settingwindow.h"
+void CpsStatisticsWindow::on_action_cfgParam_triggered()
+{
+    SettingWindow *w = new SettingWindow(this);
+    w->setAttribute(Qt::WA_DeleteOnClose, true);
+    w->setWindowFlags(Qt::WindowCloseButtonHint|Qt::Dialog);
+    w->setWindowModality(Qt::ApplicationModal);
+    w->showNormal();
 }
 

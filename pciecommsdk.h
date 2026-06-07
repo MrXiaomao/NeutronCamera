@@ -9,6 +9,8 @@
 #include <direct.h>
 #include <windows.h>
 #include <setupapi.h>
+#include <cfgmgr32.h>
+#include <devguid.h>
 #else
 #include <unistd.h>
 #include <fcntl.h>
@@ -71,26 +73,27 @@ public:
     bool dataExistError();
     bool writeFileWithNoBuffering(const QString &filePath, const char *data, qint64 size);
 
-    void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds);
+    void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds, bool testMode);
 
     void pause(){
         QMutexLocker locker(&mMutex);
-        mIsPaused = true;
+        mIsPaused.store(true);
     }
 
     void resume(){
         QMutexLocker locker(&mMutex);
-        mIsPaused = false;
+        mIsPaused.store(false);
         mCondition.wakeOne();
     }
 
     void stop(){
         QMutexLocker locker(&mMutex);
-        mIsStopped = true;
+        mIsStopped.store(true);
         mCondition.wakeOne();
     }
 
     bool startMeasure();
+    void stopMeasure();
     void clear();
     void empty();
 
@@ -120,14 +123,14 @@ public:
 
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
     Q_SIGNAL void reportThreadExit(quint32);
-    Q_SIGNAL void reportCaptureData(bool isDDR1, quint8 packref, const QByteArray& waveformData, const QByteArray& spectrumData);
     Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
     Q_SIGNAL void reportCaptureSpectrumData(quint8,bool,quint32,const QByteArray& data);
     Q_SIGNAL void reportCaptureFinished(quint32, bool);
 
 private:
-    quint32 mIsDDR1 = true;//设备名称
-    quint32 mCardIndex;//设备名称
+    quint32 mIsDDR1 = true;//
+    quint32 mCardIndex;//板卡索引
+    QString mDevPath;//板卡设备路径
 #if ENABLE_IOCP
     PcieIocpReader* mPcieReader = nullptr;
 #else
@@ -139,9 +142,11 @@ private:
     int mRegisterInvalidPosition = 0;
 
     QString mSaveFilePath;//保存路径
-    quint32 mCaptureCount = 1;//需要采集的总包数据
-    quint32 mCapturedRef = 1;//已经采集的包数
+    quint16 mCaptureCount = 1;//需要采集的总包数据
+    quint16 mCapturedRef = 1;//已经采集的包数
     quint32 mTimeout = 5000;//超时微秒
+    bool mEnableTestMode = false;//启用测试模式
+    bool mInterruptSave = false;//是否终止
     bool mIsException = false;//数据是否出现异常
     QVector<QByteArray> mDDRWaveformDatas;
     QVector<QByteArray> mRAMSpectrumDatas;
@@ -155,14 +160,16 @@ private:
 
     SharedData mIrq1Trigger, mIrq2Trigger;
     bool mDataError = false;
-    qint16 mErrorStart = 0;
     QMutex mReadLocker;
 
+    QVector<qint64> zeroTime;//记录0时刻
     QVector<qint64> mRamChangedTime;// RAM值改变的时间
     QVector<qint64> mBeforeReadTime;// DDR读之前的时间
     QVector<qint64> mAfterReadTime;// DDR读之后的时间
     QVector<qint64> mCreateThreadTime;// 创建线程时间
-    QMap<quint16/*包序号*/, QVector<QPair<qint64/*读寄存器前时刻*/, QPair<qint64/*读寄存器前时刻*/, quint8/*寄存器值*/>>>> mRAMReadTime;//记录RAM读取时间
+    QVector<qint64> mAfterCreateThreadTime;// 创建线程时间
+    QMap<quint16, QVector<QPair<qint64, quint8>>> mDDRReadTime; // 记录DDR读取时间
+    QMap<quint16/*包序号*/, QVector<QPair<qint64/*读寄存器前时刻*/, QPair<qint64/*读寄存器前时刻*/, quint8/*寄存器值*/>>>> mRAMReadTime; // 记录RAM读取时间
 };
 
 #define CAMNUMBER_DDR_PER   3   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
@@ -175,6 +182,12 @@ class PCIeCommSdk : public QObject
 public:
     explicit PCIeCommSdk(QObject *parent = nullptr);
     ~PCIeCommSdk();
+
+    // 封装设备信息，带启用状态标记
+    struct DeviceInfo {
+        QString devicePath;  // 设备路径
+        bool isEnabled;      // 是否启用
+    };
 
     enum CameraOrientation {
         Horizontal = 0x1,
@@ -203,7 +216,7 @@ public:
     Q_SLOT void replyCaptureSpectrumData(quint8, bool, quint32, const  QByteArray&);
     Q_SLOT void replySettingFinished();
 
-    Q_SLOT void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
+    Q_SLOT void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
     Q_SLOT void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
     Q_SLOT void stopCapture(quint32 index);
     Q_SLOT void stopAllCapture();
@@ -211,7 +224,6 @@ public:
     Q_SLOT void init(); /* 初始化 */
     Q_SLOT void reset();/* 重置 */
     Q_SLOT bool test();
-    Q_SLOT void printDataError();
 
     /*获取设备数量*/
     quint32 numberOfDevices();
@@ -224,6 +236,10 @@ public:
 
     /*获取设备列表*/
     QStringList enumDevices();
+    QList<DeviceInfo> enumerateSpecifiedDevices(const GUID& deviceClassGuid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}});
+    // 根据硬件ID找到目标设备并修改状态
+    BOOL changeDeviceStateByHardwareId(LPCTSTR lpszHardwareId, BOOL bEnable);
+
 
     /*根据卡名称判断卡序号*/
     quint8 boardNameToBoardIndex(const QString& name);
@@ -236,9 +252,10 @@ public:
     /*设置采集参数，在线*/
     void setCaptureParamter(quint8 horCameraIndex, quint8 verCameraIndex, QVector<quint32> tmMeasure);
     
-    bool analyzeHistoryWaveformData(quint8 cameraIndex, quint32 timeLength, quint32 remainTime, QString filePath);
-    
-    bool analyzeHistorySpectrumData(quint8 cameraIndex, quint8 timeIndex, quint32 remainTime, QString filePath);
+    bool analyzeHistorySpectrumData(quint8 cameraIndex,
+                                    quint8 timeIndex/*时刻索引1~3*/,
+                                    quint32 remainTime/**/ ,
+                                    QString filePath/*文件名*/);
 
     // 根据通道号、开始时间、结束时间以及文件存储目录解析波形数据
     bool analyzeHistoryWaveformData(
@@ -321,8 +338,11 @@ public:
     static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_FLAG_NO_BUFFERING);//O_RDWR
 
     enum MeasureMode{
-        mmContinue,// 连续测量
-        mmSingle,// 单次测量
+        mmTest          = 0x01,// 测试模式
+        mmSingle        = 0x02,// 单次测量
+        mmContinue      = 0x04,// 连续测量
+        mmSingleTest    = mmTest | mmSingle,// 单次测量
+        mmContinueTest  = mmTest | mmContinue,// 连续测量
     };
     void setMeasureMode(MeasureMode mm = mmSingle){mMeasureMode = mm;};
 

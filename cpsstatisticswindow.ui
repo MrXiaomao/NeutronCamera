@@ -2011,7 +2011,14 @@
     <addaction name="separator"/>
     <addaction name="action_colorTheme"/>
    </widget>
+   <widget class="QMenu" name="menu_setup">
+    <property name="title">
+     <string>配置(&amp;T)</string>
+    </property>
+    <addaction name="action_cfgParam"/>
+   </widget>
    <addaction name="menu_file"/>
+   <addaction name="menu_setup"/>
    <addaction name="menu_theme"/>
    <addaction name="menu_help"/>
   </widget>
@@ -2089,10 +2096,10 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>明亮(&amp;L)</string>
+    <string>浅色(&amp;L)</string>
    </property>
    <property name="toolTip">
-    <string>切换到明亮主题</string>
+    <string>切换到浅色主题</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Alt+L</string>
@@ -2103,10 +2110,10 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>暗黑(&amp;D)</string>
+    <string>深色(&amp;D)</string>
    </property>
    <property name="toolTip">
-    <string>切换到暗黑主题</string>
+    <string>切换到深色主题</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Alt+D</string>
@@ -2117,10 +2124,10 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>主题颜色(&amp;C)</string>
+    <string>主题色(&amp;C)</string>
    </property>
    <property name="toolTip">
-    <string>设置主题颜色，取消设置默认值</string>
+    <string>设置主题色</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Alt+C</string>
@@ -2223,6 +2230,15 @@
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_cfgParam">
+   <property name="icon">
+    <iconset resource="../3rdParty/resource/resource.qrc">
+     <normaloff>:/canshushezhi-05.png</normaloff>:/canshushezhi-05.png</iconset>
+   </property>
+   <property name="text">
+    <string>参数设置</string>
    </property>
   </action>
  </widget>

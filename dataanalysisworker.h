@@ -1,4 +1,4 @@
-#ifndef DATAANALYSISWORKER_H
+﻿#ifndef DATAANALYSISWORKER_H
 #define DATAANALYSISWORKER_H
 
 #include <QObject>
@@ -14,7 +14,9 @@
 
 #ifndef H5_DATA_COLS
 #define H5_DATA_EXTEND      2       //触发时刻1（毫秒）+峰值1
-#define H5_DATA_WAVEFORM    512     //扩展数据长度
+#define RISING_WIDTH        5       //波形上升沿宽度
+#define WAVEFORM_LENGTH     512     //波形上升沿参考点
+#define H5_DATA_WAVEFORM    WAVEFORM_LENGTH     //扩展数据长度
 #define H5_DATA_COLS        (H5_DATA_WAVEFORM + H5_DATA_EXTEND)
 #endif //H5_DATA_COLS
 
@@ -23,7 +25,7 @@ struct FileJob {
     QString filePath;
     quint8 deviceIndex = 0;      // 1~6
     quint32 packerStartTime = 0; // ms
-    QByteArray data;             // 约 256MB
+    //QByteArray data;             // 约 256MB
 };
 
 // 数据分析工作线程类
@@ -193,7 +195,7 @@ public:
     void run() override {
         // 1) 从 buffer 解交织出 4 通道
         QVector<qint16> ch[3];
-        if (!DataAnalysisWorker::readBin3Ch_fast(mJob.data, ch[0], ch[1], ch[2], true)) {
+        if (!DataAnalysisWorker::readBin3Ch_fast(mJob.filePath, ch[0], ch[1], ch[2], true)) {
             if (mOnFinished) mOnFinished();
             return;
         }
@@ -235,7 +237,7 @@ public:
 private:
     FileJob mJob;
     quint8 mCameraIndex = 0;
-    int mThreshold = 0;
+    int mThreshold = 200;
     int mPre = 5;
     int mPost = 200;
     std::function<void(quint32, quint8, QVector<std::array<qint16, H5_DATA_COLS>>&)> mCallback;

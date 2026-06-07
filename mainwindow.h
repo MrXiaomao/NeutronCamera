@@ -3,8 +3,7 @@
 
 #include <QMainWindow>
 #include "pciecommsdk.h"
-#include "detsettingwindow.h"
-#include "netsettingwindow.h"
+#include "settingwindow.h"
 #include "QGoodWindowHelper"
 #include "commhelper.h"
 
@@ -105,8 +104,6 @@ private slots:
 
     void on_action_cfgParam_triggered();
 
-    void on_action_cfgNet_triggered();
-
     void on_pushButton_selChannel1_clicked();
 
     void on_pushButton_selChannel2_clicked();
@@ -141,8 +138,8 @@ private:
     Ui::MainWindow *ui;
     CommHelper* mCommHelper = nullptr;
     PCIeCommSdk mPCIeCommSdk;
-    DetSettingWindow *mDetSettingWindow = nullptr;
-    NetSettingWindow *mNetSettingWindow = nullptr;
+    SettingWindow *mSettingWindow = nullptr;
+
     bool mIsAlarm[2] = {false, false};//0-温度 1-电压
     bool mIsMeasuring = false;
     quint8 mCurrentPageIndex = 1;
@@ -159,6 +156,7 @@ private:
 
     class QGoodWindowHelper *mainWindow = nullptr;
     bool mEnableContinueMeasuer = false;
+    int mCurrentMeasuerCount = 0;
     int mContinueMeasuerCount = 0;
     int mContinueMeasuerFailCount = 0;
 };

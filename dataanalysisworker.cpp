@@ -1,4 +1,4 @@
-#include "dataanalysisworker.h"
+﻿#include "dataanalysisworker.h"
 #include "globalsettings.h"
 #include <cstring> // std::memcpy
 
@@ -360,8 +360,8 @@ void DataAnalysisWorker::getValidWave()
     emit logMessage(QString("开始处理波形数据，阈值: %1").arg(threshold), QtInfoMsg);
 
     // 设置触发阈值前后波形点数
-    int pre_points = 5;
-    int post_points = 256 - pre_points - 1;
+    int pre_points = RISING_WIDTH;
+    int post_points = WAVEFORM_LENGTH - pre_points - 1;
 
     if (dataDir.isEmpty()) {
         emit logMessage("数据目录路径为空", QtWarningMsg);
@@ -412,17 +412,19 @@ void DataAnalysisWorker::getValidWave()
             }
         }
 
+        QString cardName = QString("%1-%2").arg((deviceIndex+1)/2).arg((deviceIndex%2 == 0) ? "DDR1" : "DDR2");
+
         // 这里需要判断对应的板卡是否存在数据
         if (tempFileList[deviceIndex-1].size() == 0){
             const int totalProgress = 1;
             const int currentProgress = 1;
             emit progressUpdated(currentProgress, totalProgress);
             processedBoards++;
-            emit logMessage(QString("板卡%1无数据...").arg(deviceIndex), QtInfoMsg);
+            emit logMessage(QString("板卡%1无数据...").arg(cardName), QtInfoMsg);
             continue;
         }
 
-        emit logMessage(QString("开始处理板卡%1的数据...").arg(deviceIndex), QtInfoMsg);
+        emit logMessage(QString("开始处理板卡%1的数据...").arg(cardName), QtInfoMsg);
 
         //对每个通道的有效波形数据进行合并
         QVector<std::array<qint16, H5_DATA_COLS>> wave_ch0_all;
@@ -432,7 +434,7 @@ void DataAnalysisWorker::getValidWave()
         int totalFiles = endFile - startFile;
         int processedFiles = 0;
 
-        emit logMessage(QString("正在提取板卡%1的波形数据（读盘-计算流水线）...").arg(deviceIndex), QtInfoMsg);
+        emit logMessage(QString("正在提取板卡%1的波形数据（读盘-计算流水线）...").arg(cardName), QtInfoMsg);
 
         // 读盘线程：顺序读文件，尽量让磁盘持续满载
         // 队列容量建议 2~4（每个文件约120MB，容量越大占用内存越多）
@@ -461,38 +463,42 @@ void DataAnalysisWorker::getValidWave()
 
                 const QString fileName = tempFileList[deviceIndex-1][i];// QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
                 const QString filePath = QDir(dataDir).filePath(fileName);
+                if (!QFile::exists(filePath)){
+                    emit logMessage(QString("板卡%1 文件%2: 不存在").arg(cardName).arg(fileName), QtWarningMsg);
+                    continue;
+                }
                 int fileID = QFileInfo(fileName).baseName().mid(QFileInfo(fileName).baseName().indexOf("data")+4).toInt();
 
-                QFile f(filePath);
-                if (!f.open(QIODevice::ReadOnly)) {
-                    emit logMessage(QString("板卡%1 文件%2: 打开失败").arg(deviceIndex).arg(fileName), QtWarningMsg);
-                    continue;
-                }
-                // 大文件：增大缓冲，减少 read 系统调用次数
-                // f.setReadBufferSize(16 * 1024 * 1024);
+                // QFile f(filePath);
+                // if (!f.open(QIODevice::ReadOnly)) {
+                //     emit logMessage(QString("板卡%1 文件%2: 打开失败").arg(cardName).arg(fileName), QtWarningMsg);
+                //     continue;
+                // }
+                // // 大文件：增大缓冲，减少 read 系统调用次数
+                // // f.setReadBufferSize(16 * 1024 * 1024);
 
-                const qint64 size = f.size();
-                if (size <= 0) {
-                    f.close();
-                    emit logMessage(QString("板卡%1 文件%2: 文件大小异常").arg(deviceIndex).arg(fileName), QtWarningMsg);
-                    continue;
-                }
+                // const qint64 size = f.size();
+                // if (size <= 0) {
+                //     f.close();
+                //     emit logMessage(QString("板卡%1 文件%2: 文件大小异常").arg(cardName).arg(fileName), QtWarningMsg);
+                //     continue;
+                // }
 
-                QByteArray buf = f.readAll();
-                if (buf.isEmpty()) {
-                    f.close();
-                    emit logMessage(QString("板卡%1 文件%2: 读取不完整 (%3/%4)")
-                                    .arg(deviceIndex).arg(fileName), QtWarningMsg);
-                    continue;
-                }
+                // QByteArray buf = f.readAll();
+                // if (buf.isEmpty()) {
+                //     f.close();
+                //     emit logMessage(QString("板卡%1 文件%2: 读取不完整 (%3/%4)")
+                //                     .arg(cardName).arg(fileName), QtWarningMsg);
+                //     continue;
+                // }
+                // f.close();
 
                 FileJob job;
                 job.filePath = filePath;
                 job.deviceIndex = static_cast<quint8>(deviceIndex);
                 job.packerStartTime = static_cast<quint32>((fileID-1) * timePerFile);
-                job.data = std::move(buf);
+                //job.data = std::move(buf);
                 queue.push(std::move(job));
-                f.close();
             }
 
             producerDone = true;
@@ -571,17 +577,17 @@ void DataAnalysisWorker::getValidWave()
             return;
         }
 
-        emit logMessage(QString("板卡%1: 已处理 %2/%3 个文件").arg(deviceIndex).arg(processedFiles).arg(totalFiles), QtInfoMsg);
+        emit logMessage(QString("板卡%1: 已处理 %2/%3 个文件").arg(cardName).arg(processedFiles).arg(totalFiles), QtInfoMsg);
 
         // 存储有效波形数据到HDF5文件
-        emit logMessage(QString("正在写入板卡%1的波形数据...").arg(deviceIndex), QtInfoMsg);
+        emit logMessage(QString("正在写入板卡%1的波形数据...").arg(cardName), QtInfoMsg);
         if (!writeWaveformToHDF5(hdf5FilePath, deviceIndex, wave_ch0_all, wave_ch1_all, wave_ch2_all)) {
-            emit logMessage(QString("写入板卡%1的波形数据失败，请检查文件路径和权限").arg(deviceIndex), QtCriticalMsg);
-            emit analysisFinished(false, QString("写入板卡%1的波形数据失败").arg(deviceIndex));
+            emit logMessage(QString("写入板卡%1的波形数据失败，请检查文件路径和权限").arg(cardName), QtCriticalMsg);
+            emit analysisFinished(false, QString("写入板卡%1的波形数据失败").arg(cardName));
             return;
         } else {
             emit logMessage(QString("板卡%1写入成功: 通道%2=%3个波形, 通道%4=%5个波形, 通道%6=%7个波形")
-                        .arg(deviceIndex)
+                        .arg(cardName)
                         .arg((deviceIndex-1)*3+1)
                         .arg(wave_ch0_all.size() > 4 ? wave_ch0_all.size()-4 : 0)
                         .arg((deviceIndex-1)*3+2)

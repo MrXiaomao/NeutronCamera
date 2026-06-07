@@ -1,5 +1,6 @@
 ﻿#include "commhelper.h"
 #include "globalsettings.h"
+#include "AppConfig.h"
 
 #include <QTimer>
 #include <QDataStream>
@@ -67,9 +68,6 @@ void CommHelper::initSocket()
     connect(mTcpClient, SIGNAL(connected()), this, SLOT(connected()));
 
     // 初始化UDP
-    GlobalSettings settings(DEVICE_CONFIG_FILE);
-    quint32 port = settings.value("Net/portLocal", 1000).toUInt();
-
     this->mUdpStatusClient1 = new QUdpSocket();
     connect(mUdpStatusClient1, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
 
@@ -226,7 +224,7 @@ void CommHelper::DoReadyRead(QByteArray& tempData)
         return;
     }
 
-    mRawData .append(tempData);
+    mRawData.append(tempData);
     while (mRawData.contains('@') && mRawData.contains('#')){
         quint32 start = mRawData.indexOf('@');
         quint32 end = mRawData.indexOf('#', start);
@@ -369,10 +367,9 @@ void CommHelper::connected()
 */
 bool CommHelper::connectServer()
 {
-    GlobalSettings settings(DEVICE_CONFIG_FILE);
-    QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
-    quint32 port = settings.value("Net/portRemote", 8000).toUInt();
-    quint32 portLocal = settings.value("Net/portLocal", 1000).toUInt();
+    QString ip = AppConfig::instance().ipAddress();
+    quint32 port = AppConfig::instance().remotePort();
+    quint32 portLocal = AppConfig::instance().localPort();
 
     this->mUdpStatusClient1->close();
     if (this->mUdpStatusClient1->bind(QHostAddress::Any, portLocal, QUdpSocket::ShareAddress)){
@@ -399,9 +396,9 @@ bool CommHelper::connectServer()
 */
 void CommHelper::disconnectServer()
 {
-    GlobalSettings settings(DEVICE_CONFIG_FILE);
-    QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
-    quint32 port = settings.value("Net/portRemote", 8000).toUInt();
+    QString ip = AppConfig::instance().ipAddress();
+    quint32 port = AppConfig::instance().remotePort();
+
     QByteArray datagram("stop");
     mUdpStatusClient1->writeDatagram(datagram, QHostAddress(ip), port);
     mUdpStatusClient1->close();
@@ -465,9 +462,8 @@ bool CommHelper::switchBackupChannel(quint32 channel, bool on)
     // QByteArray datagram = QByteArray::fromHex("A5 03 ff ff");
     // quint32 data = 0xffff03A5;
 
-    GlobalSettings settings(DEVICE_CONFIG_FILE);
-    QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
-    quint32 port = settings.value("Net/portRemote", 8000).toUInt();
+    QString ip = AppConfig::instance().ipAddress();
+    quint32 port = AppConfig::instance().remotePort();
     mUdpStatusClient1->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
     //mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 1000);
     //mTcpClient->write((const char*)&v, sizeof(quint32));
@@ -492,9 +488,8 @@ bool CommHelper::switchAllBackupChannel(bool on)
     quint32 v = bits.to_ulong();
     v = qbswap(v);//转为网络大端字节顺序
 
-    GlobalSettings settings(DEVICE_CONFIG_FILE);
-    QString ip = settings.value("Net/ipRemote", "192.168.1.212").toString();
-    quint32 port = settings.value("Net/portRemote", 8000).toUInt();
+    QString ip = AppConfig::instance().ipAddress();
+    quint32 port = AppConfig::instance().remotePort();
     mUdpStatusClient1->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
     //mTcpClient->write((const char*)&v, sizeof(quint32));
 

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>中子相机</string>
+   <string>中子伽马相机在线测量软件</string>
   </property>
   <property name="windowIcon">
    <iconset resource="../3rdParty/resource/resource.qrc">
@@ -369,6 +369,9 @@
             </item>
            </widget>
           </item>
+          <item>
+           <widget class="QMdiArea" name="mdiArea"/>
+          </item>
          </layout>
         </item>
         <item>
@@ -570,7 +573,7 @@
         <item row="0" column="0">
          <widget class="QStackedWidget" name="stackedWidget">
           <property name="currentIndex">
-           <number>1</number>
+           <number>2</number>
           </property>
           <widget class="QWidget" name="spectroMeterPageInfoWidget_LSD">
            <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -1261,7 +1264,7 @@
                    <number>10000</number>
                   </property>
                   <property name="singleStep">
-                   <number>10</number>
+                   <number>1</number>
                   </property>
                   <property name="value">
                    <number>10</number>
@@ -1315,7 +1318,7 @@
                    <number>10000</number>
                   </property>
                   <property name="singleStep">
-                   <number>10</number>
+                   <number>1</number>
                   </property>
                   <property name="value">
                    <number>20</number>
@@ -1364,7 +1367,7 @@
                    <number>10000</number>
                   </property>
                   <property name="singleStep">
-                   <number>10</number>
+                   <number>1</number>
                   </property>
                   <property name="value">
                    <number>30</number>
@@ -1661,7 +1664,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>18</height>
+     <height>17</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -1701,6 +1704,8 @@
     </property>
     <addaction name="action_manualTrigger"/>
     <addaction name="action_externalTrigger"/>
+    <addaction name="separator"/>
+    <addaction name="action_test"/>
    </widget>
    <widget class="QMenu" name="menu_detType">
     <property name="title">
@@ -1860,10 +1865,10 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>明亮(&amp;L)</string>
+    <string>浅色(&amp;L)</string>
    </property>
    <property name="toolTip">
-    <string>切换到明亮主题</string>
+    <string>浅色主题</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Alt+L</string>
@@ -1874,10 +1879,10 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>暗黑(&amp;D)</string>
+    <string>深色(&amp;D)</string>
    </property>
    <property name="toolTip">
-    <string>切换到暗黑主题</string>
+    <string>深色主题</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Alt+D</string>
@@ -1888,10 +1893,10 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>主题颜色(&amp;C)</string>
+    <string>主题色(&amp;C)</string>
    </property>
    <property name="toolTip">
-    <string>设置主题颜色，取消设置默认值</string>
+    <string>设置主题色</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Alt+C</string>
@@ -2061,6 +2066,20 @@
    </property>
    <property name="text">
     <string>数据综合分析</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_test">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>测试模式</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

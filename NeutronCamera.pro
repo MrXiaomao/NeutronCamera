@@ -1,4 +1,4 @@
-QT       += core gui sql network concurrent
+QT       += core gui sql network concurrent xml
 #QT       += datavisualization 3dextras
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
@@ -11,45 +11,44 @@ CONFIG += c++17
 DEFINES += ENABLE_IOCP=0   #启用IO完成端口
 
 SOURCES += \
+    AppConfig.cpp \
     commhelper.cpp \
     cpsstatisticswindow.cpp \
     dataanalysisworker.cpp \
     datacompresswindow.cpp \
-    detsettingwindow.cpp \
     globalsettings.cpp \
     main.cpp \
     mainwindow.cpp \
     n_gamma.cpp \
-    netsettingwindow.cpp \
     pciecommsdk.cpp \
     pcieiocpreader.cpp \
     qgaugepanel.cpp \
+    settingwindow.cpp \
     switchbutton.cpp \
     waitingspinnerwidget.cpp
 
 HEADERS += \
+    AppConfig.h \
     commhelper.h \
     cpsstatisticswindow.h \
     dataanalysisworker.h \
     datacompresswindow.h \
-    detsettingwindow.h \
     n_gamma.h \
-    netsettingwindow.h \
     pciecommsdk.h \
     pcieiocpreader.h \
     qgaugepanel.h \
     qlitethread.h \
     globalsettings.h \
     mainwindow.h \
+    settingwindow.h \
     switchbutton.h \
     waitingspinnerwidget.h
 
 FORMS += \
     cpsstatisticswindow.ui \
     datacompresswindow.ui \
-    detsettingwindow.ui \
     mainwindow.ui \
-    netsettingwindow.ui
+    settingwindow.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
@@ -59,6 +58,8 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 RESOURCES += \
     lresource.qrc
 
+################################################################################################
+# 指定程序编译路径和名称
 DESTDIR = $$PWD/../build_NeutronCamera
 contains(QT_ARCH, x86_64) {
     # x64
@@ -76,19 +77,13 @@ message(DESTDIR = $$DESTDIR)
 #避免创建空的debug和release目录
 CONFIG -= debug_and_release
 CONFIG(debug, debug|release) {
-    TARGET = NeutronCamerad
-} else {
-    TARGET = NeutronCamera
-}
-
-CONFIG += ONLY_SAVE_ERRORDATA
-contains(CONFIG, ONLY_SAVE_ERRORDATA){
-    DEFINES += ONLY_SAVE_ERRORDATA=1
     TARGET = NeutronCameradv3
 } else {
+    TARGET = NeutronCamerav3
 }
 
-#指定编译产生的文件分门别类放到对应目录
+################################################################################################
+# 指定编译产生的文件分门别类放到对应目录
 MOC_DIR     = temp/moc
 RCC_DIR     = temp/rcc
 UI_DIR      = temp/ui
@@ -100,7 +95,8 @@ CONFIG += warn_off
 #开启大资源支持
 CONFIG += resources_big
 
-#############################################################################################################
+################################################################################################
+# 更新程序版本信息
 exists (./.git) {
     GIT_BRANCH   = $$system(git rev-parse --abbrev-ref HEAD)
     GIT_DATE     = $$system(git show --oneline --format=\"%ci\" -s HEAD)
@@ -120,6 +116,7 @@ DEFINES += GIT_VERSION=\"\\\"$$GIT_VERSION\\\"\"
 DEFINES += APP_VERSION="\\\"V3.0.1\\\""
 DEFINES +=_WIN32_WINNT=0x0601
 
+################################################################################################
 windows {
     message("The current environment is a Windows system")
 
@@ -138,9 +135,7 @@ windows {
     }
     # MSVC
     *-msvc* {
-#        QMAKE_CXXFLAGS += /utf-8
-#        QMAKE_CXXFLAGS += /source-charset:utf-8
-#        QMAKE_CXXFLAGS += /execution-charset:utf-8
+        QMAKE_CXXFLAGS += /utf-8
     }
 }
 #QMAKE_MANIFEST += $$PWD/manifest.xml
@@ -154,6 +149,9 @@ unix:!macx:{
     QMAKE_LFLAGS += -fexec-charset=UTF-8
 }
 
+
+################################################################################################
+# 引用第三方库文件
 include($$PWD/../3rdParty/log4qt/Include/log4qt.pri)
 include($$PWD/../3rdParty/resource/resource.pri)
 include($$PWD/../3rdParty/QCustomPlot/QCustomPlot.pri)
@@ -163,10 +161,34 @@ include($$PWD/../3rdParty/QGoodWindow/QGoodWindowHelper/QGoodWindowHelper.pri)
 include($$PWD/../3rdParty/hdf5/C++/hdf5Wrapper.pri)
 include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
 include($$PWD/../3rdParty/cv2pdb/generate_pdb.pri)
+include($$PWD/../3rdParty/QtnProperty-2.0.3/QtnProperty/QtnProperty.pri)
 
+################################################################################################
+# 添加预编译头文件
 # 添加config配置
 # CONFIG += precompile_header
 # 指定要使用的预编译头文件
-# PRECOMPILED_HEADER += stable.h
+# PRECOMPILED_HEADER += pch.h
 
+################################################################################################
+# 枚举设备管理器里面的xinlin设备列表
 win32: LIBS += -lsetupapi -lwinmm
+
+################################################################################################
+# 给程序启动添加管理员权限
+win32 {
+    # MinGW
+    *-g++* {
+        # RC_FILE = app.rc
+    }
+
+    *-msvc* {
+        # 强制要求程序以管理员权限启动
+        QMAKE_LFLAGS += /MANIFESTUAC:"level='requireAdministrator' uiAccess='false'"
+
+        # 如果只需要Release版本开启管理员权限，可以改成：
+        # CONFIG(release, debug|release) {
+        #     QMAKE_LFLAGS += /MANIFESTUAC:"level='requireAdministrator' uiAccess='false'"
+        # }
+        }
+}
