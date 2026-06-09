@@ -215,6 +215,8 @@ public:
 
     // nγ甄别
     Q_SLOT void onNGammaFilter();
+    Q_SLOT void onNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
+    Q_SLOT void onGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
 
     // 计数率统计相关槽函数
     Q_SLOT void onCpsStatistics(int minPeak = 0, int maxPeak = 16384);

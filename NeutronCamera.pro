@@ -99,7 +99,7 @@ CONFIG += resources_big
 # 更新程序版本信息
 exists (./.git) {
     GIT_BRANCH   = $$system(git rev-parse --abbrev-ref HEAD)
-    GIT_DATE     = $$system(git show --oneline --format=\"%ci\" -s HEAD)
+    GIT_DATE = $$system(git show --oneline --format=\"%ci\" -s HEAD)
     GIT_HASH     = $$system(git show --oneline --format=\"%H\" -s HEAD)
     GIT_VERSION = "Git: $${GIT_BRANCH}: $${GIT_DATE} $${GIT_HASH}"
 } else {
@@ -109,11 +109,20 @@ exists (./.git) {
     GIT_VERSION     = None
 }
 
+# git 日期含空格时不能直接进 -D，否则 MSVC/clangd 会拆成多个宏（问题项里 Expected ')'）
+GIT_DATE ~= s/ /_/g
+GIT_DATE ~= s/:/-/g
+GIT_DATE ~= s/+//g
+GIT_VERSION ~= s/ /_/g
+GIT_VERSION ~= s/:/-/g
+GIT_VERSION ~= s/+//g
+
 DEFINES += GIT_BRANCH=\"\\\"$$GIT_BRANCH\\\"\"
 DEFINES += GIT_DATE=\"\\\"$$GIT_DATE\\\"\"
 DEFINES += GIT_HASH=\"\\\"$$GIT_HASH\\\"\"
 DEFINES += GIT_VERSION=\"\\\"$$GIT_VERSION\\\"\"
-DEFINES += APP_VERSION="\\\"V3.0.1\\\""
+DEFINES += APP_VERSION="\\\"V3.1.2\\\""
+
 DEFINES +=_WIN32_WINNT=0x0601
 
 ################################################################################################
@@ -155,8 +164,6 @@ unix:!macx:{
 include($$PWD/../3rdParty/log4qt/Include/log4qt.pri)
 include($$PWD/../3rdParty/resource/resource.pri)
 include($$PWD/../3rdParty/QCustomPlot/QCustomPlot.pri)
-include($$PWD/../3rdParty/QGoodWindow/QGoodWindow/QGoodWindow.pri)
-include($$PWD/../3rdParty/QGoodWindow/QGoodCentralWidget/QGoodCentralWidget.pri)
 include($$PWD/../3rdParty/QGoodWindow/QGoodWindowHelper/QGoodWindowHelper.pri)
 include($$PWD/../3rdParty/hdf5/C++/hdf5Wrapper.pri)
 include($$PWD/../3rdParty/alglib-cpp/alglib.pri)

@@ -81,6 +81,7 @@ bool DataAnalysisWorker::readBin3Ch_fast(const QString& filePath,
     if (!f.open(QIODevice::ReadOnly)) return false;
     QByteArray buf = f.readAll();;
     f.close();
+
     return DataAnalysisWorker::readBin3Ch_fast(buf, ch0, ch1, ch2, littleEndian);
 }
 

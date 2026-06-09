@@ -44,9 +44,7 @@ public:
     void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
     void applyColorTheme();
     void updateTableRowHidden();
-    // void checkTemperatureLimit(quint8 row, quint8 column, float v1, float);
-    // void check29VoltageLimit(quint8 row, quint8 column, float v1, float v2);
-    // void check48VoltageLimit(quint8 row, quint8 column, float v);
+    void recordExternalCommand(const QString&);
 
     qint64 getDiskFreeSpace(const QString& disk = "C:/");
     QPixmap maskPixmap(QPixmap, QSize sz, QColor clrMask);
@@ -59,13 +57,15 @@ public:
 
 public slots:
     void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
-    void onNeutronSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//中子能谱
-    void onGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);//伽马能谱
+    void onNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);//中子能谱
+    void onGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);//伽马能谱
+    void onStartMeasure();//开始测量
 
 signals:
     void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    void reportNeutronSpectrum(quint8, quint8, QVector<QPair<double,double>>&);
-    void reportGammaSpectrum(quint8, quint8, QVector<QPair<double,double>>&);
+    void doNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
+    void doGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
+    void doStartMeasure();//开始测量
 
 private slots:
     void on_action_exit_triggered();
@@ -118,12 +118,6 @@ private slots:
 
     void on_action_init_triggered();
 
-    void on_action_clock_triggered(bool checked);
-
-    void on_action_shotNum_triggered(bool checked);
-
-    void on_action_stop_triggered(bool checked);
-
     void on_action_status_triggered(bool checked);
 
     void on_action_reset_triggered();
@@ -141,12 +135,9 @@ private:
     SettingWindow *mSettingWindow = nullptr;
 
     bool mIsAlarm[2] = {false, false};//0-温度 1-电压
-    bool mIsMeasuring = false;
+    bool mIsMeasuring = false;// 测量是否正在进行
     quint8 mCurrentPageIndex = 1;
     DetectorType mCurrentDetectorType = dtLSD; // 1-LSD 2-PSD 3-LBD
-    bool mEnableAutoUpdateShotnum = false;//是否启用自动更新炮号
-    bool mEnableClockSynchronization = false;//是否启用时钟同步
-    bool mEnableEmergencyStop = false;//是否启用紧急停机
     QString mCurrentSavePath;
 
     bool mIsDarkTheme = true;
@@ -155,7 +146,9 @@ private:
     QColor mThemeColor = QColor(255,255,255);
 
     class QGoodWindowHelper *mainWindow = nullptr;
-    bool mEnableContinueMeasuer = false;
+    bool mEnableContinueMeasuer = false; // 启用连续测量
+    bool mExternalTriggerMode = false;// 启用外触发
+    bool mExternalSignalTriggered = false;// 外触发信号是否已经触发
     int mCurrentMeasuerCount = 0;
     int mContinueMeasuerCount = 0;
     int mContinueMeasuerFailCount = 0;

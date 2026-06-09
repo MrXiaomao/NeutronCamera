@@ -391,6 +391,16 @@
           </item>
          </layout>
         </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_13">
+          <item>
+           <widget class="QCustomPlot" name="spectroMeter_neutronSpectrum" native="true"/>
+          </item>
+          <item>
+           <widget class="QCustomPlot" name="spectroMeter_gammaSpectrum" native="true"/>
+          </item>
+         </layout>
+        </item>
        </layout>
       </widget>
      </widget>
@@ -759,6 +769,9 @@
               </item>
               <item row="0" column="1">
                <widget class="QSpinBox" name="spinBox_startT_1">
+                <property name="minimum">
+                 <number>0</number>
+                </property>
                 <property name="maximum">
                  <number>10000</number>
                 </property>

@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QDebug>
+#include <QVector>
 #include "pcieiocpreader.h"
 
 #ifdef _WIN32
@@ -212,8 +213,6 @@ public:
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
 
-    Q_SLOT void replyCaptureWaveformData(quint8, bool, quint32, const QByteArray&);
-    Q_SLOT void replyCaptureSpectrumData(quint8, bool, quint32, const  QByteArray&);
     Q_SLOT void replySettingFinished();
 
     Q_SLOT void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
@@ -249,15 +248,15 @@ public:
     /*初始化*/
     void initCaptureThreads();
 
-    /*设置采集参数，离线*/
-    void setCaptureParamter(CaptureTime captureTime, quint8 cameraIndex, quint32 timeLength, quint32 tmMeasure);
-    /*设置采集参数，在线*/
-    void setCaptureParamter(quint8 horCameraIndex, quint8 verCameraIndex, QVector<quint32> tmMeasure);
-    
-    bool analyzeHistorySpectrumData(quint8 cameraIndex,
-                                    quint8 timeIndex/*时刻索引1~3*/,
-                                    quint32 remainTime/**/ ,
-                                    QString filePath/*文件名*/);
+    /*解析能谱数据*/
+    bool analyzeHistorySpectrumData(const quint8& cameraIndex,
+                                    const quint32& timeStart/*开始时刻*/,
+                                    const quint32& timeStop/*停止时刻*/ ,
+                                    const QString& filePath/*文件名*/,
+                                    std::function<void(
+                                        QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>&,
+                                        QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>&
+                                        )> callback);
 
     // 根据通道号、开始时间、结束时间以及文件存储目录解析波形数据
     bool analyzeHistoryWaveformData(
@@ -354,13 +353,6 @@ private:
     QMap<quint32, CaptureThread*> mMapCaptureThread;
     QStringList mDevices;
     QMap<quint32, bool> mThreadRunning;
-    quint8 mCameraIndex = 1;/*相机序号*/
-    quint8 mHorCameraIndex = 1;/*在线分析-水平相机序号*/
-    quint8 mVerCameraIndex = 12;/*在线分析-垂直相机序号*/
-    QVector<quint32> mTimestampMs;/*分析时刻，单位ms*/
-    quint32 mRemainTime = 0;/*剩余时间,单位ms*/
-    CaptureTime mCaptureTime = oldCaptureTime;/*采集时间，单位ms*/
-    quint32 mTimeLength = 1; /*要提取的波形时间长度，单位ms，默认1ms*/
     MeasureMode mMeasureMode = mmSingle;
 };
 

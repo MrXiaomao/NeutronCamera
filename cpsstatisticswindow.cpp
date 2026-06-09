@@ -1071,6 +1071,27 @@ void CpsStatisticsWindow::initNGammaPage()
             itemText->position->setAxisRect(customPlot->axisRect()); // 绑定到当前轴矩形
             itemText->setText("品质因子：-");
         }
+        if (customPlot == ui->spectroMeter_neutronSpectrum || customPlot == ui->spectroMeter_gammaSpectrum){
+            customPlot->xAxis->setRange(0, 2048);
+            customPlot->yAxis->setRange(0, 10000);
+
+            QColor colors[] = {Qt::red, Qt::blue};
+            QString title[] = {"水平", "垂直"};
+            customPlot->legend->setVisible(true);
+            for (int i=0; i<2; ++i){
+                QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
+                graph->setAntialiased(false);
+                graph->setPen(QPen(colors[i]));
+                graph->selectionDecorator()->setPen(QPen(colors[i]));
+                graph->setLineStyle(QCPGraph::lsLine);
+                graph->setSelectable(QCP::SelectionType::stNone);
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
+                graph->setName(title[i]);
+            }
+
+            QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
+            customPlotHelper->setGraphCheckBox(customPlot);
+        }
 
         customPlot->replot();
         connect(customPlot->xAxis, SIGNAL(rangeChanged(const QCPRange &)), customPlot->xAxis2, SLOT(setRange(const QCPRange &)));
@@ -1085,6 +1106,9 @@ void CpsStatisticsWindow::initNGammaPage()
     initCustomPlot(ui->spectroMeter_horCamera_FOM, tr("水平 PSD FOM图"), tr("Counts"));
     initCustomPlot(ui->spectroMeter_verCamera_PSD, tr("垂直 n/γ Energy(MeVee) PSD图"), tr("PSD"));
     initCustomPlot(ui->spectroMeter_verCamera_FOM, tr("垂直 PSD FOM图"), tr("Counts"));
+
+    initCustomPlot(ui->spectroMeter_neutronSpectrum, tr("道址"), tr("中子能谱"));
+    initCustomPlot(ui->spectroMeter_gammaSpectrum, tr("道址"), tr("伽马能谱"));
 }
 
 void CpsStatisticsWindow::initCpsPage()
@@ -2261,31 +2285,10 @@ void CpsStatisticsWindow::onNGammaFilter()
                     continue;
                 }
 
-                // QFile f(filePath);
-                // if (!f.open(QIODevice::ReadOnly)) {
-                //     if (QFile::exists(filePath))
-                //         emit doWriteLog(QString("文件打开失败：%1").arg(filePath), QtWarningMsg);
-                //     continue;
-                // }
-
-                // const qint64 size = f.size();
-                // if (size <= 0) {
-                //     emit doWriteLog(QString("文件大小异常：%1").arg(filePath), QtWarningMsg);
-                //     continue;
-                // }
-
                 QElapsedTimer readTimer;
                 readTimer.start();
-                //QByteArray buf = f.readAll();
                 const qint64 readMs = readTimer.elapsed();
                 totalFileReadTime += readMs;
-
-                // if (buf.isEmpty()) {
-                //     emit doWriteLog(QString("文件读取不完整：%1 ")
-                //                         .arg(filePath),
-                //                     QtWarningMsg);
-                //     continue;
-                // }
 
                 FileJob job;
                 job.filePath = filePath;
@@ -2293,8 +2296,6 @@ void CpsStatisticsWindow::onNGammaFilter()
 
                 // ✅ 修复 packerStartTime：必须随 i 变化
                 job.packerStartTime = static_cast<quint32>((i - 1) * time_per);
-
-                //job.data = std::move(buf);
 
                 queue.push(std::move(job));
             }
@@ -2499,6 +2500,41 @@ void CpsStatisticsWindow::onNGammaFilter()
 
     mWaitingSpinnerWidget->stop();
 }
+
+void CpsStatisticsWindow::onNeutronSpectrum(quint8 cameraIndex , QPair<QVector<double>,QVector<double>>& pairs)
+{
+    quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
+
+    //实测曲线
+    QCustomPlot* customPlot = ui->spectroMeter_neutronSpectrum;
+    if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
+        customPlot->graph(0)->setData(pairs.first, pairs.second);
+    else
+        customPlot->graph(1)->setData(pairs.first, pairs.second);
+
+    customPlot->xAxis->rescale(true);
+    customPlot->yAxis->rescale(true);
+    //customPlot->yAxis->setRange(yMin-spaceDisc, yMax+spaceDisc);
+    customPlot->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void CpsStatisticsWindow::onGammaSpectrum(quint8 cameraIndex , QPair<QVector<double>,QVector<double>>& pairs)
+{
+    quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
+
+    //实测曲线
+    QCustomPlot* customPlot = ui->spectroMeter_gammaSpectrum;
+    if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
+        customPlot->graph(0)->setData(pairs.first, pairs.second);
+    else
+        customPlot->graph(1)->setData(pairs.first, pairs.second);
+
+    customPlot->xAxis->rescale(true);
+    customPlot->yAxis->rescale(true);
+    //customPlot->yAxis->setRange(yMin-spaceDisc, yMax+spaceDisc);
+    customPlot->replot(QCustomPlot::rpQueuedReplot);
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 void CpsStatisticsWindow::onCpsStatistics(int minPeak, int maxPeak)
