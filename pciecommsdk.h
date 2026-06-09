@@ -223,6 +223,8 @@ public:
 
     Q_SLOT void init(); /* 初始化 */
     Q_SLOT void reset();/* 重置 */
+    Q_SLOT void reboot();/* 重启 */
+    Q_SLOT void setPSDThreshold();/* 设置PSD甄别阈值 */
     Q_SLOT bool test();
 
     /*获取设备数量*/

@@ -2013,7 +2013,7 @@
    </widget>
    <widget class="QMenu" name="menu_setup">
     <property name="title">
-     <string>配置(&amp;T)</string>
+     <string>编辑(&amp;E)</string>
     </property>
     <addaction name="action_cfgParam"/>
    </widget>
@@ -2238,7 +2238,7 @@
      <normaloff>:/canshushezhi-05.png</normaloff>:/canshushezhi-05.png</iconset>
    </property>
    <property name="text">
-    <string>参数设置</string>
+    <string>系统设置</string>
    </property>
   </action>
  </widget>

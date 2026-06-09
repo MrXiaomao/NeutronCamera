@@ -97,6 +97,10 @@ PCIeCommSdk::~PCIeCommSdk()
 }
 
 // 枚举指定设备接口GUID下所有已连接设备，返回设备路径列表
+/*
+    SetupDiEnumDeviceInterfaces 枚举指定设备接口GUID下所有已连接设备（已经禁用设备无法枚举到）
+    SetupDiEnumDeviceInfo 枚举指定设备接口GUID下所有设备（包括已禁用设备)
+*/
 QStringList PCIeCommSdk::enumDevices()
 {
 #ifdef _WIN32
@@ -437,13 +441,99 @@ void PCIeCommSdk::reset()
         writeData(cardIndex, mMapCaptureThread[cardIndex]->userHandle(), 0x20000, QByteArray::fromHex("00 00 00 00"));
 
         // 初始化，设置测量时间
-        PCIeCommSdk::writeData(cardIndex, mMapCaptureThread[cardIndex]->userHandle(), 0x20000, QByteArray::fromHex("30 FA 34 12"));//16-160ms 18-800ms 20-4000ms
+        writeData(cardIndex, mMapCaptureThread[cardIndex]->userHandle(), 0x20000, QByteArray::fromHex("30 FA 34 12"));//16-160ms 18-800ms 20-4000ms
         ::QThread::msleep(100);
-        PCIeCommSdk::writeData(cardIndex, mMapCaptureThread[cardIndex]->userHandle(), 0x20000, QByteArray::fromHex("00 00 00 00"));
+        writeData(cardIndex, mMapCaptureThread[cardIndex]->userHandle(), 0x20000, QByteArray::fromHex("00 00 00 00"));
         ::QThread::msleep(100);
     }
 
     qInfo().nospace() << "复位完成";
+}
+
+
+void PCIeCommSdk::reboot()
+{
+    const GUID& deviceClassGuid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}};
+
+    // 获取指定设备类的设备信息集合
+    HDEVINFO hDevInfo = SetupDiGetClassDevsA(
+        (LPGUID)&deviceClassGuid,
+        nullptr,
+        nullptr,
+        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE
+        );
+
+    if (hDevInfo == INVALID_HANDLE_VALUE) {
+        qCritical() << "Failed to get device info handle, error code:" << GetLastError();
+        return ;
+    }
+
+    SP_DEVINFO_DATA devInfoData = {0};
+    devInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+
+    // 遍历枚举所有匹配设备
+    // 枚举所有设备，匹配目标硬件ID
+    for (DWORD i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, &devInfoData); i++)
+    {
+        // 调用状态变更启用设备
+        // // 构造启用/禁用属性参数
+        // SP_PROPCHANGE_PARAMS propChangeParams = {0};
+        // propChangeParams.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
+        // propChangeParams.ClassInstallHeader.InstallFunction = DIF_PROPERTYCHANGE;
+        // propChangeParams.Scope = DICS_FLAG_GLOBAL;
+        // propChangeParams.StateChange = true ? DICS_ENABLE : DICS_DISABLE;
+
+        {
+            // 先禁用
+            SP_REMOVEDEVICE_PARAMS rmp = {0};
+            rmp.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
+            rmp.ClassInstallHeader.InstallFunction = DIF_REMOVE;
+            // 禁用时不删除设备，只禁用；启用不需要这个参数
+            rmp.Scope = DI_REMOVEDEVICE_GLOBAL;
+
+            // 3. 调用API执行状态变更
+            if (!SetupDiSetClassInstallParams(
+                    hDevInfo,
+                    &devInfoData,
+                    &rmp.ClassInstallHeader,
+                    sizeof(rmp)))
+            {
+                return ;
+            }
+        }
+
+        {
+            // 再启用
+            SP_REMOVEDEVICE_PARAMS rmp = {0};
+            rmp.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
+            rmp.ClassInstallHeader.InstallFunction = DIF_REMOVE;
+
+            // 3. 调用API执行状态变更
+            if (!SetupDiSetClassInstallParams(
+                    hDevInfo,
+                    &devInfoData,
+                    &rmp.ClassInstallHeader,
+                    sizeof(rmp)))
+            {
+                return ;
+            }
+        }
+
+        // 3. 调用API执行状态变更
+        // if (!SetupDiSetClassInstallParams(
+        //         hDevInfo,
+        //         &devInfoData,
+        //         &propChangeParams.ClassInstallHeader,
+        //         sizeof(propChangeParams)))
+        // {
+        //     return ;
+        // }
+
+        // 触发设备属性变更生效
+        SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, hDevInfo, &devInfoData);
+    }
+
+    SetupDiDestroyDeviceInfoList(hDevInfo);
 }
 
 void PCIeCommSdk::setPSDThreshold()
@@ -457,10 +547,12 @@ void PCIeCommSdk::setPSDThreshold()
         QByteArray command = QByteArray::fromHex("00 FD 34 12");
         command[0] = threshold;
         writeData(cardIndex, mMapCaptureThread[cardIndex]->userHandle(), 0x20000, command);//PSD阈值
-        QThread::msleep(100);
-     }
+        ::QThread::msleep(100);
+        writeData(cardIndex, mMapCaptureThread[cardIndex]->userHandle(), 0x20000, QByteArray::fromHex("00 00 00 00"));
+        ::QThread::msleep(100);
+    }
 
-     qInfo().nospace() << "设置PSD阈值：" << threshold;
+    qInfo().nospace() << "设置PSD阈值：" << threshold;
 }
 
 bool PCIeCommSdk::test()
@@ -1786,10 +1878,11 @@ bool CaptureThread::checkDataError()
         qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据已经全部存储到硬盘中！";
     }
 
-    for (int i=0; i<this->mCapturedRef; ++i){
-        memset(mDDRWaveformDatas[i].data(), 0, mDDRWaveformDatas[i].size());
-        memset(mRAMSpectrumDatas[i].data(), 0, mRAMSpectrumDatas[i] .size());
-    }
+    // 清空内存耗时，暂时屏蔽
+    // for (int i=0; i<this->mCapturedRef; ++i){
+    //     memset(mDDRWaveformDatas[i].data(), 0, mDDRWaveformDatas[i].size());
+    //     memset(mRAMSpectrumDatas[i].data(), 0, mRAMSpectrumDatas[i].size());
+    // }
 
     return mDataError;
 }

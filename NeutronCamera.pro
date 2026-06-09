@@ -160,7 +160,6 @@ include($$PWD/../3rdParty/QGoodWindow/QGoodCentralWidget/QGoodCentralWidget.pri)
 include($$PWD/../3rdParty/QGoodWindow/QGoodWindowHelper/QGoodWindowHelper.pri)
 include($$PWD/../3rdParty/hdf5/C++/hdf5Wrapper.pri)
 include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
-include($$PWD/../3rdParty/cv2pdb/generate_pdb.pri)
 include($$PWD/../3rdParty/QtnProperty-2.0.3/QtnProperty/QtnProperty.pri)
 
 ################################################################################################

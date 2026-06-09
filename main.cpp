@@ -51,10 +51,6 @@ void AppMessageHandler(QtMsgType type, const QMessageLogContext& context, const 
 static QTranslator qtTranslator;
 static QTranslator qtbaseTranslator;
 static QTranslator appTranslator;
-// 定义程序唯一标识（必须全局唯一，建议用程序名+UUID）
-#ifdef WIN32
-#  include "app_dmp.h"
-#endif
 int main(int argc, char *argv[])
 {
     QGoodWindow::setup();
@@ -66,11 +62,6 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationDomain("");
     QApplication::setApplicationVersion(APP_VERSION);
     QApplication::setStyle(QStyleFactory::create("fusion"));//WindowsVista fusion windows
-
-    //注冊异常捕获函数
-#ifdef WIN32
-    InstallExceptionFilter();
-#endif
 
     // 强制软件渲染（性能较低，但兼容性更好）
     //QCoreApplication::setAttribute(Qt::AA_UseSoftwareOpenGL);
