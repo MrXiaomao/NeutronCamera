@@ -46,6 +46,8 @@ CpsStatisticsWindow::CpsStatisticsWindow(bool isDarkTheme, QWidget *parent)
     connect(this, SIGNAL(doPSDPlot(quint8,const QVector<double>&, const QVector<double>&, const QVector<double>&)), this,
             SLOT(onPSDPlot(quint8,const QVector<double>&,const QVector<double>&,const QVector<double>&)));
     connect(this, &CpsStatisticsWindow::doFoMPlot, this, &CpsStatisticsWindow::onFoMPlot);
+    connect(this, &CpsStatisticsWindow::doNeutronSpectrum, this, &CpsStatisticsWindow::onNeutronSpectrum);
+    connect(this, &CpsStatisticsWindow::doGammaSpectrum, this, &CpsStatisticsWindow::onGammaSpectrum);
 
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
@@ -266,9 +268,9 @@ void CpsStatisticsWindow::dropEvent(QDropEvent *event)
 
 void CpsStatisticsWindow::onWriteLog(const QString &msg, QtMsgType msgType/* = QtDebugMsg*/)
 {
-#if 0
+#if 1
     // 创建一个 QTextCursor
-    QTextCursor cursor = ui->textEdit_log->textCursor();
+    QTextCursor cursor = ui->plainTextEdit_log->textCursor();
     // 将光标移动到文本末尾
     cursor.movePosition(QTextCursor::End);
 
@@ -283,26 +285,26 @@ void CpsStatisticsWindow::onWriteLog(const QString &msg, QtMsgType msgType/* = Q
     else if (msgType == QtCriticalMsg || msgType == QtFatalMsg)
         cursor.insertHtml(QString("<span style='color:red;'>%1</span>").arg(msg));
     else
-        cursor.insertHtml(QString("<span style='color:green;'>%1</span>").arg(msg));
+        cursor.insertHtml(QString("<span style='color:blue;'>%1</span>").arg(msg));
 
     // 最后插入换行符
     cursor.insertHtml("<br>");
 
     // 确保 QTextEdit 显示了光标的新位置
-    ui->textEdit_log->setTextCursor(cursor);
+    ui->plainTextEdit_log->setTextCursor(cursor);
 #else
-    ui->textEdit_log->append(QString("%1 %2").arg(QDateTime::currentDateTime().toString("[yyyy-MM-dd hh:mm:ss.zzz]"), msg));
+    ui->plainTextEdit_log->append(QString("%1 %2").arg(QDateTime::currentDateTime().toString("[yyyy-MM-dd hh:mm:ss.zzz]"), msg));
 #endif
 
     //限制行数
-    QTextDocument *document = ui->textEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件
+    QTextDocument *document = ui->plainTextEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件
     int rowCount = document->blockCount(); // 获取输出区的行数
     int maxRowNumber = 2000;//设定最大行
     if(rowCount > maxRowNumber){//超过最大行则开始删除
         QTextCursor cursor = QTextCursor(document); // 创建光标对象
         cursor.movePosition(QTextCursor::Start); //移动到开头，就是TXT文件开头
 
-        for (int var = 0; var < rowCount - maxRowNumber; ++var) {
+        for (int var = 0; var < rowCount - maxRowNumber - 500; ++var) {
             cursor.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor); // 向下移动并选中当前行
         }
         cursor.removeSelectedText();//删除选择的文本
@@ -1878,6 +1880,18 @@ void CpsStatisticsWindow::on_action_cps_triggered()
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 void CpsStatisticsWindow::onWaveform()
 {
+    //提取有效波形参数
+    int startTime = ui->spinBox_startT_1->value(); // 开始时刻
+    int endTime = ui->spinBox_endT_1->value(); // 截止时刻
+    if (startTime >= endTime){
+        QMessageBox::information(this, tr("提示"), tr("起始时间不能大于结束时间！"));
+        return;
+    }
+    if(startTime < 0 || endTime > ui->line_waveform_endT_1->text().toInt()){
+        QMessageBox::information(this, tr("提示"), tr("起始时间不能小于0或大于测量时长！"));
+        return;
+    }
+
     // 获取数据目录路径
     QString dataDir = ui->textBrowser_filepath->toPlainText();
     if (dataDir.isEmpty()) {
@@ -1890,9 +1904,6 @@ void CpsStatisticsWindow::onWaveform()
     mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
     mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
 
-    //提取有效波形参数
-    int timeStart = ui->spinBox_startT_1->value(); // 开始时刻
-    int timeStop = ui->spinBox_endT_1->value(); // 截止时刻
     quint8 horCameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
     quint8 verCameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
 
@@ -1902,19 +1913,15 @@ void CpsStatisticsWindow::onWaveform()
        mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
 
         // 水平相机
-        mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, timeStart, timeStop, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+        mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, startTime, endTime, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
 
             onWaveformPlot(horCameraIndex, mapPair);
-            // QMetaObject::invokeMethod(this, [=](){
-            //      mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
-            // }, Qt::QueuedConnection);
-
         });
 
         mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
 
         // 垂直相机
-        mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, timeStart, timeStop, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+        mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, startTime, endTime , dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
 
             onWaveformPlot(verCameraIndex, mapPair);
             QMetaObject::invokeMethod(this, [=](){
@@ -1945,6 +1952,20 @@ QString CpsStatisticsWindow::humanReadableSize(qint64 bytes)
 
 void CpsStatisticsWindow::onDataProcess()
 {
+    // 设置参数
+    int timePerFile = 40;// 每个文件40ms
+    int startTime = ui->spinBox_startT_2->value();
+    int endTime = ui->spinBox_endT_2->value();
+    int threshold = ui->spinBox_threshold_2->value();
+    if (startTime >= endTime){
+        QMessageBox::information(this, tr("提示"), tr("起始时间不能大于结束时间！"));
+        return;
+    }
+    if(startTime < 0 || endTime > ui->line_waveform_endT_2->text().toInt()){
+        QMessageBox::information(this, tr("提示"), tr("起始时间不能小于0或大于测量时长！"));
+        return;
+    }
+
     // 获取数据目录路径
     QString dataDir = ui->textBrowser_filepath->toPlainText();
     if (dataDir.isEmpty()) {
@@ -1957,20 +1978,15 @@ void CpsStatisticsWindow::onDataProcess()
     if (outfileName.isEmpty()) {
         emit doWriteLog("输出文件名不能为空", QtWarningMsg);
         return;
-    }
+    }    
 
     // 检查是否已有.h5后缀（区分大小写）
     if (!outfileName.endsWith(".h5", Qt::CaseSensitive)) {
         outfileName += ".h5";
     }
 
-    emit doWriteLog("========================================", QtInfoMsg);
-    emit doWriteLog("开始数据压缩分析", QtInfoMsg);
-    emit doWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
-
     // 创建HDF5文件路径（在数据目录下）
     QString hdf5FilePath = QDir(dataDir).filePath(outfileName);
-    emit doWriteLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
 
     //检查文件是否存在，如果存在则询问用户是否删除
     if (QFileInfo::exists(hdf5FilePath)) {
@@ -1989,6 +2005,11 @@ void CpsStatisticsWindow::onDataProcess()
         QFile::remove(hdf5FilePath);
         emit doWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
     }
+
+    emit doWriteLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
+    emit doWriteLog("========================================", QtInfoMsg);
+    emit doWriteLog("开始数据压缩分析", QtInfoMsg);
+    emit doWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
 
     mWaitingSpinnerWidget->start();
     mWaitingSpinnerWidget->setText(QStringLiteral("数据压缩处理中，请耐心等待..."));
@@ -2021,13 +2042,6 @@ void CpsStatisticsWindow::onDataProcess()
 
     mAnalysisThread = new QThread(this);
     mAnalysisWorker = new DataAnalysisWorker();
-
-    // 设置参数
-    int timePerFile = 40;// 每个文件40ms
-    int startTime = ui->spinBox_startT_2->value();
-    int endTime = ui->spinBox_endT_2->value();
-    int threshold = ui->spinBox_threshold_2->value();
-
     mAnalysisWorker->setParameters(dataDir, mfileList, outfileName, threshold,
                                    timePerFile, startTime, endTime);
 
@@ -2176,6 +2190,7 @@ void CpsStatisticsWindow::onNGammaFilter()
     int threshold = ui->spinBox_threshold_4->value();
     int pre_points = RISING_WIDTH;
     int post_points = WAVEFORM_LENGTH - pre_points - 1;
+    float thresholdFilter = ui->doubleSpinBox_threshold_4->value();//nγ甄别阈值
 
     int startT = ui->spinBox_startT_4->value();
     int endT = ui->spinBox_endT_4->value();
@@ -2202,9 +2217,9 @@ void CpsStatisticsWindow::onNGammaFilter()
 
     emit doWriteLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
     foreach (quint8 cameraIndex, cameras) {
-        quint32 deviceIndex = (cameraIndex + 3) / 4;
+        int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
         //根据相机序号计算出是第几块光纤卡
-        int channelIndex = (cameraIndex - 1) % 4 + 1;// 1、2、3、4
+        quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
         if (cameraIndex<=11){
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
             emit doWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
@@ -2219,7 +2234,6 @@ void CpsStatisticsWindow::onNGammaFilter()
         // 提取该通道有效波形数据，并进行合并
         qint64 totalFileReadTime = 0;
         qint64 totalBaselineTime = 0;
-        qint64 totalWaveExtractTime = 0;
         int processedFileCount = 0;
 
         QVector<std::array<qint16, H5_DATA_COLS>> ch_all_valid_wave;
@@ -2373,11 +2387,6 @@ void CpsStatisticsWindow::onNGammaFilter()
                         QtInfoMsg
                         );
 
-        emit doWriteLog(QString("  波形提取总耗时：%1 ms (%2 秒)")
-                            .arg(totalWaveExtractTime)
-                            .arg(totalWaveExtractTime / 1000.0, 0, 'f', 2),
-                        QtInfoMsg
-                        );
         emit doWriteLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
 
         n_gamma neutron;
@@ -2388,6 +2397,12 @@ void CpsStatisticsWindow::onNGammaFilter()
         QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);
         qint64 psdTime = psdTimer.elapsed();
         emit doWriteLog(QString("PSD计算耗时：%1 ms (%2 秒)，得到 %2 个数据点").arg(psdTime).arg(psdTime / 1000.0, 0, 'f', 2).arg(data.size()),QtInfoMsg);
+
+        //判断中子和伽马能谱（默认道数1024）
+        QVector<double> gammaX, gammaY, neutronX, neutronY;
+        neutron.processEnergyData(data, gammaX, gammaY, neutronX, neutronY, thresholdFilter);
+        emit doNeutronSpectrum(cameraIndex, neutronX, neutronY);
+        emit doGammaSpectrum(cameraIndex, gammaX, gammaY);
 
         // 计算密度
         QElapsedTimer densityTimer;
@@ -2440,7 +2455,7 @@ void CpsStatisticsWindow::onNGammaFilter()
 
         QPair<double,double> xLim;
         if(FOM_data.R1 < 0.90 || FOM_data.R2 < 0.90){
-            QMessageBox::information(this, tr("提示"), tr("FoM拟合不成功，请调整阈值或延长测量时间！"));
+            //QMessageBox::information(this, tr("提示"), tr("FoM拟合不成功，请调整阈值或延长测量时间！"));
             emit doWriteLog(QString("FoM拟合不成功，请调整阈值或延长测量时间！"),QtWarningMsg);
             xLim.first  = histCount.psd_x[0];
             xLim.second = histCount.psd_x.back();
@@ -2501,16 +2516,16 @@ void CpsStatisticsWindow::onNGammaFilter()
     mWaitingSpinnerWidget->stop();
 }
 
-void CpsStatisticsWindow::onNeutronSpectrum(quint8 cameraIndex , QPair<QVector<double>,QVector<double>>& pairs)
+void CpsStatisticsWindow::onNeutronSpectrum(quint8 cameraIndex, const QVector<double>& x, const QVector<double>& y)
 {
     quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
 
     //实测曲线
     QCustomPlot* customPlot = ui->spectroMeter_neutronSpectrum;
     if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
-        customPlot->graph(0)->setData(pairs.first, pairs.second);
+        customPlot->graph(0)->setData(x, y);
     else
-        customPlot->graph(1)->setData(pairs.first, pairs.second);
+        customPlot->graph(1)->setData(x, y);
 
     customPlot->xAxis->rescale(true);
     customPlot->yAxis->rescale(true);
@@ -2518,16 +2533,16 @@ void CpsStatisticsWindow::onNeutronSpectrum(quint8 cameraIndex , QPair<QVector<d
     customPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
-void CpsStatisticsWindow::onGammaSpectrum(quint8 cameraIndex , QPair<QVector<double>,QVector<double>>& pairs)
+void CpsStatisticsWindow::onGammaSpectrum(quint8 cameraIndex, const QVector<double>& x, const QVector<double>& y)
 {
     quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
 
     //实测曲线
     QCustomPlot* customPlot = ui->spectroMeter_gammaSpectrum;
     if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
-        customPlot->graph(0)->setData(pairs.first, pairs.second);
+        customPlot->graph(0)->setData(x, y);
     else
-        customPlot->graph(1)->setData(pairs.first, pairs.second);
+        customPlot->graph(1)->setData(x, y);
 
     customPlot->xAxis->rescale(true);
     customPlot->yAxis->rescale(true);

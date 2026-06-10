@@ -215,8 +215,8 @@ public:
 
     // nγ甄别
     Q_SLOT void onNGammaFilter();
-    Q_SLOT void onNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
-    Q_SLOT void onGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
+    Q_SLOT void onNeutronSpectrum(quint8, const QVector<double>&, const QVector<double>&);
+    Q_SLOT void onGammaSpectrum(quint8, const QVector<double>&, const QVector<double>&);
 
     // 计数率统计相关槽函数
     Q_SLOT void onCpsStatistics(int minPeak = 0, int maxPeak = 16384);
@@ -232,6 +232,8 @@ public slots:
 signals:
     void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
     void doWaveformPlot(quint8/*通道号*/, const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&);
+    void doNeutronSpectrum(quint8, const QVector<double>&, const QVector<double>&);
+    void doGammaSpectrum(quint8, const QVector<double>&, const QVector<double>&);
     void doPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图
     void doFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&, double);// FoM拟合
     void doSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>);

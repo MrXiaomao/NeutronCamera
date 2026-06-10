@@ -1,4 +1,4 @@
-#ifndef N_GAMMA_H
+﻿#ifndef N_GAMMA_H
 #define N_GAMMA_H
 #include <QtGlobal>
 #include <QVector>
@@ -15,7 +15,7 @@ using namespace alglib;
 using namespace H5;
 
 #ifndef H5_DATA_COLS
-#define H5_DATA_EXTEND      2       //触发时刻3（2位毫秒+1位纳秒）+峰值1
+#define H5_DATA_EXTEND      2       //触发时刻1（1位毫秒）+峰值1
 #define H5_DATA_WAVEFORM    512     //扩展数据长度
 #define H5_DATA_COLS        (H5_DATA_WAVEFORM + H5_DATA_EXTEND)
 #endif //H5_DATA_COLS
@@ -67,6 +67,17 @@ public:
     static void function_cx_1_func(const real_1d_array &c, const real_1d_array &x, double &func, void *ptr);
 
     bool lsqcurvefit1(QVector<double> fit_x, QVector<double> fit_y, double* fit_c, double* r_square);
+
+    // 对能量进行处理，区分中子或伽马能谱
+    void processEnergyData(const QVector<QPair<float, float>>& rawData,
+                                    QVector<double>& gammaX,
+                                    QVector<double>& gammaY,
+                                    QVector<double>& neutronX,
+                                    QVector<double>& neutronY,
+                                    const float threshold = 0.52f,
+                                    const int channels = 1024/*道址*/,
+                                    const float minEnergy = 0.0f/*能量范围*/,
+                                    const float maxEnergy = 16384.0f);
 
     //四舍五入取整
     inline qint16 matlab_int16(double x)

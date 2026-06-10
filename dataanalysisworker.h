@@ -14,7 +14,7 @@
 
 #ifndef H5_DATA_COLS
 #define H5_DATA_EXTEND      2       //触发时刻1（毫秒）+峰值1
-#define RISING_WIDTH        5       //波形上升沿宽度
+#define RISING_WIDTH        20      //波形上升沿宽度
 #define WAVEFORM_LENGTH     512     //波形上升沿参考点
 #define H5_DATA_WAVEFORM    WAVEFORM_LENGTH     //扩展数据长度
 #define H5_DATA_COLS        (H5_DATA_WAVEFORM + H5_DATA_EXTEND)
@@ -82,7 +82,11 @@ public:
     // pre_points: 触发点之前的点数
     // post_points: 触发点之后的点数
     // 返回: 所有提取的波形，每个波形是固定长度512的数组（优化内存使用）
-    static QVector<std::array<qint16, H5_DATA_COLS>>/*波形数据*/ overThreshold(quint16 packerStartTime/*毫秒*/, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points);
+    static QVector<std::array<qint16, H5_DATA_COLS>>/*波形数据*/ overThreshold(quint16 packerStartTime/*毫秒*/,
+                                                                                const QVector<qint16>& data,
+                                                                                int ch, int threshold,
+                                                                                int pre_points/*触发阈值往前多少个点*/,
+                                                                                int post_points/*触发阈值往后多少个点*/);
 
     void getValidWave();
 
@@ -238,7 +242,7 @@ private:
     FileJob mJob;
     quint8 mCameraIndex = 0;
     int mThreshold = 200;
-    int mPre = 5;
+    int mPre = 20;
     int mPost = 200;
     std::function<void(quint32, quint8, QVector<std::array<qint16, H5_DATA_COLS>>&)> mCallback;
     std::function<void()> mOnFinished;

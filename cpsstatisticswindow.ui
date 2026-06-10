@@ -1139,33 +1139,20 @@
               <string>显示时间范围</string>
              </property>
              <layout class="QGridLayout" name="gridLayout_12">
-              <item row="1" column="0">
-               <widget class="QLabel" name="label_22">
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_32">
                 <property name="text">
-                 <string>时间终点(ms)：</string>
+                 <string>波形阈值：</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                 </property>
                </widget>
               </item>
-              <item row="0" column="1">
-               <widget class="QSpinBox" name="spinBox_startT_4">
-                <property name="maximum">
-                 <number>10000</number>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="0">
-               <widget class="QLabel" name="label_24">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_22">
                 <property name="text">
-                 <string>时间起点(ms)：</string>
+                 <string>时间终点(ms)：</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -1185,13 +1172,26 @@
                 </property>
                </widget>
               </item>
-              <item row="2" column="0">
-               <widget class="QLabel" name="label_32">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_24">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
                 <property name="text">
-                 <string>波形阈值：</string>
+                 <string>时间起点(ms)：</string>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QSpinBox" name="spinBox_startT_4">
+                <property name="maximum">
+                 <number>10000</number>
                 </property>
                </widget>
               </item>
@@ -1208,6 +1208,23 @@
                 </property>
                 <property name="value">
                  <number>200</number>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_21">
+                <property name="text">
+                 <string>甄别阈值：</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QDoubleSpinBox" name="doubleSpinBox_threshold_4">
+                <property name="value">
+                 <double>0.520000000000000</double>
                 </property>
                </widget>
               </item>
@@ -1910,11 +1927,8 @@
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_4">
              <item>
-              <widget class="QTextEdit" name="textEdit_log">
+              <widget class="QPlainTextEdit" name="plainTextEdit_log">
                <property name="enabled">
-                <bool>true</bool>
-               </property>
-               <property name="readOnly">
                 <bool>true</bool>
                </property>
               </widget>
@@ -1995,7 +2009,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>17</height>
+     <height>18</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">

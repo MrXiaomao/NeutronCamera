@@ -1,4 +1,4 @@
-#include "n_gamma.h"
+﻿#include "n_gamma.h"
 #include <H5Cpp.h>
 
 #include <QVector>
@@ -107,18 +107,18 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
     const int PSD_L1_PAR         = 30;
     const int PSD_L2_PAR         = 100;
     const float ratio            = 0.3f; // 恒比定时比值 k
-
+    const int peakIndex          = H5_DATA_EXTEND;/*前面的扩展数据是给触发时刻+峰值预留的，真实数据从第H5_DATA_EXTEND个开始*/
     // ---------- 剔除不满足峰位要求的波形 ----------
-    {
+    if (0) { // 提取有效波形的时候，阈值是200，所以这里应该峰值都是大于100的
         QVector<Pulse> filtered;
         filtered.reserve(pulses.size());
 
         for (int idx = 0; idx < pulses.size(); ++idx) {
             const Pulse &p = pulses[idx];
 
-            float peak = p[H5_DATA_EXTEND];/*前面的扩展数据是给触发时刻+峰值预留的，真实数据从第H5_DATA_EXTEND个开始*/
-            int peakIndex0 = H5_DATA_EXTEND; // 0-based
-            for (int s = H5_DATA_EXTEND+1; s < numSamples; ++s) {
+            float peak = p[peakIndex];
+            int peakIndex0 = peakIndex; // 0-based
+            for (int s = peakIndex + 1; s < numSamples; ++s) {
                 if (p[s] > peak) {
                     peak = p[s];
                     peakIndex0 = s;
@@ -137,13 +137,13 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         return {};
 
     // ---------- 扣除畸形波形：峰值 <= 100 的剔除 ----------
-    {
+    if (0){ // 提取有效波形的时候，阈值是200，所以这里应该峰值都是大于100的
         QVector<Pulse> filtered;
         filtered.reserve(pulses.size());
 
         for (const Pulse &p : pulses) {
-            float peak = p[H5_DATA_EXTEND];
-            for (int s = H5_DATA_EXTEND+1; s < numSamples; ++s) {
+            float peak = p[peakIndex];
+            for (int s = peakIndex + 1; s < numSamples; ++s) {
                 if (p[s] > peak)
                     peak = p[s];
             }
@@ -158,16 +158,16 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         return {};
 
     // ---------- baseline 计算并扣除 (前 16 点平均) ----------
-    {
+    if(0){// 之前以及扣除过一次基线了，这里就不再重复扣除了
         const int baseSamples = 16;
         for (Pulse &p : pulses) {
             float sum = 0.0f;
-            for (int s = H5_DATA_EXTEND; s < H5_DATA_EXTEND+baseSamples; ++s) {
+            for (int s = peakIndex; s < peakIndex+baseSamples; ++s) {
                 sum += p[s];
             }
             qint16 baseline = matlab_int16(sum / baseSamples);
 
-            for (int s = H5_DATA_EXTEND; s < numSamples; ++s) {
+            for (int s = peakIndex; s < numSamples; ++s) {
                 //这里可能有溢出风险
                 p[s] = p[s] - baseline;
             }
@@ -181,8 +181,8 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         filtered.reserve(pulses.size());
         int lines =1;
         for (const Pulse &p : pulses) {
-            float minVal = p[H5_DATA_EXTEND];
-            for (int s = H5_DATA_EXTEND+1; s < numSamples; ++s) {
+            float minVal = p[peakIndex + 1];
+            for (int s = peakIndex + 1; s < numSamples; ++s) {
                 if (p[s] < minVal)
                     minVal = p[s];
             }
@@ -210,9 +210,9 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         const Pulse &pulse = pulses[i1];
 
         // 1) 峰值和峰位
-        float peak = pulse[H5_DATA_EXTEND];
-        int peakIndex0 = H5_DATA_EXTEND;
-        for (int s = H5_DATA_EXTEND+1; s < numSamples; ++s) {
+        float peak = pulse[peakIndex];
+        int peakIndex0 = peakIndex;
+        for (int s = peakIndex + 1; s < numSamples; ++s) {
             if (pulse[s] > peak) {
                 peak = pulse[s];
                 peakIndex0 = s;
@@ -222,7 +222,7 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         // 2) 找恒比阈值 crossing 点 Th_id
         int Th_id0 = -1;  // 0-based
         const float thr = ratio * peak;
-        for (int s = H5_DATA_EXTEND; s <= peakIndex0 && s + 1 < numSamples; ++s) {
+        for (int s = peakIndex; s <= peakIndex0 && s + 1 < numSamples; ++s) {
             if (pulse[s] <= thr && pulse[s + 1] > thr) {
                 Th_id0 = s;
                 break;
@@ -701,6 +701,58 @@ bool n_gamma::lsqcurvefit1(QVector<double> fit_x, QVector<double> fit_y, double*
         return 0;
     }
     return 1;
+}
+
+// 分类+分道+归一化处理函数
+void n_gamma::processEnergyData(const QVector<QPair<float, float>>& rawData,
+                       QVector<double>& gammaX,
+                       QVector<double>& gammaY,
+                       QVector<double>& neutronX,
+                       QVector<double>& neutronY,
+                       const float threshold,
+                       const int channels,
+                       const float minEnergy,
+                       const float maxEnergy)
+{
+    // 1. 初始化1024个道的计数容器
+    QVector<int> gammaBins(channels, 0);
+    QVector<int> neutronBins(channels, 0);
+
+    // 每个道址对应的能量宽度
+    float binWidth = (maxEnergy - minEnergy) / channels;
+
+    // 2. 遍历原始数据，分类+分道计数
+    for (const auto& point : rawData) {
+        float energy = point.first;   // first：能量值
+        float thresholdVal = point.second; // second：用于分类的阈值
+
+        // 计算能量对应到1024道的索引
+        int binIndex = static_cast<int>((energy - minEnergy) / binWidth);
+        // 边界保护，防止索引越界
+        binIndex = std::clamp(binIndex, 0, channels - 1);
+
+        // 按阈值分类计数
+        if (thresholdVal > threshold) {
+            neutronBins[binIndex]++;
+        } else {
+            gammaBins[binIndex]++;
+        }
+    }
+
+    // 3. 归一化工具函数：Y值映射到[0,1]，X为道址坐标，适配QCustomPlot
+    auto normalize = [channels](const QVector<int>& bins, QVector<double>& outX, QVector<double>& outY) {
+        outX.clear();
+        outY.clear();
+
+        for (int i = 0; i < channels; i++) {
+            outX.append(static_cast<double>(i)); // X轴为道址索引
+            outY.append(static_cast<double>(bins[i])); // Y轴归一化
+        }
+    };
+
+    // 分别输出两类归一化数据
+    normalize(gammaBins, gammaX, gammaY);
+    normalize(neutronBins, neutronX, neutronY);
 }
 
 // 保存结果到文件的辅助函数
