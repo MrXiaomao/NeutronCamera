@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QVector>
 #include "pcieiocpreader.h"
+#include "globalsettings.h"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -280,6 +281,10 @@ public:
                                    )> callback,
                                 const quint32 minPeak = 0/*最小峰值0*/,
                                 const quint32 maxPeak = 16384/*最大峰值16384*/);
+    // 从H5文件提起波形数据
+    bool takeWaveformData(const quint8& cameraIndex,
+                          const QString& filePath/*H5文件路径*/,
+                          QVector<std::array<qint16, H5_DATA_COLS>>& data);
 
     /*指令集*/
     //死时间

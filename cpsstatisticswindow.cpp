@@ -2238,149 +2238,159 @@ void CpsStatisticsWindow::onNGammaFilter()
 
         QVector<std::array<qint16, H5_DATA_COLS>> ch_all_valid_wave;
 
-        // === 读盘-计算流水线：尽量让磁盘持续顺序读 ===
-        QThreadPool* pool = QThreadPool::globalInstance();
-        // 计算线程池：建议 2~4 起步（单盘更稳；NVMe 可再加）
-        int maxTh = int(QThread::idealThreadCount() * 0.5*0.8); //使用80%物理核CPU资源，因为一般计算机都是超线程，所以乘以0.5
-        pool->setMaxThreadCount(maxTh);
+        emit doWriteLog(QString("=== 文件处理阶段统计 ==="),QtInfoMsg);
 
-        // 队列容量：2~4（每个文件256MB）
-        const int queueCapacity = 1;
-        BoundedFileQueue queue(queueCapacity);
-
-        QMutex mergeMutex;
-        std::atomic<int> doneFiles{0};
-
-        // 用于等待所有任务完成
-        std::atomic<int> pendingTasks{0};
-        QMutex pendingMutex;
-        QWaitCondition pendingCond;
-
-        // 生产者：单线程顺序读文件（把磁盘拉满）
-        std::thread producer([&]() {
-            for (int i = fileIndex; i <= endFileIndex; ++i) {
-                auto indexToPrefix = [=](const int& cameraIndex)
-                {
-                    QString filename;
-
-                    switch (cameraIndex){
-                    case 1: filename = "1A"; break;
-                    case 2: filename = "1A"; break;
-                    case 3: filename = "1A"; break;
-                    case 4: filename = "1B"; break;
-                    case 5: filename = "1B"; break;
-                    case 6: filename = "1B"; break;
-
-                    case 7: filename = "2A"; break;
-                    case 8: filename = "2A"; break;
-                    case 9: filename = "2A"; break;
-                    case 10: filename = "2B"; break;
-                    case 11: filename = "2B"; break;
-                    case 12: filename = "2B"; break;
-
-                    case 13: filename = "3A"; break;
-                    case 14: filename = "3A"; break;
-                    case 15: filename = "3A"; break;
-                    case 16: filename = "3B"; break;
-                    case 17: filename = "3B"; break;
-                    case 18: filename = "3B"; break;
-                    }
-
-                    return filename;
-                };
-
-                const QString filePath =
-                    QString("%1/%2data%3.bin")
-                        .arg(ui->textBrowser_filepath->toPlainText())
-                        .arg(indexToPrefix(cameraIndex))
-                        .arg(i);
-
-                if (!QFile::exists(filePath)){
-                    continue;
-                }
-
-                QElapsedTimer readTimer;
-                readTimer.start();
-                const qint64 readMs = readTimer.elapsed();
-                totalFileReadTime += readMs;
-
-                FileJob job;
-                job.filePath = filePath;
-                job.deviceIndex = static_cast<quint8>(deviceIndex);
-
-                // ✅ 修复 packerStartTime：必须随 i 变化
-                job.packerStartTime = static_cast<quint32>((i - 1) * time_per);
-
-                queue.push(std::move(job));
-            }
-
-            queue.stop();
-        });
-
-        // 消费者：从队列取内存数据，丢给线程池做“解交织+基线+阈值提取”
-        // 只处理 cameraIndex 对应的单通道（ExtractValidWaveformFromBufferTask 已支持）
         QElapsedTimer consumerWall;
         consumerWall.start();                 // ✅ 消费者阶段开始（墙钟）
 
-        FileJob job;
-        while (queue.pop(job)) {
-            pendingTasks.fetch_add(1, std::memory_order_relaxed);
-
-            auto onFinished = [&]() {
-                const int left = pendingTasks.fetch_sub(1, std::memory_order_acq_rel) - 1;
-                if (left == 0) {
-                    QMutexLocker lk(&pendingMutex);
-                    pendingCond.wakeAll();
-                }
-            };
-
-            auto cb = [&](quint32 /*packerCurrentTime*/,
-                          quint8 /*channelIdx*/,
-                          QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch) {
-                QMutexLocker locker(&mergeMutex);
-                ch_all_valid_wave.append(wave_ch);
-            };
-
-            auto* task = new ExtractValidWaveformFromBufferTask(
-                std::move(job),
-                static_cast<quint8>(cameraIndex), // ✅ 单相机（单通道）
-                threshold,
-                pre_points,
-                post_points,
-                cb,
-                [&]() {
-                    doneFiles.fetch_add(1, std::memory_order_relaxed);
-                    onFinished();
-                });
-
-            pool->start(task);
-        }
-
-        if (producer.joinable()) producer.join();
-
-        // 等待所有任务完成
+        // 直接从H5文件种获取波形数据
+        QString h5FilePath = mFileDir + "/waveform_data.h5";
+        if (QFile::exists(h5FilePath))
         {
-            QMutexLocker lk(&pendingMutex);
-            while (pendingTasks.load(std::memory_order_acquire) > 0) {
-                pendingCond.wait(&pendingMutex, 20);
-                qApp->processEvents();
+            mPCIeCommSdk.takeWaveformData(cameraIndex, h5FilePath, ch_all_valid_wave);
+        }
+        else
+        {
+        // === 读盘-计算流水线：尽量让磁盘持续顺序读 ===
+            QThreadPool* pool = QThreadPool::globalInstance();
+            // 计算线程池：建议 2~4 起步（单盘更稳；NVMe 可再加）
+            int maxTh = int(QThread::idealThreadCount() * 0.5*0.8); //使用80%物理核CPU资源，因为一般计算机都是超线程，所以乘以0.5
+            pool->setMaxThreadCount(maxTh);
+
+            // 队列容量：2~4（每个文件256MB）
+            const int queueCapacity = 1;
+            BoundedFileQueue queue(queueCapacity);
+
+            QMutex mergeMutex;
+            std::atomic<int> doneFiles{0};
+
+            // 用于等待所有任务完成
+            std::atomic<int> pendingTasks{0};
+            QMutex pendingMutex;
+            QWaitCondition pendingCond;
+
+            // 生产者：单线程顺序读文件（把磁盘拉满）
+            std::thread producer([&]() {
+                for (int i = fileIndex; i <= endFileIndex; ++i) {
+                    auto indexToPrefix = [=](const int& cameraIndex)
+                    {
+                        QString filename;
+
+                        switch (cameraIndex){
+                        case 1: filename = "1A"; break;
+                        case 2: filename = "1A"; break;
+                        case 3: filename = "1A"; break;
+                        case 4: filename = "1B"; break;
+                        case 5: filename = "1B"; break;
+                        case 6: filename = "1B"; break;
+
+                        case 7: filename = "2A"; break;
+                        case 8: filename = "2A"; break;
+                        case 9: filename = "2A"; break;
+                        case 10: filename = "2B"; break;
+                        case 11: filename = "2B"; break;
+                        case 12: filename = "2B"; break;
+
+                        case 13: filename = "3A"; break;
+                        case 14: filename = "3A"; break;
+                        case 15: filename = "3A"; break;
+                        case 16: filename = "3B"; break;
+                        case 17: filename = "3B"; break;
+                        case 18: filename = "3B"; break;
+                        }
+
+                        return filename;
+                    };
+
+                    const QString filePath =
+                        QString("%1/%2data%3.bin")
+                            .arg(ui->textBrowser_filepath->toPlainText())
+                            .arg(indexToPrefix(cameraIndex))
+                            .arg(i);
+
+                    if (!QFile::exists(filePath)){
+                        continue;
+                    }
+
+                    QElapsedTimer readTimer;
+                    readTimer.start();
+                    const qint64 readMs = readTimer.elapsed();
+                    totalFileReadTime += readMs;
+
+                    FileJob job;
+                    job.filePath = filePath;
+                    job.deviceIndex = static_cast<quint8>(deviceIndex);
+
+                    // ✅ 修复 packerStartTime：必须随 i 变化
+                    job.packerStartTime = static_cast<quint32>((i - 1) * time_per);
+
+                    queue.push(std::move(job));
+                }
+
+                queue.stop();
+            });
+
+            // 消费者：从队列取内存数据，丢给线程池做“解交织+基线+阈值提取”
+            // 只处理 cameraIndex 对应的单通道（ExtractValidWaveformFromBufferTask 已支持）
+
+            FileJob job;
+            while (queue.pop(job)) {
+                pendingTasks.fetch_add(1, std::memory_order_relaxed);
+
+                auto onFinished = [&]() {
+                    const int left = pendingTasks.fetch_sub(1, std::memory_order_acq_rel) - 1;
+                    if (left == 0) {
+                        QMutexLocker lk(&pendingMutex);
+                        pendingCond.wakeAll();
+                    }
+                };
+
+                auto cb = [&](quint32 /*packerCurrentTime*/,
+                              quint8 /*channelIdx*/,
+                              QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch) {
+                    QMutexLocker locker(&mergeMutex);
+                    ch_all_valid_wave.append(wave_ch);
+                };
+
+                auto* task = new ExtractValidWaveformFromBufferTask(
+                    std::move(job),
+                    static_cast<quint8>(cameraIndex), // ✅ 单相机（单通道）
+                    threshold,
+                    pre_points,
+                    post_points,
+                    cb,
+                    [&]() {
+                        doneFiles.fetch_add(1, std::memory_order_relaxed);
+                        onFinished();
+                    });
+
+                pool->start(task);
             }
+
+            if (producer.joinable()) producer.join();
+
+            // 等待所有任务完成
+            {
+                QMutexLocker lk(&pendingMutex);
+                while (pendingTasks.load(std::memory_order_acquire) > 0) {
+                    pendingCond.wait(&pendingMutex, 20);
+                    qApp->processEvents();
+                }
+            }
+
+            // 统计
+            processedFileCount = doneFiles.load(std::memory_order_relaxed);
+
+            emit doWriteLog(QString("处理文件总数：%1").arg(processedFileCount),QtInfoMsg);
+            emit doWriteLog(QString("  文件读取总耗时：%1 ms (%2 秒)")
+                                .arg(totalFileReadTime)
+                                .arg(totalFileReadTime / 1000.0, 0, 'f', 2),
+                            QtInfoMsg
+                            );
         }
 
         // pool->waitForDone();                  // ✅ 所有消费者任务都结束
         qint64 consumerTotalMs = consumerWall.elapsed();   // ✅ 消费者阶段总耗时（系统时间）
-
-        // 统计
-        processedFileCount = doneFiles.load(std::memory_order_relaxed);
-
-        emit doWriteLog(QString("=== 文件处理阶段统计 ==="),QtInfoMsg);
-        emit doWriteLog(QString("处理文件总数：%1").arg(processedFileCount),QtInfoMsg);
-        emit doWriteLog(QString("  文件读取总耗时：%1 ms (%2 秒)")
-                            .arg(totalFileReadTime)
-                            .arg(totalFileReadTime / 1000.0, 0, 'f', 2),
-                        QtInfoMsg
-                        );
-
         emit doWriteLog(QString("  基线计算、波形提取总耗时：%1 ms (%2 秒)")
                             .arg(consumerTotalMs)
                             .arg(consumerTotalMs / 1000.0, 0, 'f', 2),

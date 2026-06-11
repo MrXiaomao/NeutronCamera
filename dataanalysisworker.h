@@ -11,14 +11,7 @@
 #include <QWaitCondition>
 #include <QThreadPool>
 #include <QQueue>
-
-#ifndef H5_DATA_COLS
-#define H5_DATA_EXTEND      2       //触发时刻1（毫秒）+峰值1
-#define RISING_WIDTH        20      //波形上升沿宽度
-#define WAVEFORM_LENGTH     512     //波形上升沿参考点
-#define H5_DATA_WAVEFORM    WAVEFORM_LENGTH     //扩展数据长度
-#define H5_DATA_COLS        (H5_DATA_WAVEFORM + H5_DATA_EXTEND)
-#endif //H5_DATA_COLS
+#include "globalsettings.h"
 
 // ====== 有界队列：最多缓存 N 个文件（N * 256MB 内存）======
 struct FileJob {

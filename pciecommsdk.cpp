@@ -4,7 +4,6 @@
 #include <QDir>
 #include <QDebug>
 #include "datacompresswindow.h"
-#include "globalsettings.h"
 #include "AppConfig.h"
 
 #ifdef _WIN32
@@ -923,6 +922,83 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                 boardGroup.close();
                 callback(cpsMapPair, spectrumMapPair);
             }
+        }
+
+        file.close();
+
+        return true;
+    } catch (H5::FileIException& error) {
+        // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
+        qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSetIException& error) {
+        qDebug() << "HDF5 DataSet Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::DataSpaceIException& error) {
+        qDebug() << "HDF5 DataSpace Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (H5::GroupIException& error) {
+        qDebug() << "HDF5 Group Exception:" << error.getDetailMsg().c_str();
+        return false;
+    } catch (...) {
+        qDebug() << "Unknown HDF5 Exception";
+        return false;
+    }
+}
+
+// 从H5文件提起波形数据
+bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
+                                   const QString& filePath/*H5文件路径*/,
+                                   QVector<std::array<qint16, H5_DATA_COLS>>& data)
+{
+    //根据通道号计算对应采集卡的第几通道
+    int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
+    //根据相机序号计算出是第几块光纤卡
+    quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
+
+    QTextCodec* gbk_codec = QTextCodec::codecForName("GBK");
+    QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
+    try {
+        H5::H5File file(filePathBytes.toStdString(), H5F_ACC_RDONLY);
+
+        // 创建或打开板卡组
+        QString boardGroupName = QString("Board%1").arg(deviceIndex);
+
+        H5::Group boardGroup;
+        htri_t existsGroup = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
+
+        if (existsGroup > 0) {
+            boardGroup = file.openGroup(boardGroupName.toStdString());
+
+            // 辅助函数：写入单个通道的数据集
+            auto readChannel = [&](const QString& datasetName) {
+                htri_t existsDataset = H5Lexists(boardGroup.getId(), datasetName.toStdString().c_str(), H5P_DEFAULT);
+                if (existsDataset){
+                    std::string ds = datasetName.toUtf8().constData();
+                    H5::DataSet dataset = boardGroup.openDataSet(ds);
+                    H5::DataSpace fileSpace = dataset.getSpace();
+
+                    // 校验维度
+                    hsize_t dims[2];
+                    fileSpace.getSimpleExtentDims(dims, nullptr);
+                    if (dims[1] != H5_DATA_COLS) {
+                        qWarning() << QString("Dataset columns is %1, required 514").arg(dims[1]);
+                        return;
+                    }
+                    const hsize_t totalRows = dims[0];
+
+                    // 调整容器容量，直接读取到连续内存
+                    data.resize(totalRows);
+                    qint16* buffer = data.front().data();
+                    dataset.read(buffer, H5::PredType::NATIVE_INT16);
+
+                    dataset.close();
+                }
+            };
+
+            // 读通道的数据
+            readChannel(QStringLiteral("wave_ch%1").arg(cameraNo));
+            boardGroup.close();
         }
 
         file.close();
