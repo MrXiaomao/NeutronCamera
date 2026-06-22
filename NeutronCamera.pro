@@ -16,6 +16,7 @@ SOURCES += \
     cpsstatisticswindow.cpp \
     dataanalysisworker.cpp \
     datacompresswindow.cpp \
+    devicemanagerwindow.cpp \
     globalsettings.cpp \
     main.cpp \
     mainwindow.cpp \
@@ -33,6 +34,7 @@ HEADERS += \
     cpsstatisticswindow.h \
     dataanalysisworker.h \
     datacompresswindow.h \
+    devicemanagerwindow.h \
     n_gamma.h \
     pciecommsdk.h \
     pcieiocpreader.h \
@@ -47,6 +49,7 @@ HEADERS += \
 FORMS += \
     cpsstatisticswindow.ui \
     datacompresswindow.ui \
+    devicemanagerwindow.ui \
     mainwindow.ui \
     settingwindow.ui
 

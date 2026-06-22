@@ -25,14 +25,24 @@ QString increaseShotNumSuffix(QString shotNumStr)
     }
 }
 
+bool isRunAsAdmin() {
+    BOOL isAdmin = FALSE;
+    PSID adminSID;
+    SID_IDENTIFIER_AUTHORITY auth = SECURITY_NT_AUTHORITY;
+    if(AllocateAndInitializeSid(&auth, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminSID)) {
+        CheckTokenMembership(NULL, adminSID, &isAdmin);
+        FreeSid(adminSID);
+    }
+    return isAdmin;
+}
+
 MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , mIsDarkTheme(isDarkTheme)
     , mainWindow(static_cast<QGoodWindowHelper *>(parent))
 {
-    ui->setupUi(this);
-    setWindowTitle(QApplication::applicationName() + " - " + APP_VERSION);
+    ui->setupUi(this);    
 
     initUi();
     restoreSettings();
@@ -143,10 +153,25 @@ MainWindow::~MainWindow()
 
 void MainWindow::initUi()
 {
+    if (!isRunAsAdmin()){
+        //ui->action_deviceManager->setEnabled(false);
+        ui->action_deviceManager->setToolTip(QStringLiteral("非管理员身份禁止使用设备管理器！"));
+        setWindowTitle(QApplication::applicationName() + " - " + APP_VERSION);
+    }
+    else{
+        setWindowTitle(QStringLiteral("管理员") + QApplication::applicationName() + " - " + APP_VERSION);
+    }
+
     mSettingWindow = new SettingWindow();
     mSettingWindow->setWindowFlags(Qt::Widget | Qt::WindowStaysOnTopHint);
     mSettingWindow->hide();
     connect(mSettingWindow, &SettingWindow::reportSettingFinished, &mPCIeCommSdk, &PCIeCommSdk::replySettingFinished);
+
+    mDeviceManagerWindow = new DeviceManagerWindow();
+    // 移除最大化最小化按钮，只保留关闭按钮
+    Qt::WindowFlags flags = Qt::Widget | Qt::WindowStaysOnTopHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint;
+    mDeviceManagerWindow->setWindowFlags(flags);
+    mDeviceManagerWindow->hide();
 
     mCommHelper = CommHelper::instance();
 
@@ -1006,15 +1031,16 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-    if (mIsMeasuring){
-        QMessageBox::information(this, tr("系统退出提示"), tr("测量中禁止退出软件系统！"),
-                                             QMessageBox::Ok, QMessageBox::Ok);
+    int ret = QMessageBox::information(this, tr("系统退出提示"), tr("确定要退出软件系统吗？"),
+                                         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (ret == QMessageBox::No) {
         event->ignore();
+        return;
     }
-    else
-    {
-        event->accept();
-    }
+
+    mSettingWindow->deleteLater();
+    mDeviceManagerWindow->deleteLater();
+    event->accept();
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event){
@@ -1050,17 +1076,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event){
         }
 
         else if (event->type() == QEvent::MouseButtonDblClick){
-            // QMouseEvent *e = reinterpret_cast<QMouseEvent*>(event);
-            // if (watched->inherits("QCustomPlot")){
-            //     QCustomPlot* customPlot = qobject_cast<QCustomPlot*>(watched);
-            //     if (e->button() == Qt::LeftButton) {
-            //         mIsOneLayout = !mIsOneLayout;
-            //         if (mIsOneLayout)
-            //             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageDetailWidget);
-            //         else
-            //             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
-            //     }
-            // }
+
         }
     }
     if(event->type() == QEvent::StatusTip) {
@@ -1943,3 +1959,22 @@ void MainWindow::on_action_cps_statistics_triggered()
         });
     }
 }
+
+void MainWindow::on_action_deviceManager_triggered()
+{
+    if (!isRunAsAdmin()){
+        int ret = QMessageBox::information(this, tr("管理员提示"), tr("非管理员身份禁止使用设备管理器功能，是否以管理员身份重新运行本程序？"),
+                                           QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (ret == QMessageBox::No) {
+            return;
+        }
+
+        emit doRebootAsAdmin();
+        QCoreApplication::exit(0);
+        ShellExecuteW(NULL, L"runas", QCoreApplication::applicationFilePath().toStdWString().c_str(), NULL, NULL, SW_SHOWNORMAL);
+        return ;
+    }
+
+    mDeviceManagerWindow->show();
+}
+

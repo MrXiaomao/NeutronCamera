@@ -944,7 +944,7 @@ void CpsStatisticsWindow::initWaveformPage()
     mGraphisColor.push_back(QColor::fromRgb(232,88,39));
 
     QCustomPlot *customPlotHor = new QCustomPlot(this);
-    customPlotHor->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
+    //customPlotHor->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
     QCustomPlotHelper* customPlotHelperHor = new QCustomPlotHelper(customPlotHor, this);
     {
         customPlotHor->legend->setVisible(true);
@@ -960,7 +960,7 @@ void CpsStatisticsWindow::initWaveformPage()
     }
 
     QCustomPlot *customPlotVer = new QCustomPlot(this);
-    customPlotVer->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
+    //customPlotVer->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
     QCustomPlotHelper* customPlotHelperVer = new QCustomPlotHelper(customPlotVer, this);
     {
         customPlotVer->legend->setVisible(true);
@@ -1083,16 +1083,25 @@ void CpsStatisticsWindow::initNGammaPage()
             for (int i=0; i<2; ++i){
                 QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
                 graph->setAntialiased(false);
-                graph->setPen(QPen(colors[i]));
                 graph->selectionDecorator()->setPen(QPen(colors[i]));
-                graph->setLineStyle(QCPGraph::lsLine);
                 graph->setSelectable(QCP::SelectionType::stNone);
-                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
+                graph->setLineStyle(QCPGraph::lsLine);
+                if (0 == i)
+                {
+                    graph->setPen(QPen(colors[i], 2, Qt::PenStyle::SolidLine));
+                    graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
+                }
+                else
+                {
+                    graph->setPen(QPen(colors[i], 2, Qt::PenStyle::DashLine));
+                    graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, colors[i], 6));//显示散点图
+                }
+
                 graph->setName(title[i]);
             }
 
             QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
-            customPlotHelper->setGraphCheckBox(customPlot);
+            //customPlotHelper->setGraphCheckBox(customPlot);
         }
 
         customPlot->replot();

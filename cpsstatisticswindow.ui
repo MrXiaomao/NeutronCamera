@@ -359,6 +359,9 @@
       </widget>
       <widget class="QWidget" name="pageInfoWidget_ngamma">
        <layout class="QVBoxLayout" name="verticalLayout_10">
+        <property name="spacing">
+         <number>1</number>
+        </property>
         <property name="leftMargin">
          <number>0</number>
         </property>

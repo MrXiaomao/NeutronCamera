@@ -28,7 +28,6 @@ public:
 
     // 板卡通道管理
     void setBoardState(quint8 boardIndex, bool online = true);
-    bool enableCapture(quint8 channel);
     bool enableCapture(quint8 boardIndex, bool isDDR1);
 
     // 探测器测量参数设置

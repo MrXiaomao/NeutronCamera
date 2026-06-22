@@ -119,10 +119,6 @@ public:
 
     bool readDataAsync(HANDLE fd, quint64 offset, const QByteArray& data);
 
-    HANDLE userHandle() const{
-        return mUserHandle;
-    };
-
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
     Q_SIGNAL void reportThreadExit(quint32);
     Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
@@ -136,10 +132,7 @@ private:
 #if ENABLE_IOCP
     PcieIocpReader* mPcieReader = nullptr;
 #else
-    HANDLE mDDRHandle[4];//设备句柄
 #endif // ENABLE_IOCP
-    HANDLE mRAMHandle[4];//RAM句柄
-    HANDLE mUserHandle;//用户句柄
     bool mIsRegisterInvalid = false;
     int mRegisterInvalidPosition = 0;
 
@@ -235,22 +228,21 @@ public:
 
     /*判断板卡是否存在*/
     bool boardExists(const quint8& index/*板卡序号1-3*/);
+    static bool boardIsEnable(quint8 boardIndex);
+    static bool setBoardState(quint8 boardIndex, bool enable);
 
     /*获取设备列表*/
-    QStringList enumDevices();
+    static QStringList enumDevices();
     QList<DeviceInfo> enumerateSpecifiedDevices(const GUID& deviceClassGuid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}});
-    // 根据硬件ID找到目标设备并修改状态
-    BOOL changeDeviceStateByHardwareId(LPCTSTR lpszHardwareId, BOOL bEnable);
-
 
     /*根据卡名称判断卡序号*/
-    quint8 boardNameToBoardIndex(const QString& name);
+    static quint8 boardNameToBoardIndex(const QString& name);
 
     /*初始化*/
     void initCaptureThreads();
 
     /*解析能谱数据*/
-    bool analyzeHistorySpectrumData(const quint8& cameraIndex,
+    static bool analyzeHistorySpectrumData(const quint8& cameraIndex,
                                     const quint32& timeStart/*开始时刻*/,
                                     const quint32& timeStop/*停止时刻*/ ,
                                     const QString& filePath/*文件名*/,
@@ -260,7 +252,7 @@ public:
                                         )> callback);
 
     // 根据通道号、开始时间、结束时间以及文件存储目录解析波形数据
-    bool analyzeHistoryWaveformData(
+    static bool analyzeHistoryWaveformData(
                                 const quint8& cameraIndex,
                                 const quint32& timeStart/*开始时刻ms*/,
                                 const quint32& timeStop/*结束时刻ms*/,
@@ -270,7 +262,7 @@ public:
                                     )> callback);
 
     // 从H5文件解析计数率信息和能谱信息
-    bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
+    static bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
                                const quint32 timeWidth/*时间宽度ms（统计计数率用）*/,
                                const quint32 timeStart/*开始时刻ms*/,
                                const quint32 timeStop/*结束时刻ms*/,
@@ -282,7 +274,7 @@ public:
                                 const quint32 minPeak = 0/*最小峰值0*/,
                                 const quint32 maxPeak = 16384/*最大峰值16384*/);
     // 从H5文件提起波形数据
-    bool takeWaveformData(const quint8& cameraIndex,
+    static bool takeWaveformData(const quint8& cameraIndex,
                           const QString& filePath/*H5文件路径*/,
                           QVector<std::array<qint16, H5_DATA_COLS>>& data);
 

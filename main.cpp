@@ -219,6 +219,12 @@ int main(int argc, char *argv[])
     else{
         // 创建主窗体
         mMainWindow = new MainWindow(isDarkTheme, &w);
+        QObject::connect((MainWindow*)mMainWindow, &MainWindow::doRebootAsAdmin, (MainWindow*)mMainWindow, [&server,&SERVER_KEY](){
+            server.close();
+            QLocalServer::removeServer(SERVER_KEY);
+            ShellExecuteW(NULL, L"runas", QCoreApplication::applicationFilePath().toStdWString().c_str(), NULL, NULL, SW_SHOWNORMAL);
+            QCoreApplication::exit(0);
+        }, Qt::DirectConnection);
     }
     mMainWindow->setWindowIcon(QIcon(":/logo.ico"));
     w.setupUiHelper(mMainWindow, isDarkTheme);

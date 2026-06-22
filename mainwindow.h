@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include "pciecommsdk.h"
 #include "settingwindow.h"
+#include "devicemanagerwindow.h"
 #include "QGoodWindowHelper"
 #include "commhelper.h"
 
@@ -66,6 +67,7 @@ signals:
     void doNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
     void doGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
     void doStartMeasure();//开始测量
+    void doRebootAsAdmin();
 
 private slots:
     void on_action_exit_triggered();
@@ -128,11 +130,14 @@ private slots:
 
     void on_action_cps_statistics_triggered();
 
+    void on_action_deviceManager_triggered();
+
 private:
     Ui::MainWindow *ui;
     CommHelper* mCommHelper = nullptr;
     PCIeCommSdk mPCIeCommSdk;
     SettingWindow *mSettingWindow = nullptr;
+    DeviceManagerWindow* mDeviceManagerWindow = nullptr;
 
     bool mIsAlarm[2] = {false, false};//0-温度 1-电压
     bool mIsMeasuring = false;// 测量是否正在进行
@@ -142,7 +147,6 @@ private:
 
     bool mIsDarkTheme = true;
     bool mThemeColorEnable = true;
-    bool mIsOneLayout = false;
     QColor mThemeColor = QColor(255,255,255);
 
     class QGoodWindowHelper *mainWindow = nullptr;
