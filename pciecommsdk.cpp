@@ -100,63 +100,6 @@ PCIeCommSdk::~PCIeCommSdk()
     SetupDiEnumDeviceInterfaces 枚举指定设备接口GUID下所有已连接设备（已经禁用设备无法枚举到）
     SetupDiEnumDeviceInfo 枚举指定设备接口GUID下所有设备（包括已禁用设备)
 */
-// QStringList PCIeCommSdk::enumDevices()
-// {
-// #ifdef _WIN32
-//     const GUID guid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}};
-//     QStringList lstDevices;
-//     HDEVINFO hDevInfo = SetupDiGetClassDevsA((LPGUID)&guid, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
-//     if (hDevInfo == INVALID_HANDLE_VALUE) {
-//         qCritical() << "GetDevices INVALID_HANDLE_VALUE";
-//         return lstDevices;
-//     }
-
-//     SP_DEVICE_INTERFACE_DATA device_interface;
-//     device_interface.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
-
-//     DWORD index;
-//     for (index = 0; SetupDiEnumDeviceInterfaces(hDevInfo, NULL, &guid, index, &device_interface); ++index) {
-//         ULONG detailLength = 0;
-//         if (!SetupDiGetDeviceInterfaceDetailA(hDevInfo, &device_interface, NULL, 0, &detailLength, NULL) && GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
-//             qDebug() << "SetupDiGetDeviceInterfaceDetail - get length failed";
-//             break;
-//         }
-
-//         PSP_DEVICE_INTERFACE_DETAIL_DATA_A dev_detail = (PSP_DEVICE_INTERFACE_DETAIL_DATA_A)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, detailLength);
-//         if (!dev_detail) {
-//             qDebug() << "HeapAlloc failed";
-//             break;
-//         }
-//         dev_detail->cbSize = sizeof(PSP_DEVICE_INTERFACE_DETAIL_DATA_A);
-
-//         if (!SetupDiGetDeviceInterfaceDetailA(hDevInfo, &device_interface, dev_detail, detailLength, NULL, NULL)) {
-//             qDebug() << "SetupDiGetDeviceInterfaceDetail - get detail failed";
-//             HeapFree(GetProcessHeap(), 0, dev_detail);
-//             break;
-//         }
-
-//         lstDevices.append(QString::fromLatin1(dev_detail->DevicePath, strlen(dev_detail->DevicePath)));
-//         HeapFree(GetProcessHeap(), 0, dev_detail);
-//     }
-
-//     SetupDiDestroyDeviceInfoList(hDevInfo);
-
-//     if (lstDevices.size() == 0)
-//         lstDevices << "/dev/xdma0" << "/dev/xdma1" << "/dev/xdma2";
-
-//     return lstDevices;
-// #else
-//     QStringList lstDevices;
-//     for (int i=0; i<=3; ++i)
-//     {
-//         if (QFileInfo::exists(QString("/dev/xdma%1_user").arg(i)))
-//             lstDevices << QString("/dev/xdma%1").arg(i);
-//     }
-
-//     return QStringList() << lstDevices;//"/dev/xdma0" << "/dev/xdma1";// << "/dev/xdma2";
-// #endif
-// }
-
 QStringList PCIeCommSdk::enumDevices()
 {
 #ifdef _WIN32
@@ -236,171 +179,6 @@ QStringList PCIeCommSdk::enumDevices()
     }
     return lstDevices;
 #endif
-}
-
-
-QList<PCIeCommSdk::DeviceInfo> PCIeCommSdk::enumerateSpecifiedDevices(const GUID& deviceClassGuid)
-{
-    QList<DeviceInfo> result;
-    // 获取指定设备类的设备信息集合
-    HDEVINFO hDevInfo = SetupDiGetClassDevsA(
-        (LPGUID)&deviceClassGuid,
-        nullptr,
-        nullptr,
-        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE
-        );
-
-    if (hDevInfo == INVALID_HANDLE_VALUE) {
-        qCritical() << "Failed to get device info handle, error code:" << GetLastError();
-        return result;
-    }
-
-    SP_DEVICE_INTERFACE_DATA deviceInterfaceData = {};
-    deviceInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
-
-    // 遍历枚举所有匹配设备
-    for (DWORD index = 0;
-         SetupDiEnumDeviceInterfaces(
-             hDevInfo,
-             nullptr,
-             &deviceClassGuid,
-             index,
-             &deviceInterfaceData
-             );
-         ++index) {
-
-        // 1. 先获取详情所需缓冲区大小
-        ULONG requiredSize = 0;
-        if (!SetupDiGetDeviceInterfaceDetailA(
-                hDevInfo,
-                &deviceInterfaceData,
-                nullptr,
-                0,
-                &requiredSize,
-                nullptr) && GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
-            qDebug() << "Get required buffer size failed, error:" << GetLastError();
-            break;
-        }
-
-        // 分配缓冲区
-        PSP_DEVICE_INTERFACE_DETAIL_DATA_A pDeviceDetail =
-            (PSP_DEVICE_INTERFACE_DETAIL_DATA_A)HeapAlloc(
-                GetProcessHeap(),
-                HEAP_ZERO_MEMORY,
-                requiredSize
-                );
-
-        if (!pDeviceDetail) {
-            qDebug() << "Heap allocation failed";
-            break;
-        }
-        pDeviceDetail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_A);
-
-        // 准备存储设备信息的结构体
-        SP_DEVINFO_DATA devInfoData = {};
-        devInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
-
-        // 2. 读取设备详情
-        if (!SetupDiGetDeviceInterfaceDetailA(
-                hDevInfo,
-                &deviceInterfaceData,
-                pDeviceDetail,
-                requiredSize,
-                nullptr,
-                &devInfoData)) {
-            qDebug() << "Get device detail failed, error:" << GetLastError();
-            HeapFree(GetProcessHeap(), 0, pDeviceDetail);
-            break;
-        }
-
-        // 3. 查询设备启用状态
-        DeviceInfo currentDev;
-        currentDev.devicePath = QString::fromLocal8Bit(pDeviceDetail->DevicePath);
-
-        DWORD devStatus = 0;
-        if (SetupDiGetDeviceRegistryPropertyA(
-                hDevInfo,
-                &devInfoData,
-                SPDRP_CONFIGFLAGS,
-                nullptr,
-                (PBYTE)&devStatus,
-                sizeof(devStatus),
-                nullptr)) {
-            // 如果位标志中不存在DN_STARTED，则表示设备未启用
-            currentDev.isEnabled = (devStatus & DN_STARTED) != 0;
-        } else {
-            // 如果读取状态失败，默认标记为未启用
-            qDebug() << "Get device status failed for:" << currentDev.devicePath;
-            currentDev.isEnabled = false;
-        }
-
-        result.append(currentDev);
-        HeapFree(GetProcessHeap(), 0, pDeviceDetail);
-    }
-
-    SetupDiDestroyDeviceInfoList(hDevInfo);
-    return result;
-}
-
-// 查询设备当前是否为启用状态
-#ifndef CONFIGFLAG_DISABLED
-#define CONFIGFLAG_DISABLED 0x00000001
-#endif
-BOOL IsDeviceEnabled(HDEVINFO hDevInfo, SP_DEVINFO_DATA* devInfoData, BOOL* pIsEnabled)
-{
-    if (hDevInfo == NULL || devInfoData == NULL || pIsEnabled == NULL)
-        return FALSE;
-
-    DWORD configFlags = 0;
-    if (!SetupDiGetDeviceRegistryProperty(
-            hDevInfo,
-            devInfoData,
-            SPDRP_CONFIGFLAGS,
-            NULL,
-            (PBYTE)&configFlags,
-            sizeof(configFlags),
-            NULL))
-    {
-        return FALSE;
-    }
-
-    // 若包含DISABLED标志则为禁用，否则为启用
-    *pIsEnabled = !(configFlags & CONFIGFLAG_DISABLED);
-    return TRUE;
-}
-
-// 控制设备启用/禁用：TRUE=启用，FALSE=禁用
-BOOL SetDeviceEnabled(HDEVINFO hDevInfo, SP_DEVINFO_DATA* devInfoData, BOOL enable)
-{
-    if (hDevInfo == NULL || devInfoData == NULL)
-        return FALSE;
-
-    // 1. 获取当前设备状态，避免重复操作
-    BOOL currentState = FALSE;
-    if (!IsDeviceEnabled(hDevInfo, devInfoData, &currentState))
-        return FALSE;
-    if (currentState == enable)
-        return TRUE; // 状态已经符合要求，直接返回成功
-
-    // 2. 构造启用/禁用属性参数
-    SP_PROPCHANGE_PARAMS propChangeParams = {0};
-    propChangeParams.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
-    propChangeParams.ClassInstallHeader.InstallFunction = DIF_PROPERTYCHANGE;
-    propChangeParams.Scope = DICS_FLAG_GLOBAL;
-    propChangeParams.StateChange = enable ? DICS_ENABLE : DICS_DISABLE;
-
-    // 3. 调用API执行状态变更
-    if (!SetupDiSetClassInstallParams(
-            hDevInfo,
-            devInfoData,
-            &propChangeParams.ClassInstallHeader,
-            sizeof(propChangeParams)))
-    {
-        return FALSE;
-    }
-
-    // 4. 触发设备属性变更生效
-    return SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, hDevInfo, devInfoData);
 }
 
 quint32 PCIeCommSdk::numberOfDevices()
@@ -502,6 +280,7 @@ void PCIeCommSdk::stopAllCapture()
 
 void PCIeCommSdk::init()
 {
+    mDevices = enumDevices();
     for (int cardIndex = 1; cardIndex <= mDevices.size(); ++cardIndex){
         quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
         if (!boardIsEnable(boardIndex))
@@ -563,6 +342,9 @@ void PCIeCommSdk::reset()
 
 bool PCIeCommSdk::boardIsEnable(quint8 boardIndex)
 {
+    if (boardIndex<=0)
+        return false;
+
     const GUID& deviceClassGuid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}};
 
     // 获取指定设备类的设备信息集合
@@ -679,97 +461,32 @@ bool PCIeCommSdk::setBoardState(quint8 boardIndex, bool enable)
     return true;
 }
 
-
 void PCIeCommSdk::reboot()
 {
-    const GUID& deviceClassGuid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}};
 
-    // 获取指定设备类的设备信息集合
-    HDEVINFO hDevInfo = SetupDiGetClassDevsA(
-        (LPGUID)&deviceClassGuid,
-        nullptr,
-        nullptr,
-        DIGCF_PRESENT | DIGCF_DEVICEINTERFACE
-        );
-
-    if (hDevInfo == INVALID_HANDLE_VALUE) {
-        qCritical() << "Failed to get device info handle, error code:" << GetLastError();
-        return ;
-    }
-
-    // 遍历枚举所有匹配设备
-    SP_DEVINFO_DATA devInfoData = { 0 };
-    devInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
-    for (DWORD devIndex = 0; SetupDiEnumDeviceInfo(hDevInfo, devIndex, &devInfoData); ++devIndex) {
-        // 调用状态变更启用设备
-        // // 构造启用/禁用属性参数
-        // SP_PROPCHANGE_PARAMS propChangeParams = {0};
-        // propChangeParams.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
-        // propChangeParams.ClassInstallHeader.InstallFunction = DIF_PROPERTYCHANGE;
-        // propChangeParams.Scope = DICS_FLAG_GLOBAL;
-        // propChangeParams.StateChange = true ? DICS_ENABLE : DICS_DISABLE;
-
-        {
-            // 先禁用
-            SP_REMOVEDEVICE_PARAMS rmp = {0};
-            rmp.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
-            rmp.ClassInstallHeader.InstallFunction = DIF_REMOVE;
-            // 禁用时不删除设备，只禁用；启用不需要这个参数
-            rmp.Scope = DI_REMOVEDEVICE_GLOBAL;
-
-            // 3. 调用API执行状态变更
-            if (!SetupDiSetClassInstallParams(
-                    hDevInfo,
-                    &devInfoData,
-                    &rmp.ClassInstallHeader,
-                    sizeof(rmp)))
-            {
-                return ;
-            }
-        }
-
-        {
-            // 再启用
-            SP_REMOVEDEVICE_PARAMS rmp = {0};
-            rmp.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
-            rmp.ClassInstallHeader.InstallFunction = DIF_REMOVE;
-
-            // 3. 调用API执行状态变更
-            if (!SetupDiSetClassInstallParams(
-                    hDevInfo,
-                    &devInfoData,
-                    &rmp.ClassInstallHeader,
-                    sizeof(rmp)))
-            {
-                return ;
-            }
-        }
-
-        // 3. 调用API执行状态变更
-        // if (!SetupDiSetClassInstallParams(
-        //         hDevInfo,
-        //         &devInfoData,
-        //         &propChangeParams.ClassInstallHeader,
-        //         sizeof(propChangeParams)))
-        // {
-        //     return ;
-        // }
-
-        // 触发设备属性变更生效
-        SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, hDevInfo, &devInfoData);
-    }
-
-    SetupDiDestroyDeviceInfoList(hDevInfo);
 }
 
 void PCIeCommSdk::setPSDThreshold()
 {
-    /* 设置PSD甄别阈值 */
-    quint8 threshold = AppConfig::instance().psdThreshold();
-    for (int cardIndex = 1; cardIndex <= mDevices.size(); ++cardIndex){
+    /* 设置PSD甄别阈值 */    
+    for (quint8 channelIndex = 0; channelIndex <= 17; ++channelIndex){
+        quint8 channelNo = (channelIndex % 6);/*范围0~5*/
+        bool isDDR1 = channelNo <= 2 ? true : false;
+        quint8 cardIndex = (channelIndex / 6) + 1;/*范围1~3*/
+        quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
+
+        // 判断板卡是否启用
+        if (!boardIsEnable(boardIndex))
+            continue;
+
+        // 判断通道是否启用
+        if (!AppConfig::instance().enableCapture(boardIndex, isDDR1))
+            continue;
+
         if (!mMapCaptureThread.contains(cardIndex))
             continue;
 
+        quint8 threshold = AppConfig::instance().psdThreshold(channelIndex);
         HANDLE fUserHandle = PCIeCommSdk::getHandle(mDevices[cardIndex-1] + XDMA_FILE_USER,
                                                     GENERIC_READ | GENERIC_WRITE,
                                                     FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
@@ -778,15 +495,26 @@ void PCIeCommSdk::setPSDThreshold()
 
         QByteArray command = QByteArray::fromHex("00 FD 34 12");
         command[0] = threshold;
-        writeData(cardIndex, fUserHandle, 0x20000, command);//PSD阈值
-        ::QThread::msleep(100);
-        writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
-        ::QThread::msleep(100);
 
+        quint64 offset = 0x20000;
+        switch (channelNo){
+        case 0: offset = 0x1234F1; break;
+        case 1: offset = 0x1234F2; break;
+        case 2: offset = 0x1234F3; break;
+        case 3: offset = 0x1234F4; break;
+        case 4: offset = 0x1234F5; break;
+        case 5: offset = 0x1234F6; break;
+        }
+        writeData(cardIndex, fUserHandle, offset, command);//PSD阈值
+        ::QThread::msleep(10);
+
+        writeData(cardIndex, fUserHandle, offset, QByteArray::fromHex("00 00 00 00"));
+        ::QThread::msleep(10);
+
+        qInfo().nospace() << "通道" << (channelIndex+1) << "设置PSD阈值：" << threshold;
         CloseHandle(fUserHandle);
     }
 
-    qInfo().nospace() << "设置PSD阈值：" << threshold;
 }
 
 bool PCIeCommSdk::test()
@@ -1456,7 +1184,7 @@ HANDLE PCIeCommSdk::getHandle(QString path, quint32 dwDesiredAccess, quint32 dwF
     return fd;
 }
 
-/*根据卡名称判断卡序号*/
+/*根据卡名称判断卡序号1~3*/
 quint8 PCIeCommSdk::boardNameToBoardIndex(const QString& name)
 {
     // if (i==0)

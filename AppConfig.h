@@ -31,7 +31,7 @@ public:
     bool enableCapture(quint8 boardIndex, bool isDDR1);
 
     // 探测器测量参数设置
-    int psdThreshold() const;
+    int psdThreshold(quint8 channelNo/*通道号*/) const;
     int deathTime() const;
     void setDeathTime(int deathdTime);
 

@@ -156,10 +156,10 @@ void MainWindow::initUi()
     if (!isRunAsAdmin()){
         //ui->action_deviceManager->setEnabled(false);
         ui->action_deviceManager->setToolTip(QStringLiteral("非管理员身份禁止使用设备管理器！"));
-        setWindowTitle(QApplication::applicationName() + " - " + APP_VERSION);
+        QApplication::setApplicationName(QApplication::applicationName());
     }
     else{
-        setWindowTitle(QStringLiteral("管理员") + QApplication::applicationName() + " - " + APP_VERSION);
+        QApplication::setApplicationName(QStringLiteral("[管理员]") + QApplication::applicationName());
     }
 
     mSettingWindow = new SettingWindow();
@@ -1963,7 +1963,7 @@ void MainWindow::on_action_cps_statistics_triggered()
 void MainWindow::on_action_deviceManager_triggered()
 {
     if (!isRunAsAdmin()){
-        int ret = QMessageBox::information(this, tr("管理员提示"), tr("非管理员身份禁止使用设备管理器功能，是否以管理员身份重新运行本程序？"),
+        int ret = QMessageBox::information(this, tr("管理员提示"), tr("非管理员身份禁止使用设备管理器功能，是否以管理员身份重新运行本系统？"),
                                            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (ret == QMessageBox::No) {
             return;

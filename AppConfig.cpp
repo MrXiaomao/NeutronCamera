@@ -38,7 +38,7 @@ public:
 
     //探测器参数设置
     QtnPropertySet* propSetDetector;
-    QtnPropertyInt* psdThreshold; // PSD甄别阈值
+    QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
     QtnPropertyInt* deathTime; // 死时间
     QtnPropertyInt* triggerThreshold;// 触发阈值
     QtnPropertyInt* spectrumRefreshTimelength;// 能谱刷新时间
@@ -128,13 +128,21 @@ AppConfig::AppConfig(QObject* parent)
         propSet->setId(ID_DETECTOR_SET);
 
         // PSD甄别阈值
-        d->psdThreshold = qtnCreateProperty<QtnPropertyInt>(propSet);
-        d->psdThreshold->setId(++baseId);
-        d->psdThreshold->setName("PSD甄别阈值");
-        d->psdThreshold->setDescription("范围：0 ~ 255");
-        d->psdThreshold->setMaxValue(255);
-        d->psdThreshold->setMinValue(0);
-        d->psdThreshold->setValue(133);
+        QtnPropertySet* propSetPSDThreshold = new QtnPropertySet(d->propSetRoot);
+        propSet->addChildProperty(propSetPSDThreshold);
+        propSetPSDThreshold->setName("PSD甄别阈值");
+        propSetPSDThreshold->setId(++baseId);
+        propSetPSDThreshold->collapse();
+
+        for (int i=0; i<18; ++i){
+            d->psdThreshold[i] = qtnCreateProperty<QtnPropertyInt>(propSetPSDThreshold);
+            d->psdThreshold[i]->setId(++baseId);
+            d->psdThreshold[i]->setName(QStringLiteral("[通道#%1]PSD甄别阈值").arg(i+1));
+            d->psdThreshold[i]->setDescription("范围：0 ~ 255");
+            d->psdThreshold[i]->setMaxValue(255);
+            d->psdThreshold[i]->setMinValue(0);
+            d->psdThreshold[i]->setValue(133);
+        }
 
         //死时间*10ns
         d->deathTime = qtnCreateProperty<QtnPropertyInt>(propSet);
@@ -504,7 +512,9 @@ bool AppConfig::enableCapture(quint8 boardIndex, bool isDDR1)
 }
 
 // 探测器测量参数设置
-int AppConfig::psdThreshold() const { return d->psdThreshold->value(); }
+int AppConfig::psdThreshold(quint8 channelNo) const {
+    return d->psdThreshold[channelNo]->value();
+}
 int AppConfig::deathTime() const { return d->deathTime->value(); }
 void AppConfig::setDeathTime(int deathTime) { d->deathTime->setValue(deathTime); }
 

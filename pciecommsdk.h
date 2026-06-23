@@ -179,11 +179,6 @@ public:
     ~PCIeCommSdk();
 
     // 封装设备信息，带启用状态标记
-    struct DeviceInfo {
-        QString devicePath;  // 设备路径
-        bool isEnabled;      // 是否启用
-    };
-
     enum CameraOrientation {
         Horizontal = 0x1,
         Vertical = 0x2
@@ -203,7 +198,6 @@ public:
     Q_SIGNAL void reportOpenDeviceFail(quint8);
     Q_SIGNAL void reportCaptureFail(quint32, quint32);
     Q_SIGNAL void reportCaptureFinished();
-    Q_SIGNAL void doWaveform(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
 
@@ -233,7 +227,6 @@ public:
 
     /*获取设备列表*/
     static QStringList enumDevices();
-    QList<DeviceInfo> enumerateSpecifiedDevices(const GUID& deviceClassGuid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}});
 
     /*根据卡名称判断卡序号*/
     static quint8 boardNameToBoardIndex(const QString& name);

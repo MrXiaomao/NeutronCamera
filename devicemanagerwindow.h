@@ -15,6 +15,7 @@ public:
     explicit DeviceManagerWindow(QWidget *parent = nullptr);
     ~DeviceManagerWindow();
 
+    void updataUi();
     virtual void showEvent(QShowEvent *event);
 
 private slots:
