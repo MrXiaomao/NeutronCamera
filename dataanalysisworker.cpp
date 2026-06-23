@@ -146,9 +146,12 @@ bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
 
             // 将无符号整数转换为有符号整数，并除以4进行数据缩放
             // 除以4的原因可能是原始数据进行了放大（左移2位），这里恢复原始范围
-            ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
-            ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
-            ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
+            // ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
+            // ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
+            // ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
+            ch0[j] = static_cast<qint16>(v0)/4; ch0[j+1] = static_cast<qint16>(v1)/4;
+            ch1[j] = static_cast<qint16>(v2)/4; ch1[j+1] = static_cast<qint16>(v3)/4;
+            ch2[j] = static_cast<qint16>(v4)/4; ch2[j+1] = static_cast<qint16>(v5)/4;
         }
     } else {
         // 大端序（Big Endian）处理
@@ -168,9 +171,12 @@ bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
             v4 = qFromBigEndian(v4); v5 = qFromBigEndian(v5);
 
             // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
-            ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
-            ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
+            // ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
+            // ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
+            // ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
+            ch0[j] = static_cast<qint16>(v0)/4; ch0[j+1] = static_cast<qint16>(v1)/4;
+            ch1[j] = static_cast<qint16>(v2)/4; ch1[j+1] = static_cast<qint16>(v3)/4;
+            ch2[j] = static_cast<qint16>(v4)/4; ch2[j+1] = static_cast<qint16>(v5)/4;
         }
     }
 
@@ -226,36 +232,21 @@ void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16
     // ch1和ch2：板卡编号、通道号共同决定调整方式
     // ch3和ch4：通道号决定调整方式，与板卡编号无关
 
-    bool isPositive = false; //是否为正脉冲信号
-    //板卡编号为奇数，则2、3为正，1为负
-    //板卡编号为偶数，则1、3为正，2为负
+    // bool isPositive = false; //是否为正脉冲信号
+    // //板卡编号为奇数，则2、3为正，1为负
+    // //板卡编号为偶数，则1、3为正，2为负
 
-    bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数板卡
-    if (isOddBoard)
-    {
-        if (ch==2 || ch==3)
-            isPositive = true;
-    }
-    else{
-        if (ch==1 || ch==3)
-            isPositive = true;
-    }
-
-//    if (ch == 3) {
-//        // 第3通道：data - baseline
-//        isPositive = true;
-//    }
-//    else if (ch == 4) {
-//        // 第4通道：baseline - data
-//        isPositive = false;
-//    }
-//    else {
-//        // ch1和ch2：根据板卡编号的奇偶性和通道号的组合来决定
-//        // 奇数板卡(1,3,5)ch1 或 偶数板卡(2,4,6)ch2: data - baseline
-//        // 其他情况: baseline - data
-
-//        isPositive = (isOddBoard && ch == 1) || (!isOddBoard && ch == 2);
-//    }
+    // bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数板卡
+    // if (isOddBoard)
+    // {
+    //     if (ch==2 || ch==3)
+    //         isPositive = true;
+    // }
+    // else{
+    //     if (ch==1 || ch==3)
+    //         isPositive = true;
+    // }
+    bool isPositive = true;// 全部为正脉冲信号
 
     for (int i = 0; i < data_ch.size(); ++i) {
         if (isPositive) {
