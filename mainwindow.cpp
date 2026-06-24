@@ -109,9 +109,11 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
                     });
                 });
             } else {
+                mIsMeasuring = false;
                 emit ui->action_stopMeasure->trigger();
             }
         } else {
+            mIsMeasuring = false;
             emit ui->action_stopMeasure->trigger();
         }
     });
@@ -1164,13 +1166,14 @@ void MainWindow::on_action_startMeasure_triggered()
         spectroMeter->replot();
     }
 
-    if (0 == ui->cbb_triggerModel->currentIndex())
+    if (1 == ui->cbb_triggerModel->currentIndex())
     {
         // 外触发模式
         mExternalTriggerMode = true;
         mExternalSignalTriggered = false;
         ui->lineEdit_triggerflag->setText(QStringLiteral("等待触发"));
         ui->action_startMeasure->setEnabled(false);
+        ui->action_stopMeasure->setEnabled(false);
         ui->lineEdit_savePath->setEnabled(false);
         ui->spinBox_timeLength->setEnabled(false);
     }
@@ -1198,12 +1201,15 @@ void MainWindow::on_action_startMeasure_triggered()
 
 void MainWindow::on_action_stopMeasure_triggered()
 {
-    this->mIsMeasuring = false;
+    mExternalTriggerMode = false;
 
     // 发送指令集
     //mPCIeCommSdk.writeStopMeasure();
     mEnableContinueMeasuer = false;
-    mPCIeCommSdk.stopAllCapture();
+    if (mIsMeasuring){
+        mIsMeasuring = false;
+        mPCIeCommSdk.stopAllCapture();
+    }
 
     //mCommHelper->disconnectServer();
 

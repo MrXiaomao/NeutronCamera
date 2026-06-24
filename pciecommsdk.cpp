@@ -155,11 +155,10 @@ QStringList PCIeCommSdk::enumDevices()
             if (SetupDiGetDeviceInterfaceDetailA(hDevInfo, &device_interface, dev_detail, detailLength, NULL, &devInfoData)) {
                 QString path = QString::fromLatin1(dev_detail->DevicePath);
                 if (isDisabled) {
-                    path += "[已禁用]";
+                    //path += "[已禁用]";
                 }
-                else {
-                    lstDevices.append(path);
-                }
+
+                lstDevices.append(path);
             } else {
                 qDebug() << "SetupDiGetDeviceInterfaceDetail - get detail failed, error:" << GetLastError();
             }
@@ -197,10 +196,13 @@ void PCIeCommSdk::printDevicesInfomation()
         qCritical().noquote() << QStringLiteral("未发现数据采集卡，请检查卡是否松动或是已被禁用！");
     else{
         QStringList lst;
-        for (int i=1; i<=3; ++i)
+        for (int boardIndex=1; boardIndex<=3; ++boardIndex)
         {
-            if (boardExists(i)){
-                lst << QStringLiteral("卡%1%2").arg(i).arg((boardIsEnable(i) ? "" : "[未启用]"));
+            if (boardExists(boardIndex)){
+                bool isEnable = boardIsEnable(boardIndex);
+                AppConfig::instance().enableBoard(boardIndex, isEnable);
+                AppConfig::instance().setBoardCaptureState(boardIndex, isEnable);
+                lst << QStringLiteral("卡%1%2").arg(boardIndex).arg((isEnable ? "" : "[未启用]"));
             }
         }
 
@@ -263,7 +265,7 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeSecon
         bool isDDR1 = deviceIndex <= numberOfDevices();
         quint8 cardIndex = (deviceIndex - 1) % numberOfDevices() + 1;
         quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
-        if (boardIsEnable(boardIndex) && AppConfig::instance().enableCapture(boardIndex, isDDR1))
+        if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(boardIndex, isDDR1))
             startCapture(deviceIndex, fileSavePath, captureTimeSeconds, shotNum, mMeasureMode & mmTest);
         else
             mThreadRunning[deviceIndex] = false;
@@ -387,7 +389,7 @@ bool PCIeCommSdk::boardIsEnable(quint8 boardIndex)
     return false;
 }
 
-bool PCIeCommSdk::setBoardState(quint8 boardIndex, bool enable)
+bool PCIeCommSdk::setBoardEnable(quint8 boardIndex, bool enable)
 {
     const GUID& deviceClassGuid = {0x74c7e4a9, 0x6d5d, 0x4a70, {0xbc, 0x0d, 0x20, 0x69, 0x1d, 0xff, 0x9e, 0x9d}};
 
@@ -396,7 +398,7 @@ bool PCIeCommSdk::setBoardState(quint8 boardIndex, bool enable)
         (LPGUID)&deviceClassGuid,
         nullptr,
         nullptr,
-        DIGCF_PRESENT | DIGCF_ALLCLASSES
+        DIGCF_DEVICEINTERFACE//DIGCF_PRESENT | DIGCF_ALLCLASSES
         );
 
     if (hDevInfo == INVALID_HANDLE_VALUE) {
@@ -480,7 +482,7 @@ void PCIeCommSdk::setPSDThreshold()
             continue;
 
         // 判断通道是否启用
-        if (!AppConfig::instance().enableCapture(boardIndex, isDDR1))
+        if (!AppConfig::instance().isEnableCapture(boardIndex, isDDR1))
             continue;
 
         if (!mMapCaptureThread.contains(cardIndex))
@@ -525,7 +527,7 @@ bool PCIeCommSdk::test()
         quint8 cardIndex = (deviceIndex - 1) % numberOfDevices() + 1;
         quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
 
-        if (AppConfig::instance().enableCapture(boardIndex, isDDR1))
+        if (AppConfig::instance().isEnableCapture(boardIndex, isDDR1))
         {
             if (mMapCaptureThread[deviceIndex]->dataExistError())
                 allOk = false;
@@ -1215,7 +1217,6 @@ void PCIeCommSdk::initCaptureThreads()
         if (boardIndex == 0)
             continue;
 
-        AppConfig::instance().setBoardState(boardIndex, true);
         CaptureThread *captureThread = new CaptureThread(boardIndex, mDevices.at(cardIndex-1), isDDR1);
         captureThread->setPriority(QThread::Priority::HighPriority);
         connect(captureThread, &CaptureThread::reportThreadExit, this, [=](quint32 index){

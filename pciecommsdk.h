@@ -223,7 +223,7 @@ public:
     /*判断板卡是否存在*/
     bool boardExists(const quint8& index/*板卡序号1-3*/);
     static bool boardIsEnable(quint8 boardIndex);
-    static bool setBoardState(quint8 boardIndex, bool enable);
+    static bool setBoardEnable(quint8 boardIndex, bool enable);
 
     /*获取设备列表*/
     static QStringList enumDevices();

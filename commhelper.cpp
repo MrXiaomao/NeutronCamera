@@ -367,6 +367,7 @@ void CommHelper::connected()
 */
 bool CommHelper::connectServer()
 {
+    return true;
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();
     quint32 portLocal = AppConfig::instance().localPort();

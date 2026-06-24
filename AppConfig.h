@@ -27,8 +27,11 @@ public:
     static AppConfig& instance();
 
     // 板卡通道管理
-    void setBoardState(quint8 boardIndex, bool online = true);
-    bool enableCapture(quint8 boardIndex, bool isDDR1);
+    void enableBoardCapture(quint8 boardIndex);
+    void disableBoardCapture(quint8 boardIndex);
+    void setBoardCaptureState(quint8 boardIndex, bool isEnable = true);
+    bool enableBoard(quint8 boardIndex, bool isEnable = true);
+    bool isEnableCapture(quint8 boardIndex, bool isDDR1);
 
     // 探测器测量参数设置
     int psdThreshold(quint8 channelNo/*通道号*/) const;

@@ -105,15 +105,15 @@ AppConfig::AppConfig(QObject* parent)
         d->propBoard3EnableDDR1 = qtnCreateProperty<QtnPropertyBool>(d->propSetBoard3, QStringLiteral("启用DDR#1"));
         d->propBoard3EnableDDR2 = qtnCreateProperty<QtnPropertyBool>(d->propSetBoard3, QStringLiteral("启用DDR#2"));
 
-        d->propSetBoard1->setState(QtnPropertyStateImmutable, false);
-        d->propSetBoard2->setState(QtnPropertyStateImmutable, false);
-        d->propSetBoard3->setState(QtnPropertyStateImmutable, false);
-        d->propBoard1EnableDDR1->setState(QtnPropertyStateImmutable, false);
-        d->propBoard1EnableDDR2->setState(QtnPropertyStateImmutable, false);
-        d->propBoard2EnableDDR1->setState(QtnPropertyStateImmutable, false);
-        d->propBoard2EnableDDR2->setState(QtnPropertyStateImmutable, false);
-        d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
-        d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
+        // d->propSetBoard1->setState(QtnPropertyStateNone);
+        // d->propSetBoard2->setState(QtnPropertyStateImmutable, false);
+        // d->propSetBoard3->setState(QtnPropertyStateImmutable, false);
+        // d->propBoard1EnableDDR1->setState(QtnPropertyStateImmutable, false);
+        // d->propBoard1EnableDDR2->setState(QtnPropertyStateImmutable, false);
+        // d->propBoard2EnableDDR1->setState(QtnPropertyStateImmutable, false);
+        // d->propBoard2EnableDDR2->setState(QtnPropertyStateImmutable, false);
+        // d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
+        // d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
 
         propSet->collapse();
     }
@@ -431,7 +431,7 @@ QtnPropertySet* AppConfig::propertySet(int id)
 
 
 // 板卡通道管理
-void AppConfig::setBoardState(quint8 boardIndex, bool online)
+void AppConfig::enableBoardCapture(quint8 boardIndex)
 {
     QtnPropertySet* propSetBoard = nullptr;
     if (1 == boardIndex)
@@ -442,57 +442,100 @@ void AppConfig::setBoardState(quint8 boardIndex, bool online)
         propSetBoard = d->propSetBoard3;
 
     if (propSetBoard){
-        if (online)
+        //propSetBoard->switchState(QtnPropertyStateImmutable, false);
+        if (1 == boardIndex)
         {
-            propSetBoard->removeState(QtnPropertyStateImmutable, true);
-            if (1 == boardIndex)
-            {
-                d->propBoard1EnableDDR1->removeState(QtnPropertyStateImmutable, true);
-                d->propBoard1EnableDDR2->removeState(QtnPropertyStateImmutable, true);
-                d->propBoard1EnableDDR1->setValue(true);
-                d->propBoard1EnableDDR2->setValue(true);
-            } else if (2 == boardIndex)
-            {
-                d->propBoard2EnableDDR1->removeState(QtnPropertyStateImmutable, true);
-                d->propBoard2EnableDDR2->removeState(QtnPropertyStateImmutable, true);
-                d->propBoard2EnableDDR1->setValue(true);
-                d->propBoard2EnableDDR2->setValue(true);
-            } else if (3 == boardIndex)
-            {
-                d->propBoard3EnableDDR1->removeState(QtnPropertyStateImmutable, true);
-                d->propBoard3EnableDDR2->removeState(QtnPropertyStateImmutable, true);
-                d->propBoard3EnableDDR1->setValue(true);
-                d->propBoard3EnableDDR2->setValue(true);
-            }
-        }
-        else
+            // 设置新值
+            d->propBoard1EnableDDR1->setValue(true);
+            d->propBoard1EnableDDR2->setValue(true);
+        } else if (2 == boardIndex)
         {
-            propSetBoard->addState(QtnPropertyStateImmutable, true);
-            if (1 == boardIndex)
-            {
-                d->propBoard1EnableDDR1->addState(QtnPropertyStateImmutable, true);
-                d->propBoard1EnableDDR2->addState(QtnPropertyStateImmutable, true);
-                d->propBoard1EnableDDR1->setValue(false);
-                d->propBoard1EnableDDR2->setValue(false);
-            } else if (2 == boardIndex)
-            {
-                d->propBoard2EnableDDR1->addState(QtnPropertyStateImmutable, true);
-                d->propBoard2EnableDDR2->addState(QtnPropertyStateImmutable, true);
-                d->propBoard2EnableDDR1->setValue(false);
-                d->propBoard2EnableDDR2->setValue(false);
-            } else if (3 == boardIndex)
-            {
-                d->propBoard3EnableDDR1->addState(QtnPropertyStateImmutable, true);
-                d->propBoard3EnableDDR2->addState(QtnPropertyStateImmutable, true);
-                d->propBoard3EnableDDR1->setValue(false);
-                d->propBoard3EnableDDR2->setValue(false);
-            }
+            d->propBoard2EnableDDR1->setValue(true);
+            d->propBoard2EnableDDR2->setValue(true);
+        } else if (3 == boardIndex)
+        {
+            d->propBoard3EnableDDR1->setValue(true);
+            d->propBoard3EnableDDR2->setValue(true);
         }
     }
 }
 
-bool AppConfig::enableCapture(quint8 boardIndex, bool isDDR1)
+void AppConfig::disableBoardCapture(quint8 boardIndex)
 {
+    QtnPropertySet* propSetBoard = nullptr;
+    if (1 == boardIndex)
+        propSetBoard = d->propSetBoard1;
+    if (2 == boardIndex)
+        propSetBoard = d->propSetBoard2;
+    if (3 == boardIndex)
+        propSetBoard = d->propSetBoard3;
+
+    if (propSetBoard){
+        //propSetBoard->switchState(QtnPropertyStateImmutable, true);
+        if (1 == boardIndex)
+        {
+            // 设置新值
+            d->propBoard1EnableDDR1->setValue(false);
+            d->propBoard1EnableDDR2->setValue(false);
+        } else if (2 == boardIndex)
+        {
+            d->propBoard2EnableDDR1->setValue(false);
+            d->propBoard2EnableDDR2->setValue(false);
+        } else if (3 == boardIndex)
+        {
+            d->propBoard3EnableDDR1->setValue(false);
+            d->propBoard3EnableDDR2->setValue(false);
+        }
+    }
+}
+
+void AppConfig::setBoardCaptureState(quint8 boardIndex, bool isEnable)
+{
+    if (isEnable)
+        enableBoardCapture(boardIndex);
+    else
+        disableBoardCapture(boardIndex);
+}
+
+bool AppConfig::enableBoard(quint8 boardIndex, bool isEnable)
+{
+    QtnPropertySet* propSetBoard = nullptr;
+    if (1 == boardIndex)
+        propSetBoard = d->propSetBoard1;
+    if (2 == boardIndex)
+        propSetBoard = d->propSetBoard2;
+    if (3 == boardIndex)
+        propSetBoard = d->propSetBoard3;
+
+    if (propSetBoard){
+        propSetBoard->switchState(QtnPropertyStateImmutable, !isEnable);
+        if (1 == boardIndex)
+        {
+            // 设置新值
+            d->propBoard1EnableDDR1->switchState(QtnPropertyStateImmutable, !isEnable);
+            d->propBoard1EnableDDR2->switchState(QtnPropertyStateImmutable, !isEnable);
+        } else if (2 == boardIndex)
+        {
+            d->propBoard2EnableDDR1->switchState(QtnPropertyStateImmutable, !isEnable);
+            d->propBoard2EnableDDR2->switchState(QtnPropertyStateImmutable, !isEnable);
+        } else if (3 == boardIndex)
+        {
+            d->propBoard3EnableDDR1->switchState(QtnPropertyStateImmutable, !isEnable);
+            d->propBoard3EnableDDR2->switchState(QtnPropertyStateImmutable, !isEnable);
+        }
+    }
+}
+
+bool AppConfig::isEnableCapture(quint8 boardIndex, bool isDDR1)
+{
+    QtnPropertySet* propSetBoard = nullptr;
+    if (1 == boardIndex)
+        propSetBoard = d->propSetBoard1;
+    if (2 == boardIndex)
+        propSetBoard = d->propSetBoard2;
+    if (3 == boardIndex)
+        propSetBoard = d->propSetBoard3;
+
     QtnPropertyBool* propBoardEnableDDR = nullptr;
     if (1 == boardIndex)
     {
@@ -506,7 +549,7 @@ bool AppConfig::enableCapture(quint8 boardIndex, bool isDDR1)
     }
 
     if (propBoardEnableDDR)
-        return propBoardEnableDDR->value();
+        return propSetBoard->isWritable() && propBoardEnableDDR->value();
     else
         return false;
 }
