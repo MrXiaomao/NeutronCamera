@@ -26,15 +26,15 @@ void DeviceManagerWindow::showEvent(QShowEvent *event)
 void DeviceManagerWindow::updataUi()
 {
     AppConfig::instance().enableBoard(1, PCIeCommSdk::boardIsEnable(1));
-    ui->checkBox_board->setEnabled(PCIeCommSdk::boardIsEnable(1) && ((AppConfig::instance().isEnableCapture(1, true) || AppConfig::instance().isEnableCapture(1, false))));
+    ui->checkBox_board->setEnabled(PCIeCommSdk::boardIsEnable(1));
     ui->checkBox_board->setChecked(ui->checkBox_board->isEnabled() ? (AppConfig::instance().isEnableCapture(1, true) || AppConfig::instance().isEnableCapture(1, false)) : false);
 
     AppConfig::instance().enableBoard(2, PCIeCommSdk::boardIsEnable(2));
-    ui->checkBox_board_2->setEnabled(PCIeCommSdk::boardIsEnable(2) && ((AppConfig::instance().isEnableCapture(2, true) || AppConfig::instance().isEnableCapture(2, false))));
+    ui->checkBox_board_2->setEnabled(PCIeCommSdk::boardIsEnable(2));
     ui->checkBox_board_2->setChecked(ui->checkBox_board_2->isEnabled() ? (AppConfig::instance().isEnableCapture(2, true) || AppConfig::instance().isEnableCapture(2, false)) : false);
 
     AppConfig::instance().enableBoard(3, PCIeCommSdk::boardIsEnable(3));
-    ui->checkBox_board_3->setEnabled(PCIeCommSdk::boardIsEnable(3) && ((AppConfig::instance().isEnableCapture(3, true) || AppConfig::instance().isEnableCapture(3, false))));
+    ui->checkBox_board_3->setEnabled(PCIeCommSdk::boardIsEnable(3));
     ui->checkBox_board_3->setChecked(ui->checkBox_board_3->isEnabled() ? (AppConfig::instance().isEnableCapture(3, true) || AppConfig::instance().isEnableCapture(3, false)) : false);
 }
 

@@ -13,7 +13,6 @@ DEFINES += ENABLE_IOCP=0   #启用IO完成端口
 SOURCES += \
     AppConfig.cpp \
     commhelper.cpp \
-    cpsstatisticswindow.cpp \
     dataanalysisworker.cpp \
     datacompresswindow.cpp \
     devicemanagerwindow.cpp \
@@ -21,6 +20,7 @@ SOURCES += \
     main.cpp \
     mainwindow.cpp \
     n_gamma.cpp \
+    offlinewindow.cpp \
     pciecommsdk.cpp \
     pcieiocpreader.cpp \
     qgaugepanel.cpp \
@@ -31,11 +31,11 @@ SOURCES += \
 HEADERS += \
     AppConfig.h \
     commhelper.h \
-    cpsstatisticswindow.h \
     dataanalysisworker.h \
     datacompresswindow.h \
     devicemanagerwindow.h \
     n_gamma.h \
+    offlinewindow.h \
     pciecommsdk.h \
     pcieiocpreader.h \
     qgaugepanel.h \
@@ -47,10 +47,10 @@ HEADERS += \
     waitingspinnerwidget.h
 
 FORMS += \
-    cpsstatisticswindow.ui \
     datacompresswindow.ui \
     devicemanagerwindow.ui \
     mainwindow.ui \
+    offlinewindow.ui \
     settingwindow.ui
 
 # Default rules for deployment.

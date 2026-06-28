@@ -672,7 +672,7 @@ bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& cameraIndex,
     }
 
     QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/> pairSpectrumGamma = qMakePair(channel, spectrumGamma);
-    QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/> pairSpectrumNeutron= qMakePair(channel, spectrumGamma);
+    QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/> pairSpectrumNeutron= qMakePair(channel, spectrumNeutron);
     callback(pairSpectrumGamma, pairSpectrumNeutron);
     return true;
 }

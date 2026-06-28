@@ -1,6 +1,6 @@
 ﻿#include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "cpsstatisticswindow.h"
+#include "offlinewindow.h"
 #include "qcustomplothelper.h"
 #include "globalsettings.h"
 #include "switchbutton.h"
@@ -683,15 +683,15 @@ void MainWindow::initUi()
         actionType->addAction(ui->action_typeLBD);
         {
             GlobalSettings settings(DEVICE_CONFIG_FILE);
-            if (settings.value("Global/DetectType").toUInt() == CpsStatisticsWindow::dtLSD){
+            if (settings.value("Global/DetectType").toUInt() == OfflineWindow::dtLSD){
                 ui->action_typeLSD->setChecked(true);
                 emit ui->action_typeLSD->triggered(true);
             }
-            else if (settings.value("Global/DetectType").toUInt() == CpsStatisticsWindow::dtPSD){
+            else if (settings.value("Global/DetectType").toUInt() == OfflineWindow::dtPSD){
                 ui->action_typePSD->setChecked(true);
                 emit ui->action_typePSD->triggered(true);
             }
-            else if (settings.value("Global/DetectType").toUInt() == CpsStatisticsWindow::dtLBD){
+            else if (settings.value("Global/DetectType").toUInt() == OfflineWindow::dtLBD){
                 ui->action_typeLBD->setChecked(true);
                 emit ui->action_typeLBD->triggered(true);
             }
@@ -703,7 +703,7 @@ void MainWindow::initUi()
     }
 
     connect(mCommHelper, &CommHelper::reportShotnum, this, [=](QString shotnum){
-        qInfo().noquote() << "接收指令，更新炮号：" << shotnum;
+        qInfo().noquote() << "接收指令，发射炮号：" << shotnum;
         ui->lineEdit_shotNum->setText(shotnum);
 
         // 记录指令
@@ -1585,7 +1585,7 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
         this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
-        settings.setValue("Global/DetectType", CpsStatisticsWindow::dtLSD);
+        settings.setValue("Global/DetectType", OfflineWindow::dtLSD);
 
         updateTableRowHidden();
     }
@@ -1616,7 +1616,7 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
         this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
-        settings.setValue("Global/DetectType", CpsStatisticsWindow::dtPSD);
+        settings.setValue("Global/DetectType", OfflineWindow::dtPSD);
 
         updateTableRowHidden();
     }
@@ -1647,7 +1647,7 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
         this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
-        settings.setValue("Global/DetectType", CpsStatisticsWindow::dtLBD);
+        settings.setValue("Global/DetectType", OfflineWindow::dtLBD);
 
         updateTableRowHidden();
     }

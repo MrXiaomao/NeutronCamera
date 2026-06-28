@@ -3,7 +3,7 @@
 
 #include "mainwindow.h"
 #include "datacompresswindow.h"
-#include "cpsstatisticswindow.h"
+#include "offlinewindow.h"
 #include "globalsettings.h"
 #include "darkstyle.h"
 
@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
     }
     else if (args.contains("-m") && args.contains("cps")){
         QApplication::setApplicationName(QObject::tr("中子伽马相机软件离线数据综合分析"));
-        mMainWindow = new CpsStatisticsWindow(isDarkTheme, &w);
+        mMainWindow = new OfflineWindow(isDarkTheme, &w);
     }
     else{
         // 创建主窗体

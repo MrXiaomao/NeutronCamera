@@ -1,6 +1,5 @@
-﻿void on_action_cfgParam_triggered();
-#ifndef CPSSTATISTICSWINDOW_H
-#define CPSSTATISTICSWINDOW_H
+﻿#ifndef OFFLINEWINDOW_H
+#define OFFLINEWINDOW_H
 
 #include <QMainWindow>
 
@@ -92,7 +91,7 @@
 //};
 
 namespace Ui {
-class CpsStatisticsWindow;
+class OfflineWindow;
 }
 
 ///// 自定义X轴格式化器：将数值转换为CH1-CH18的标签
@@ -170,13 +169,13 @@ struct FOM_CurvePoint {
 
 class QCustomPlot;
 class WaitingSpinnerWidget;
-class CpsStatisticsWindow : public QMainWindow
+class OfflineWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    explicit CpsStatisticsWindow(bool isDarkTheme = true, QWidget *parent = nullptr);
-    ~CpsStatisticsWindow();
+    explicit OfflineWindow(bool isDarkTheme = true, QWidget *parent = nullptr);
+    ~OfflineWindow();
 
     enum DetectorType{
         dtLSD,
@@ -271,7 +270,7 @@ private slots:
     void on_action_cfgParam_triggered();
 
 private:
-    Ui::CpsStatisticsWindow *ui;
+    Ui::OfflineWindow *ui;
     bool mIsDarkTheme = true;// 深色主题
     bool mThemeColorEnable = true;// 启用主题色
     QColor mThemeColor = QColor(255,255,255);// 主题色
@@ -298,4 +297,4 @@ private:
     QCustomPlot* mCpsPlot;
 };
 
-#endif // CPSSTATISTICSWINDOW_H
+#endif // OFFLINEWINDOW_H
