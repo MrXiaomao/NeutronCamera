@@ -836,8 +836,8 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                     }
 
                     // 2. 遍历所有输入数据，分桶统计
-                    int i = 0;
-                    for (qint32 time : timeTrigger_ch[cameraNo]) {
+                    for (int i =0; i<timeTrigger_ch[cameraNo].size(); ++i) {
+                        qint16 time = timeTrigger_ch[cameraNo][i];
                         if (time < timeStart)
                             continue;
 
@@ -847,7 +847,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                         if (i>timePeak_ch[cameraNo].size())
                             qDebug();
 
-                        quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
+                        quint64 peak = timePeak_ch[cameraNo][i];// 能量峰值
                         if (peak >= minPeak && peak <= maxPeak)
                             cpsMapPair[cameraIndex][timeStart + (time - timeStart) / timeWidth * timeWidth] += 1;
                     }
@@ -864,9 +864,9 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                     }
 
                     // 2. 遍历所有时间段内的能量值，分桶统计
-                    int i = 0;
                     double channelWidth = (double)16384/channels;
-                    for (qint32 time : timeTrigger_ch[cameraNo]) {
+                    for (int i =0; i<timeTrigger_ch[cameraNo].size(); ++i) {
+                        qint16 time = timeTrigger_ch[cameraNo][i];
                         if (time < timeStart)
                             continue;
 
@@ -876,7 +876,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                         if (i>timePeak_ch[cameraNo].size())
                             qDebug();
 
-                        quint64 peak = timePeak_ch[cameraNo][i++];// 能量峰值
+                        quint64 peak = timePeak_ch[cameraNo][i];// 能量峰值
                         quint16 channel = peak / channelWidth;// 道址
                         spectrumMapPair[cameraIndex][channel] += 1;
                     }
@@ -986,7 +986,7 @@ bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
     }
 }
 
-void PCIeCommSdk::replySettingFinished()
+void PCIeCommSdk::onSettingFinished()
 {
     quint16 deathTime = AppConfig::instance().deathTime();
     writeDeathTime(deathTime);
@@ -1219,11 +1219,11 @@ void PCIeCommSdk::initCaptureThreads()
 
         CaptureThread *captureThread = new CaptureThread(boardIndex, mDevices.at(cardIndex-1), isDDR1);
         captureThread->setPriority(QThread::Priority::HighPriority);
-        connect(captureThread, &CaptureThread::reportThreadExit, this, [=](quint32 index){
+        connect(captureThread, &CaptureThread::threadExitOccurred, this, [=](quint32 index){
             mMapCaptureThread.remove(index);
             mThreadRunning[index] = false;
         });
-        connect(captureThread, &CaptureThread::reportCaptureFinished, this, [=](quint32 cardIndex, bool isDDR1){
+        connect(captureThread, &CaptureThread::captureFinished, this, [=](quint32 cardIndex, bool isDDR1){
             mThreadRunning[deviceIndex] = false;
 
             bool allCaptureFinished = true;
@@ -1238,7 +1238,7 @@ void PCIeCommSdk::initCaptureThreads()
 
             if (allCaptureFinished)
             {
-                emit reportCaptureFinished();
+                emit captureFinished();
                 qInfo() << "数据采集完毕！";
             }
         }, Qt::DirectConnection);
@@ -1652,7 +1652,10 @@ bool CaptureThread::checkDataError()
                     qDebug() << "Cannot open file for writing";
                 }
                 else{
-                    file.write(mDDRWaveformDatas.at(i));
+                    //file.write(mDDRWaveformDatas.at(i));
+                    uchar *mappedBuffer = file.map(0, mRAMSpectrumDatas.at(i).size());
+                    memcpy(mappedBuffer, mRAMSpectrumDatas.at(i).data(), mRAMSpectrumDatas.at(i).size());
+                    file.unmap(mappedBuffer);
                     file.close();
                 }
             }
@@ -2095,13 +2098,13 @@ void CaptureThread::run()
             //     this->clear();
             // }
 
-            //emit reportCaptureFinished(mCardIndex, mIsDDR1);
+            //emit captureFinished(mCardIndex, mIsDDR1);
 
             threadPool->waitForDone();
             qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "采集结束，共采集：" << mCapturedRef;
 
             checkDataError();
-            emit reportCaptureFinished(mCardIndex, mIsDDR1);
+            emit captureFinished(mCardIndex, mIsDDR1);
 
             pause();
             // 暂停逻辑
@@ -2119,7 +2122,7 @@ void CaptureThread::run()
     timeEndPeriod(1);
 
     // 报告线程退出
-    emit reportThreadExit(mCardIndex);
+    emit threadExitOccurred(mCardIndex);
     qDebug() << "destroyCaptureThread id:" << this->currentThreadId();
 }
 

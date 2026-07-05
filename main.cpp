@@ -35,7 +35,7 @@ void AppMessageHandler(QtMsgType type, const QMessageLogContext& context, const 
         return;// 主要用于过滤系统的警告信息
 
     if (mMainWindow && type != QtDebugMsg){
-        QMetaObject::invokeMethod(mMainWindow, "doWriteLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(QtMsgType, type));
+        QMetaObject::invokeMethod(mMainWindow, "WriteLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(QtMsgType, type));
     }
 
     //这里必须调用，否则消息被拦截，log4qt无法捕获系统日志
@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
     else{
         // 创建主窗体
         mMainWindow = new MainWindow(isDarkTheme, &w);
-        QObject::connect((MainWindow*)mMainWindow, &MainWindow::doRebootAsAdmin, (MainWindow*)mMainWindow, [&server,&SERVER_KEY](){
+        QObject::connect((MainWindow*)mMainWindow, &MainWindow::rebootAsAdmin, (MainWindow*)mMainWindow, [&server,&SERVER_KEY](){
             server.close();
             QLocalServer::removeServer(SERVER_KEY);
             ShellExecuteW(NULL, L"runas", QCoreApplication::applicationFilePath().toStdWString().c_str(), NULL, NULL, SW_SHOWNORMAL);

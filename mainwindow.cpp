@@ -48,10 +48,10 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     restoreSettings();
     applyColorTheme();
 
-    connect(this, SIGNAL(doWriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
-    connect(this, SIGNAL(doNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
-    connect(this, SIGNAL(doGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
-    connect(this, SIGNAL(doStartMeasure()), this, SLOT(onStartMeasure()));
+    connect(this, SIGNAL(WriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
+    connect(this, SIGNAL(showNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
+    connect(this, SIGNAL(showGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
+    connect(this, SIGNAL(startMeasure()), this, SLOT(onStartMeasure()));
 
     ui->toolButton_startMeasure->setDefaultAction(ui->action_startMeasure);
     ui->toolButton_stopMeasure->setDefaultAction(ui->action_stopMeasure);
@@ -86,7 +86,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         }
     });
 
-    connect(&mPCIeCommSdk, &PCIeCommSdk::reportCaptureFinished, this, [=](){
+    connect(&mPCIeCommSdk, &PCIeCommSdk::captureFinished, this, [=](){
         SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
@@ -101,7 +101,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         }
 
         if (mEnableContinueMeasuer){
-            doWriteLog(QString("连续测量次数：%1，累计次数：%2，累计异常次数:%3").arg(++mCurrentMeasuerCount).arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
+            WriteLog(QString("连续测量次数：%1，累计次数：%2，累计异常次数:%3").arg(++mCurrentMeasuerCount).arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
             if (testOk){
                 QTimer::singleShot(ui->spinBox_intervalSeconds->value() * 1000, this, [=](){
                     QTimer::singleShot(3000, this, [=](){
@@ -167,7 +167,7 @@ void MainWindow::initUi()
     mSettingWindow = new SettingWindow();
     mSettingWindow->setWindowFlags(Qt::Widget | Qt::WindowStaysOnTopHint);
     mSettingWindow->hide();
-    connect(mSettingWindow, &SettingWindow::reportSettingFinished, &mPCIeCommSdk, &PCIeCommSdk::replySettingFinished);
+    connect(mSettingWindow, &SettingWindow::reportSettingFinished, &mPCIeCommSdk, &PCIeCommSdk::onSettingFinished);
 
     mDeviceManagerWindow = new DeviceManagerWindow();
     // 移除最大化最小化按钮，只保留关闭按钮
@@ -359,31 +359,31 @@ void MainWindow::initUi()
             }
         }
 
-        connect(mCommHelper, &CommHelper::reportPowerStatus, this, [=](quint32 moduleNo, bool on){
+        connect(mCommHelper, &CommHelper::powerStatusChanged, this, [=](quint32 moduleNo, bool on){
             SwitchButton* button = this->findChild<SwitchButton*>(QString("1#Power#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
         });
-        connect(mCommHelper, &CommHelper::reportVoltageStatus, this, [=](quint32 moduleNo, bool on){
+        connect(mCommHelper, &CommHelper::voltageStatusChanged, this, [=](quint32 moduleNo, bool on){
             SwitchButton* button = this->findChild<SwitchButton*>(QString("1#Voltage#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
         });
-        connect(mCommHelper, &CommHelper::reportBackupPowerStatus, this, [=](quint32 moduleNo, bool on){
+        connect(mCommHelper, &CommHelper::backupPowerStatusChanged, this, [=](quint32 moduleNo, bool on){
             SwitchButton* button = this->findChild<SwitchButton*>(QString("2#Power#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
         });
-        connect(mCommHelper, &CommHelper::reportBackupVoltageStatus, this, [=](quint32 moduleNo, bool on){
+        connect(mCommHelper, &CommHelper::backupVoltageStatusChanged, this, [=](quint32 moduleNo, bool on){
             SwitchButton* button = this->findChild<SwitchButton*>(QString("2#Voltage#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
         });
-        connect(mCommHelper, &CommHelper::reportBackupChannelStatus, this, [=](quint32 moduleNo, bool on){
+        connect(mCommHelper, &CommHelper::backupChannelStatusChanged, this, [=](quint32 moduleNo, bool on){
             SwitchButton* button = this->findChild<SwitchButton*>(QString("BackupChannel#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
@@ -475,7 +475,7 @@ void MainWindow::initUi()
                 // 检测外触发开始时刻
                 if (currentDateTime >= ui->dateTimeEdit_startTime->dateTime())
                 {
-                    emit doStartMeasure();
+                    emit startMeasure();
                 }
             }
         }
@@ -702,14 +702,14 @@ void MainWindow::initUi()
         }
     }
 
-    connect(mCommHelper, &CommHelper::reportShotnum, this, [=](QString shotnum){
+    connect(mCommHelper, &CommHelper::shotnumValueChanged, this, [=](const QString& shotnum){
         qInfo().noquote() << "接收指令，发射炮号：" << shotnum;
         ui->lineEdit_shotNum->setText(shotnum);
 
         // 记录指令
         recordExternalCommand(QString("炮号：%1").arg(shotnum));
     });
-    connect(mCommHelper, &CommHelper::reportSystemtime, this, [=](QDateTime tm){
+    connect(mCommHelper, &CommHelper::systemTimeValueChanged, this, [=](const QDateTime& tm){
         qInfo().noquote() << "接收指令，同步时钟：" << tm.toString("yyyy-MM-dd hh:mm:ss.zzz");
         ui->dateTime_shotTime->setDateTime(QDateTime::currentDateTime());
         ui->dateTimeEdit_startTime->setDateTime(tm);
@@ -719,7 +719,7 @@ void MainWindow::initUi()
         // 记录指令
         recordExternalCommand(QString("时钟：%1").arg(tm.toString("yyyy-MM-dd hh:mm:ss.zzz")));
     });
-    connect(mCommHelper, &CommHelper::reportEnergenceStop, this, [=](){
+    connect(mCommHelper, &CommHelper::energenceStopSignalTriggered, this, [=](){
         qInfo().noquote() << "接收指令，紧急停机！";
 
         //软件立马控制软件停止测量，并将已测的数据继续保存，在界面打印“紧急停机”日志。然后发送电源断开指令、偏压关闭指令到设备来控制测量系统进行断电。
@@ -734,7 +734,7 @@ void MainWindow::initUi()
         recordExternalCommand(QStringLiteral("紧急停机"));
     });
 
-    connect(mCommHelper, &CommHelper::reportTemperatureAndVoltage, this, [=](quint8 moduleNo, QMap<QString, QPair<double, double>>& pairs){
+    connect(mCommHelper, &CommHelper::temperatureAndVoltageChanged, this, [=](quint8 moduleNo, QMap<QString, QPair<double, double>>& pairs){
         if (moduleNo < 1 || moduleNo > 18)
         {
 
@@ -832,7 +832,7 @@ void MainWindow::initUi()
         }
     });
 
-    connect(mCommHelper, &CommHelper::reportTemperature, this, [=](quint8 moduleNo, QVector<float>& pairs){
+    connect(mCommHelper, &CommHelper::temperatureChanged, this, [=](quint8 moduleNo, QVector<float>& pairs){
         quint32 column = moduleNo + 1;
         for (int row=0; row<pairs.size(); ++row){
             ui->tableWidget_status->item(row, column)->setText(QString::number(pairs[row], 'f', 2));
@@ -851,7 +851,7 @@ void MainWindow::initUi()
             }
         }
     });
-    connect(mCommHelper, &CommHelper::reportVoltageCurrent, this, [=](quint8 moduleNo, QVector<QPair<float,float>>& pairs){
+    connect(mCommHelper, &CommHelper::voltageAndCurrentChanged, this, [=](quint8 moduleNo, QVector<QPair<float,float>>& pairs){
         quint32 column = moduleNo + 1;
 
         if (pairs.size() != 12)
@@ -1831,8 +1831,8 @@ void MainWindow::on_pushButton_preview_clicked()
                 QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
                 QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
         {
-            emit doNeutronSpectrum(horCameraIndex, pairSpectrumNeutron);
-            emit doGammaSpectrum(horCameraIndex, pairSpectrumGamma);
+            emit showNeutronSpectrum(horCameraIndex, pairSpectrumNeutron);
+            emit showGammaSpectrum(horCameraIndex, pairSpectrumGamma);
             //onWaveformPlot(horCameraIndex, mapPair);
             // QMetaObject::invokeMethod(this, [=](){
             //      mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
@@ -1851,8 +1851,8 @@ void MainWindow::on_pushButton_preview_clicked()
                 QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
         {
 
-            emit doNeutronSpectrum(verCameraIndex, pairSpectrumNeutron);
-            emit doGammaSpectrum(verCameraIndex, pairSpectrumGamma);
+            emit showNeutronSpectrum(verCameraIndex, pairSpectrumNeutron);
+            emit showGammaSpectrum(verCameraIndex, pairSpectrumGamma);
             // QMetaObject::invokeMethod(this, [=](){
             //     mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
             //     mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
@@ -1891,7 +1891,7 @@ void MainWindow::on_action_init_triggered()
         qInfo().noquote() << tr("初始化失败");
     }
 
-    //emit mPCIeCommSdk.replySettingFinished();
+    //emit mPCIeCommSdk.onSettingFinished();
 }
 
 void MainWindow::on_action_status_triggered(bool checked)
@@ -1975,7 +1975,7 @@ void MainWindow::on_action_deviceManager_triggered()
             return;
         }
 
-        emit doRebootAsAdmin();
+        emit rebootAsAdmin();
         QCoreApplication::exit(0);
         ShellExecuteW(NULL, L"runas", QCoreApplication::applicationFilePath().toStdWString().c_str(), NULL, NULL, SW_SHOWNORMAL);
         return ;

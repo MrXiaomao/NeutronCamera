@@ -58,7 +58,7 @@ DataCompressWindow::DataCompressWindow(bool isDarkTheme, QWidget *parent)
 //    QStringList args = QCoreApplication::arguments();
 //    this->setWindowTitle(QApplication::applicationName()+" - "+APP_VERSION + " [" + args[4] + "]");
 
-    connect(this, SIGNAL(doWriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
+    connect(this, SIGNAL(WriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
 
     // 连接时间范围验证信号
     connect(ui->spinBox_startT, &QSpinBox::editingFinished, this, &DataCompressWindow::validateTimeRange);
@@ -411,7 +411,7 @@ void DataCompressWindow::on_action_choseDir_triggered()
     else {
         GlobalSettings settings(filePath+"/device_config.ini");
         mShotNum = settings.value("Global/ShotNum", "00000").toString();
-        emit doWriteLog("炮号：" + mShotNum);
+        emit WriteLog("炮号：" + mShotNum);
     }
 
 

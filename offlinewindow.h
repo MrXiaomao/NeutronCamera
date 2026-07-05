@@ -229,14 +229,14 @@ public slots:
     void onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>);
 
 signals:
-    void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    void doWaveformPlot(quint8/*通道号*/, const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&);
-    void doNeutronSpectrum(quint8, const QVector<double>&, const QVector<double>&);
-    void doGammaSpectrum(quint8, const QVector<double>&, const QVector<double>&);
-    void doPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图
-    void doFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&, double);// FoM拟合
-    void doSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>);
-    void doCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>);
+    void writeLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    void showWaveform(quint8/*通道号*/, const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&);
+    void showNeutronSpectrum(quint8, const QVector<double>&, const QVector<double>&);
+    void showGammaSpectrum(quint8, const QVector<double>&, const QVector<double>&);
+    void showPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图
+    void showFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&, double);// FoM拟合
+    void showSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>);
+    void showCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>);
 
 private slots:
     void on_action_about_triggered();

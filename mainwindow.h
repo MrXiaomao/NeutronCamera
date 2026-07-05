@@ -63,11 +63,11 @@ public slots:
     void onStartMeasure();//开始测量
 
 signals:
-    void doWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
-    void doNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
-    void doGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
-    void doStartMeasure();//开始测量
-    void doRebootAsAdmin();
+    void WriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    void showNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
+    void showGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
+    void startMeasure();//开始测量
+    void rebootAsAdmin();
 
 private slots:
     void on_action_exit_triggered();

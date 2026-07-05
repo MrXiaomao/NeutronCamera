@@ -72,15 +72,15 @@ void CommHelper::initSocket()
     connect(mUdpStatusClient1, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
 
     //炮号接收器
-    this->mUdpServer = new QUdpSocket();
-    this->mUdpServer->setSocketOption(QAbstractSocket::MulticastLoopbackOption, true);
-    connect (mUdpServer, &QUdpSocket::readyRead, this, [=](){
-        while (mUdpServer->hasPendingDatagrams()) {
+    this->mUdpShotReceiver = new QUdpSocket();
+    this->mUdpShotReceiver->setSocketOption(QAbstractSocket::MulticastLoopbackOption, true);
+    connect (mUdpShotReceiver, &QUdpSocket::readyRead, this, [=](){
+        while (mUdpShotReceiver->hasPendingDatagrams()) {
             QByteArray datagram;
-            datagram.resize(int(mUdpServer->pendingDatagramSize()));
+            datagram.resize(int(mUdpShotReceiver->pendingDatagramSize()));
             QHostAddress sender;
             quint16 senderPort;
-            mUdpServer->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
+            mUdpShotReceiver->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
             //+PLS_12345
 
             qInfo().noquote() << "接收广播消息：" << datagram;
@@ -91,7 +91,7 @@ void CommHelper::initSocket()
                 if (iterator.hasNext()) {
                     QRegularExpressionMatch match = iterator.next();
                     QString shotNum = match.captured(0);
-                    emit reportShotnum(shotNum);
+                    emit shotnumValueChanged(shotNum);
                 }
             }
             else if (datagram.startsWith("TIME_")){
@@ -109,16 +109,16 @@ void CommHelper::initSocket()
                     QString millisecond = match.captured(7); // 毫秒
                     QDateTime tm(QDate(year.toUInt(),month.toUInt(),day.toUInt()),
                                  QTime(hour.toUInt(),minute.toUInt(),second.toUInt(),millisecond.toUInt()));
-                    emit reportSystemtime(tm);
+                    emit systemTimeValueChanged(tm);
                 }
             }
             else if (datagram.startsWith("EMERGENCE_STOP")){
-                emit reportEnergenceStop();
+                emit energenceStopSignalTriggered();
             }
         }
     });
-    if (this->mUdpServer->bind(QHostAddress::Any, 12100, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)){
-        this->mUdpServer->joinMulticastGroup(QHostAddress::LocalHost);
+    if (this->mUdpShotReceiver->bind(QHostAddress::Any, 12100, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)){
+        this->mUdpShotReceiver->joinMulticastGroup(QHostAddress::LocalHost);
     }
 }
 
@@ -192,7 +192,7 @@ void CommHelper::readyRead()
 
         //+PLS_12345
         // if (datagram.size() > 0)
-        //     DoReadyRead(datagram);
+        //     onReadyRead(datagram);
         // else
         //     break;
     } while (mUdpStatusClient1->hasPendingDatagrams());
@@ -201,10 +201,10 @@ void CommHelper::readyRead()
     //QByteArray tempData = mTcpClient->readAll();
     // QByteArray tempData = mTcpClient->readAll();
     // qDebug() << tempData;
-    DoReadyRead(datagram);
+    onReadyRead(datagram);
 }
 
-void CommHelper::DoReadyRead(QByteArray& tempData)
+void CommHelper::onReadyRead(QByteArray& tempData)
 {
     if (tempData.at(0) == 0x5A){
         // 选通器状态返回
@@ -217,7 +217,7 @@ void CommHelper::DoReadyRead(QByteArray& tempData)
             if (mMapChannel[i+1] != bits.test(i))
             {
                 mMapChannel[i+1] = bits.test(i);
-                emit reportBackupChannelStatus(i+1, mMapChannel[i+1]);
+                emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
             }
         }
 
@@ -283,14 +283,14 @@ void CommHelper::DoReadyRead(QByteArray& tempData)
         {
             rawData.replace('\n', ',');
             QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(rawData);
-            emit reportTemperatureAndVoltage(moduleNo, result);
+            emit temperatureAndVoltageChanged(moduleNo, result);
 
             std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
             for (int i=0; i<18; ++i){
                 if (mMapChannel[i+1] != bits.test(i))
                 {
                      mMapChannel[i+1] = bits.test(i);
-                    emit reportBackupChannelStatus(i+1, mMapChannel[i+1]);
+                    emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
                 }
             }
         }
@@ -349,8 +349,8 @@ void CommHelper::DoReadyRead(QByteArray& tempData)
             }
             else{
 
-                emit reportTemperature(moduleNo, temperature);
-                emit reportVoltageCurrent(moduleNo, voltage_current);
+                emit temperatureChanged(moduleNo, temperature);
+                emit voltageAndCurrentChanged(moduleNo, voltage_current);
             }
         }
     }
@@ -414,7 +414,7 @@ bool CommHelper::switchPower(quint32 channel, bool on)
 {
     mMapPower[channel] = on;
 
-    emit reportPowerStatus(channel, on);
+    emit powerStatusChanged(channel, on);
     return true;
 }
 
@@ -422,7 +422,7 @@ bool CommHelper::switchVoltage(quint32 channel, bool on)
 {
     mMapVoltage[channel] = on;
 
-    emit reportVoltageStatus(channel, on);
+    emit voltageStatusChanged(channel, on);
     return true;
 }
 
@@ -430,7 +430,7 @@ bool CommHelper::switchBackupPower(quint32 channel, bool on)
 {
     mMapBackupPower[channel] = on;
 
-    emit reportBackupPowerStatus(channel, on);
+    emit backupPowerStatusChanged(channel, on);
     return true;
 }
 
@@ -438,7 +438,7 @@ bool CommHelper::switchBackupVoltage(quint32 channel, bool on)
 {
     mMapBackupVoltage[channel] = on;
 
-    emit reportBackupVoltageStatus(channel, on);
+    emit backupVoltageStatusChanged(channel, on);
     return true;
 }
 

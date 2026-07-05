@@ -39,15 +39,15 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
     this->setWindowTitle(QApplication::applicationName() + " - " + APP_VERSION);
     this->applyColorTheme();
 
-    connect(this, SIGNAL(doWriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
-    connect(this, SIGNAL(doWaveformPlot(quint8/*通道号*/,const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&)), this, SLOT(onWaveformPlot(quint8/*通道号*/,const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&)));
-    connect(this, SIGNAL(doSpectrumPlot(QMap<quint8/*通道号*/,QMap<quint16/*道址*/,quint32/*计数率*/>>)), this, SLOT(onSpectrumPlot(QMap<quint8/*通道号*/,QMap<quint16/*道址*/,quint32/*计数率*/>>)));
-    connect(this, SIGNAL(doCpsPlot(QMap<quint8/*通道号*/,QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>)), this, SLOT(onCpsPlot(QMap<quint8/*通道号*/,QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>)));
-    connect(this, SIGNAL(doPSDPlot(quint8,const QVector<double>&, const QVector<double>&, const QVector<double>&)), this,
+    connect(this, SIGNAL(writeLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
+    connect(this, SIGNAL(showWaveform(quint8/*通道号*/,const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&)), this, SLOT(onWaveformPlot(quint8/*通道号*/,const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&)));
+    connect(this, SIGNAL(showSpectrumPlot(QMap<quint8/*通道号*/,QMap<quint16/*道址*/,quint32/*计数率*/>>)), this, SLOT(onSpectrumPlot(QMap<quint8/*通道号*/,QMap<quint16/*道址*/,quint32/*计数率*/>>)));
+    connect(this, SIGNAL(showCpsPlot(QMap<quint8/*通道号*/,QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>)), this, SLOT(onCpsPlot(QMap<quint8/*通道号*/,QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>)));
+    connect(this, SIGNAL(showPSDPlot(quint8,const QVector<double>&, const QVector<double>&, const QVector<double>&)), this,
             SLOT(onPSDPlot(quint8,const QVector<double>&,const QVector<double>&,const QVector<double>&)));
-    connect(this, &OfflineWindow::doFoMPlot, this, &OfflineWindow::onFoMPlot);
-    connect(this, &OfflineWindow::doNeutronSpectrum, this, &OfflineWindow::onNeutronSpectrum);
-    connect(this, &OfflineWindow::doGammaSpectrum, this, &OfflineWindow::onGammaSpectrum);
+    connect(this, &OfflineWindow::showFoMPlot, this, &OfflineWindow::onFoMPlot);
+    connect(this, &OfflineWindow::showNeutronSpectrum, this, &OfflineWindow::onNeutronSpectrum);
+    connect(this, &OfflineWindow::showGammaSpectrum, this, &OfflineWindow::onGammaSpectrum);
 
     QTimer::singleShot(0, this, [&](){
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
@@ -460,22 +460,22 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
         GlobalSettings settings(dirPath+"/device_config.ini");
         mCurrentDetectorType = (DetectorType)settings.value("Global/DetectType", 0).toUInt();
 
-        emit doWriteLog("实验炮号：" + settings.value("Global/ShotNum", "00000").toString());
+        emit writeLog("实验炮号：" + settings.value("Global/ShotNum", "00000").toString());
         if (mCurrentDetectorType == dtLBD){
             ui->action_ngamma->setVisible(false);
-            emit doWriteLog("探测器类型：LBD探测器");
+            emit writeLog("探测器类型：LBD探测器");
         }
         else if (mCurrentDetectorType == dtLSD){
             ui->action_ngamma->setVisible(true);
-            emit doWriteLog("探测器类型：LSD探测器");
+            emit writeLog("探测器类型：LSD探测器");
         }
         else if (mCurrentDetectorType == dtPSD){
             ui->action_ngamma->setVisible(false);
-            emit doWriteLog("探测器类型：PSD探测器");
+            emit writeLog("探测器类型：PSD探测器");
         }
         else{
             ui->action_ngamma->setVisible(false);
-            emit doWriteLog("探测器类型：未知");
+            emit writeLog("探测器类型：未知");
         }
     }
 
@@ -573,7 +573,7 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
             // 开启最后一列自动填充剩余空间
             //ui->tableWidget_filelist->horizontalHeader()->setStretchLastSection(true);
 
-            emit doWriteLog(QString("bin文件数量: %1, 总大小: %2").arg(fileCount).arg(humanReadableSize(totalSize)), QtDebugMsg);
+            emit writeLog(QString("bin文件数量: %1, 总大小: %2").arg(fileCount).arg(humanReadableSize(totalSize)), QtDebugMsg);
             ui->lineEdit_binCount->setText(QString::number(fileCount));
             ui->lineEdit_binTotal->setText(humanReadableSize(totalSize));
         }
@@ -586,6 +586,12 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
                 count1data = DataCompressWindow::countFilesByPrefix(mfileList, "2Adata");
             if (count1data==0)
                 count1data = DataCompressWindow::countFilesByPrefix(mfileList, "3Adata");
+            if (count1data==0)
+                count1data = DataCompressWindow::countFilesByPrefix(mfileList, "1Bdata");
+            if (count1data==0)
+                count1data = DataCompressWindow::countFilesByPrefix(mfileList, "2Bdata");
+            if (count1data==0)
+                count1data = DataCompressWindow::countFilesByPrefix(mfileList, "3Bdata");
 
             // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
             const int time_per = 40;
@@ -653,9 +659,9 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
         emit ui->comboBox_h5Files->currentIndexChanged(0);
 
     if (fileinfoList.size() == 0)
-        emit doWriteLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
+        emit writeLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
     else
-        emit doWriteLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(fileinfoList.size()));
+        emit writeLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(fileinfoList.size()));
 }
 
 QPixmap OfflineWindow::maskPixmap(QPixmap pixmap, QSize sz, QColor clrMask)
@@ -1985,7 +1991,7 @@ void OfflineWindow::onDataProcess()
     QString outfileName = ui->lineEdit_outputFile->text().trimmed();
     //根据用户输入，对文件名后缀进行追加.h5，如果存在.h5则不追加后缀，否则追加后缀
     if (outfileName.isEmpty()) {
-        emit doWriteLog("输出文件名不能为空", QtWarningMsg);
+        emit writeLog("输出文件名不能为空", QtWarningMsg);
         return;
     }    
 
@@ -2008,17 +2014,17 @@ void OfflineWindow::onDataProcess()
             QMessageBox::No
             );
         if (reply == QMessageBox::No) {
-            emit doWriteLog("用户取消操作", QtInfoMsg);
+            emit writeLog("用户取消操作", QtInfoMsg);
             return;
         }
         QFile::remove(hdf5FilePath);
-        emit doWriteLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
+        emit writeLog(QString("已删除已存在的文件: %1").arg(hdf5FilePath), QtInfoMsg);
     }
 
-    emit doWriteLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
-    emit doWriteLog("========================================", QtInfoMsg);
-    emit doWriteLog("开始数据压缩分析", QtInfoMsg);
-    emit doWriteLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
+    emit writeLog(QString("输出文件: %1").arg(outfileName), QtInfoMsg);
+    emit writeLog("========================================", QtInfoMsg);
+    emit writeLog("开始数据压缩分析", QtInfoMsg);
+    emit writeLog(QString("数据目录: %1").arg(dataDir), QtInfoMsg);
 
     mWaitingSpinnerWidget->start();
     mWaitingSpinnerWidget->setText(QStringLiteral("数据压缩处理中，请耐心等待..."));
@@ -2077,7 +2083,7 @@ void OfflineWindow::onDataProcess()
 void OfflineWindow::onAnalysisLogMessage(const QString& msg, QtMsgType msgType)
 {
     // 这个槽函数在工作线程中通过信号调用，会自动切换到UI线程执行
-    emit doWriteLog(msg, msgType);
+    emit writeLog(msg, msgType);
 }
 
 void OfflineWindow::onAnalysisProgress(int current, int total)
@@ -2095,7 +2101,7 @@ void OfflineWindow::onAnalysisFinished(bool success, const QString& message)
     ui->toolButton_process->setEnabled(true);
 
     if (success) {
-        emit doWriteLog("数据压缩分析完成", QtInfoMsg);
+        emit writeLog("数据压缩分析完成", QtInfoMsg);
 
         // 更新文件大小显示
         QString dataDir = ui->textBrowser_filepath->toPlainText();
@@ -2109,12 +2115,12 @@ void OfflineWindow::onAnalysisFinished(bool success, const QString& message)
         if (fi.exists()) {
             qint64 sizeBytes = fi.size();
             ui->lineEdit_fileSize->setText(humanReadableSize(sizeBytes));
-            emit doWriteLog(QString("压缩后文件大小: %1").arg(humanReadableSize(sizeBytes)), QtInfoMsg);
+            emit writeLog(QString("压缩后文件大小: %1").arg(humanReadableSize(sizeBytes)), QtInfoMsg);
         }
 
-        emit doWriteLog("========================================", QtInfoMsg);
+        emit writeLog("========================================", QtInfoMsg);
     } else {
-        emit doWriteLog(QString("数据分析失败: %1").arg(message), QtCriticalMsg);
+        emit writeLog(QString("数据分析失败: %1").arg(message), QtCriticalMsg);
         QMessageBox::critical(this, "错误", QString("数据分析失败: %1").arg(message));
     }
 
@@ -2132,7 +2138,7 @@ void OfflineWindow::onAnalysisFinished(bool success, const QString& message)
             // 等待线程结束（最多等待3秒）
             if (!mAnalysisThread->wait(3000)) {
                 // 如果等待超时，强制终止
-                emit doWriteLog("警告：线程未能正常结束，强制终止", QtWarningMsg);
+                emit writeLog("警告：线程未能正常结束，强制终止", QtWarningMsg);
                 mAnalysisThread->terminate();
                 mAnalysisThread->wait();
             }
@@ -2173,7 +2179,7 @@ void OfflineWindow::onAnalysisFinished(bool success, const QString& message)
 
 void OfflineWindow::onAnalysisError(const QString& error)
 {
-    emit doWriteLog(QString("错误: %1").arg(error), QtCriticalMsg);
+    emit writeLog(QString("错误: %1").arg(error), QtCriticalMsg);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2224,21 +2230,21 @@ void OfflineWindow::onNGammaFilter()
 
     mWaitingSpinnerWidget->start();
 
-    emit doWriteLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
+    emit writeLog(QString("n-gamma甄别模式，起始时间：%1，结束时间：%2").arg(startT).arg(endT),QtInfoMsg);
     foreach (quint8 cameraIndex, cameras) {
         int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
         //根据相机序号计算出是第几块光纤卡
         quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
         if (cameraIndex<=11){
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
-            emit doWriteLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
+            emit writeLog(QString("水平相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         }
         else{
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
-            emit doWriteLog(QString("垂直相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
+            emit writeLog(QString("垂直相机序号：%1，设备序号：%2").arg(cameraIndex).arg(deviceIndex),QtInfoMsg);
         }
 
-        emit doWriteLog(QString("需要处理的文件数量：%1 (从文件%2到%3)").arg(endFileIndex - fileIndex + 1).arg(fileIndex).arg(endFileIndex),QtInfoMsg);
+        emit writeLog(QString("需要处理的文件数量：%1 (从文件%2到%3)").arg(endFileIndex - fileIndex + 1).arg(fileIndex).arg(endFileIndex),QtInfoMsg);
 
         // 提取该通道有效波形数据，并进行合并
         qint64 totalFileReadTime = 0;
@@ -2247,7 +2253,7 @@ void OfflineWindow::onNGammaFilter()
 
         QVector<std::array<qint16, H5_DATA_COLS>> ch_all_valid_wave;
 
-        emit doWriteLog(QString("=== 文件处理阶段统计 ==="),QtInfoMsg);
+        emit writeLog(QString("=== 文件处理阶段统计 ==="),QtInfoMsg);
 
         QElapsedTimer consumerWall;
         consumerWall.start();                 // ✅ 消费者阶段开始（墙钟）
@@ -2390,8 +2396,8 @@ void OfflineWindow::onNGammaFilter()
             // 统计
             processedFileCount = doneFiles.load(std::memory_order_relaxed);
 
-            emit doWriteLog(QString("处理文件总数：%1").arg(processedFileCount),QtInfoMsg);
-            emit doWriteLog(QString("  文件读取总耗时：%1 ms (%2 秒)")
+            emit writeLog(QString("处理文件总数：%1").arg(processedFileCount),QtInfoMsg);
+            emit writeLog(QString("  文件读取总耗时：%1 ms (%2 秒)")
                                 .arg(totalFileReadTime)
                                 .arg(totalFileReadTime / 1000.0, 0, 'f', 2),
                             QtInfoMsg
@@ -2400,36 +2406,36 @@ void OfflineWindow::onNGammaFilter()
 
         // pool->waitForDone();                  // ✅ 所有消费者任务都结束
         qint64 consumerTotalMs = consumerWall.elapsed();   // ✅ 消费者阶段总耗时（系统时间）
-        emit doWriteLog(QString("  基线计算、波形提取总耗时：%1 ms (%2 秒)")
+        emit writeLog(QString("  基线计算、波形提取总耗时：%1 ms (%2 秒)")
                             .arg(consumerTotalMs)
                             .arg(consumerTotalMs / 1000.0, 0, 'f', 2),
                         QtInfoMsg
                         );
 
-        emit doWriteLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
+        emit writeLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
 
         n_gamma neutron;
         //计算PSD
         QElapsedTimer psdTimer;
         psdTimer.start();
-        emit doWriteLog(QString("开始计算PSD，有效波形数量：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
+        emit writeLog(QString("开始计算PSD，有效波形数量：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
         QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);
         qint64 psdTime = psdTimer.elapsed();
-        emit doWriteLog(QString("PSD计算耗时：%1 ms (%2 秒)，得到 %2 个数据点").arg(psdTime).arg(psdTime / 1000.0, 0, 'f', 2).arg(data.size()),QtInfoMsg);
+        emit writeLog(QString("PSD计算耗时：%1 ms (%2 秒)，得到 %2 个数据点").arg(psdTime).arg(psdTime / 1000.0, 0, 'f', 2).arg(data.size()),QtInfoMsg);
 
         //判断中子和伽马能谱（默认道数1024）
         QVector<double> gammaX, gammaY, neutronX, neutronY;
         neutron.processEnergyData(data, gammaX, gammaY, neutronX, neutronY, thresholdFilter);
-        emit doNeutronSpectrum(cameraIndex, neutronX, neutronY);
-        emit doGammaSpectrum(cameraIndex, gammaX, gammaY);
+        emit showNeutronSpectrum(cameraIndex, neutronX, neutronY);
+        emit showGammaSpectrum(cameraIndex, gammaX, gammaY);
 
         // 计算密度
         QElapsedTimer densityTimer;
         densityTimer.start();
-        emit doWriteLog(QString("开始计算密度分布"),QtInfoMsg);
+        emit writeLog(QString("开始计算密度分布"),QtInfoMsg);
         QVector<float> den = neutron.computeDensity(data, 200);
         qint64 densityTime = densityTimer.elapsed();
-        emit doWriteLog(QString("密度计算耗时：%1 ms (%2 秒)").arg(densityTime).arg(densityTime / 1000.0, 0, 'f', 2),QtInfoMsg);
+        emit writeLog(QString("密度计算耗时：%1 ms (%2 秒)").arg(densityTime).arg(densityTime / 1000.0, 0, 'f', 2),QtInfoMsg);
 
         // 提取 Energy 和 PSD 向量用于绘图，转换为 double（setData 需要 double）
         QElapsedTimer convertTimer;
@@ -2447,35 +2453,35 @@ void OfflineWindow::onNGammaFilter()
             denDouble.append(static_cast<double>(d));
         }
         qint64 convertTime = convertTimer.elapsed();
-        emit doWriteLog(QString("数据类型转换耗时：%1 ms").arg(convertTime),QtInfoMsg);
+        emit writeLog(QString("数据类型转换耗时：%1 ms").arg(convertTime),QtInfoMsg);
 
         // 绘制PSD图表
         QElapsedTimer plotTimer;
         plotTimer.start();
-        emit doPSDPlot(cameraIndex, energyVec, psdVec, denDouble);
+        emit showPSDPlot(cameraIndex, energyVec, psdVec, denDouble);
         qint64 plotTime = plotTimer.elapsed();
-        emit doWriteLog(QString("PSD图表绘制耗时：%1 ms").arg(plotTime),QtInfoMsg);
+        emit writeLog(QString("PSD图表绘制耗时：%1 ms").arg(plotTime),QtInfoMsg);
 
         // 计算FoM
         QElapsedTimer fomTimer;
         fomTimer.start();
-        emit doWriteLog(QString("开始计算FoM"),QtInfoMsg);
+        emit writeLog(QString("开始计算FoM"),QtInfoMsg);
         n_gamma::HistResult histCount = neutron.selectAndHist(data);
         qint64 histTime = fomTimer.elapsed();
-        emit doWriteLog(QString("  直方图计算耗时：%1 ms").arg(histTime),QtInfoMsg);
+        emit writeLog(QString("  直方图计算耗时：%1 ms").arg(histTime),QtInfoMsg);
 
         QElapsedTimer fomCalcTimer;
         fomCalcTimer.start();
         n_gamma::FOM FOM_data = neutron.GetFOM(histCount.psd_x, histCount.count_y);
         qint64 fomCalcTime = fomCalcTimer.elapsed();
         qint64 fomTotalTime = fomTimer.elapsed();
-        emit doWriteLog(QString("  FoM拟合计算耗时：%1 ms").arg(fomCalcTime),QtInfoMsg);
-        emit doWriteLog(QString("FoM计算总耗时：%1 ms (%2 秒)").arg(fomTotalTime).arg(fomTotalTime / 1000.0, 0, 'f', 2),QtInfoMsg);
+        emit writeLog(QString("  FoM拟合计算耗时：%1 ms").arg(fomCalcTime),QtInfoMsg);
+        emit writeLog(QString("FoM计算总耗时：%1 ms (%2 秒)").arg(fomTotalTime).arg(fomTotalTime / 1000.0, 0, 'f', 2),QtInfoMsg);
 
         QPair<double,double> xLim;
         if(FOM_data.R1 < 0.90 || FOM_data.R2 < 0.90){
             //QMessageBox::information(this, tr("提示"), tr("FoM拟合不成功，请调整阈值或延长测量时间！"));
-            emit doWriteLog(QString("FoM拟合不成功，请调整阈值或延长测量时间！"),QtWarningMsg);
+            emit writeLog(QString("FoM拟合不成功，请调整阈值或延长测量时间！"),QtWarningMsg);
             xLim.first  = histCount.psd_x[0];
             xLim.second = histCount.psd_x.back();
         }
@@ -2494,38 +2500,38 @@ void OfflineWindow::onNGammaFilter()
         }
 
         // 绘制FoM图表
-        emit doFoMPlot(cameraIndex, xLim, curveData, FOM_data.fom);
+        emit showFoMPlot(cameraIndex, xLim, curveData, FOM_data.fom);
         qApp->restoreOverrideCursor();
         qint64 fomPlotTime = fomPlotTimer.elapsed();
-        emit doWriteLog(QString("FoM图表绘制耗时：%1 ms").arg(fomPlotTime),QtInfoMsg);
+        emit writeLog(QString("FoM图表绘制耗时：%1 ms").arg(fomPlotTime),QtInfoMsg);
 
         qint64 totalTime = totalTimer.elapsed();
-        emit doWriteLog(QString("=== n-gamma甄别模式总耗时统计 ==="),QtInfoMsg);
-        emit doWriteLog(QString("总耗时：%1 ms (%2 秒)").arg(totalTime).arg(totalTime / 1000.0, 0, 'f', 2),QtInfoMsg);
-        emit doWriteLog(QString("  文件处理阶段：%1 ms (%2%)")
+        emit writeLog(QString("=== n-gamma甄别模式总耗时统计 ==="),QtInfoMsg);
+        emit writeLog(QString("总耗时：%1 ms (%2 秒)").arg(totalTime).arg(totalTime / 1000.0, 0, 'f', 2),QtInfoMsg);
+        emit writeLog(QString("  文件处理阶段：%1 ms (%2%)")
                             .arg(totalFileReadTime)
                             .arg(totalTime > 0 ? (100.0 * totalFileReadTime / totalTime) : 0.0, 0, 'f', 2),
                         QtInfoMsg);
-        emit doWriteLog(QString("  PSD计算阶段：%1 ms (%2%)")
+        emit writeLog(QString("  PSD计算阶段：%1 ms (%2%)")
                             .arg(psdTime)
                             .arg(totalTime > 0 ? (100.0 * psdTime / totalTime) : 0.0, 0, 'f', 2),
                         QtInfoMsg
                         );
 
-        emit doWriteLog(QString("  密度计算阶段：%1 ms (%2%)")
+        emit writeLog(QString("  密度计算阶段：%1 ms (%2%)")
                             .arg(densityTime)
                             .arg(totalTime > 0 ? (100.0 * densityTime / totalTime) : 0.0, 0, 'f', 1),
                         QtInfoMsg
                         );
 
-        emit doWriteLog(QString("  FoM计算阶段：%1 ms (%2%)")
+        emit writeLog(QString("  FoM计算阶段：%1 ms (%2%)")
                             .arg(fomTotalTime)
                             .arg(totalTime > 0 ? (100.0 * fomTotalTime / totalTime) : 0.0, 0, 'f', 1),
                         QtInfoMsg
                         );
 
         const auto otherTime = totalTime - totalFileReadTime - psdTime - densityTime - fomTotalTime;
-        emit doWriteLog(QString("  其它（转换、绘图等）：%1 ms (%2%)")
+        emit writeLog(QString("  其它（转换、绘图等）：%1 ms (%2%)")
                             .arg(otherTime)
                             .arg(totalTime > 0 ? (100.0 * otherTime / totalTime) : 0.0, 0, 'f', 1),
                         QtInfoMsg
@@ -2613,10 +2619,10 @@ void OfflineWindow::onCpsStatistics(int minPeak, int maxPeak)
 
         // 在std::thread中，拿到接收对象的指针后，通过QMetaObject invokeMethod投递，否则直接用emit槽函数无法响应
         QMetaObject::invokeMethod(this, [=](){
-		    emit doCpsPlot(cpsMapPairs);
+		    emit showCpsPlot(cpsMapPairs);
 		
 		    if (0==minPeak && 16384==maxPeak)//如果是选择能谱范围就不要重新刷新能谱图了
-		        emit doSpectrumPlot(spectrumMapPairs);
+		        emit showSpectrumPlot(spectrumMapPairs);
 		
             mWaitingSpinnerWidget->stop();
         }, Qt::QueuedConnection);

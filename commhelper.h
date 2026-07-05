@@ -41,28 +41,28 @@ public:
     bool switchBackupChannel(quint32, bool);
     bool switchAllBackupChannel(bool);
 
-    Q_SIGNAL void reportPowerStatus(quint32, bool);
-    Q_SIGNAL void reportVoltageStatus(quint32, bool);
-    Q_SIGNAL void reportBackupPowerStatus(quint32, bool);
-    Q_SIGNAL void reportBackupVoltageStatus(quint32, bool);
-    Q_SIGNAL void reportBackupChannelStatus(quint32, bool);
+    Q_SIGNAL void powerStatusChanged(quint32, bool);
+    Q_SIGNAL void voltageStatusChanged(quint32, bool);
+    Q_SIGNAL void backupPowerStatusChanged(quint32, bool);
+    Q_SIGNAL void backupVoltageStatusChanged(quint32, bool);
+    Q_SIGNAL void backupChannelStatusChanged(quint32, bool);
 
-    Q_SIGNAL void reportTemperature(quint8, QVector<float>&);
-    Q_SIGNAL void reportVoltageCurrent(quint8, QVector<QPair<float,float>>&);
-    Q_SIGNAL void reportTemperatureAndVoltage(quint8, QMap<QString, QPair<double, double>>&);
-    Q_SIGNAL void reportShotnum(QString);
-    Q_SIGNAL void reportSystemtime(QDateTime);
-    Q_SIGNAL void reportEnergenceStop();
+    Q_SIGNAL void temperatureChanged(quint8, QVector<float>&);
+    Q_SIGNAL void voltageAndCurrentChanged(quint8, QVector<QPair<float,float>>&);
+    Q_SIGNAL void temperatureAndVoltageChanged(quint8, QMap<QString, QPair<double, double>>&);
+    Q_SIGNAL void shotnumValueChanged(const QString&);
+    Q_SIGNAL void systemTimeValueChanged(const QDateTime&);
+    Q_SIGNAL void energenceStopSignalTriggered();
 
     Q_SLOT void error(QAbstractSocket::SocketError);
     Q_SLOT void readyRead();
     Q_SLOT void connected();
 
-    Q_SLOT void DoReadyRead(QByteArray&);
+    Q_SLOT void onReadyRead(QByteArray&);
 
 private:
     QTcpSocket *mTcpClient = nullptr;
-    QUdpSocket *mUdpServer = nullptr;
+    QUdpSocket *mUdpShotReceiver = nullptr;// 炮号接收器
     QUdpSocket *mUdpStatusClient1 = nullptr;// 设备电压/电流状态检测
     QLiteThread* mRequestCmdThread = nullptr;
     QByteArray mRawData;

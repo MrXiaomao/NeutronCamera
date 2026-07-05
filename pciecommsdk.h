@@ -119,11 +119,11 @@ public:
 
     bool readDataAsync(HANDLE fd, quint64 offset, const QByteArray& data);
 
-    Q_SIGNAL void reportCaptureFail(quint32, quint32);
-    Q_SIGNAL void reportThreadExit(quint32);
-    Q_SIGNAL void reportCaptureWaveformData(quint8,quint32,const QByteArray& data);
-    Q_SIGNAL void reportCaptureSpectrumData(quint8,bool,quint32,const QByteArray& data);
-    Q_SIGNAL void reportCaptureFinished(quint32, bool);
+    Q_SIGNAL void captureFailOccurred(quint32, quint32);
+    Q_SIGNAL void threadExitOccurred(quint32);
+    Q_SIGNAL void captureWaveformDataChanged(quint8,quint32,const QByteArray& data);
+    Q_SIGNAL void captureSpectrumDataChanged(quint8,bool,quint32,const QByteArray& data);
+    Q_SIGNAL void captureFinished(quint32, bool);
 
 private:
     quint32 mIsDDR1 = true;//
@@ -196,23 +196,23 @@ public:
 
     Q_SIGNAL void reportNotFoundDevices();
     Q_SIGNAL void reportOpenDeviceFail(quint8);
-    Q_SIGNAL void reportCaptureFail(quint32, quint32);
-    Q_SIGNAL void reportCaptureFinished();
+    Q_SIGNAL void captureFailOccurred(quint32, quint32);
+    Q_SIGNAL void captureFinished();
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
 
-    Q_SLOT void replySettingFinished();
+    Q_SLOT void onSettingFinished();
 
-    Q_SLOT void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
-    Q_SLOT void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
-    Q_SLOT void stopCapture(quint32 index);
-    Q_SLOT void stopAllCapture();
+    void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
+    void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
+    void stopCapture(quint32 index);
+    void stopAllCapture();
 
-    Q_SLOT void init(); /* 初始化 */
-    Q_SLOT void reset();/* 重置 */
-    Q_SLOT void reboot();/* 重启 */
-    Q_SLOT void setPSDThreshold();/* 设置PSD甄别阈值 */
-    Q_SLOT bool test();
+    void init(); /* 初始化 */
+    void reset();/* 重置 */
+    void reboot();/* 重启 */
+    void setPSDThreshold();/* 设置PSD甄别阈值 */
+    bool test();
 
     /*获取设备数量*/
     quint32 numberOfDevices();
