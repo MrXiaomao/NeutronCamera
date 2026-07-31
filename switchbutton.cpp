@@ -272,6 +272,8 @@ void SwitchButton::setChecked(bool checked)
         //timer->start();
         startX = endX;
         update();
+
+        emit this->clicked(checked);
     }
 }
 

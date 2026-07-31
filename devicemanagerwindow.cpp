@@ -25,29 +25,36 @@ void DeviceManagerWindow::showEvent(QShowEvent *event)
 
 void DeviceManagerWindow::updataUi()
 {
-    AppConfig::instance().enableBoard(1, PCIeCommSdk::boardIsEnable(1));
-    ui->checkBox_board->setEnabled(PCIeCommSdk::boardIsEnable(1));
+    AppConfig::instance().enableBoard(1, PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(1)));
+    ui->checkBox_board->setEnabled(PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(1)));
     ui->checkBox_board->setChecked(ui->checkBox_board->isEnabled() ? (AppConfig::instance().isEnableCapture(1, true) || AppConfig::instance().isEnableCapture(1, false)) : false);
 
-    AppConfig::instance().enableBoard(2, PCIeCommSdk::boardIsEnable(2));
-    ui->checkBox_board_2->setEnabled(PCIeCommSdk::boardIsEnable(2));
+    AppConfig::instance().enableBoard(2, PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(2)));
+    ui->checkBox_board_2->setEnabled(PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(2)));
     ui->checkBox_board_2->setChecked(ui->checkBox_board_2->isEnabled() ? (AppConfig::instance().isEnableCapture(2, true) || AppConfig::instance().isEnableCapture(2, false)) : false);
 
-    AppConfig::instance().enableBoard(3, PCIeCommSdk::boardIsEnable(3));
-    ui->checkBox_board_3->setEnabled(PCIeCommSdk::boardIsEnable(3));
+    AppConfig::instance().enableBoard(3, PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(3)));
+    ui->checkBox_board_3->setEnabled(PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(3)));
     ui->checkBox_board_3->setChecked(ui->checkBox_board_3->isEnabled() ? (AppConfig::instance().isEnableCapture(3, true) || AppConfig::instance().isEnableCapture(3, false)) : false);
 }
 
 void DeviceManagerWindow::on_pushButton_disable_clicked()
 {
-    PCIeCommSdk::setBoardEnable(1, false);
+    PCIeCommSdk::setBoardEnable(PCIeCommSdk::physicalNoToBoardIndex(1), false);
+    if (!PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(1)))
+        qInfo() << "禁用采集卡#1";
+
     updataUi();
 }
 
 
+
 void DeviceManagerWindow::on_pushButton_enable_clicked()
 {
-    PCIeCommSdk::setBoardEnable(1, true);
+    PCIeCommSdk::setBoardEnable(PCIeCommSdk::physicalNoToBoardIndex(1), true);
+    if (PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(1)))
+        qInfo() << "启用采集卡#1";
+
     updataUi();
 }
 
@@ -60,14 +67,20 @@ void DeviceManagerWindow::on_checkBox_board_clicked(bool checked)
 
 void DeviceManagerWindow::on_pushButton_disable_2_clicked()
 {
-    PCIeCommSdk::setBoardEnable(2, false);
+    PCIeCommSdk::setBoardEnable(PCIeCommSdk::physicalNoToBoardIndex(2), false);
+    if (!PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(2)))
+        qInfo() << "禁用采集卡#2";
+
     updataUi();
 }
 
 
 void DeviceManagerWindow::on_pushButton_enable_2_clicked()
 {
-    PCIeCommSdk::setBoardEnable(2, true);
+    PCIeCommSdk::setBoardEnable(PCIeCommSdk::physicalNoToBoardIndex(2), true);
+    if (PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(2)))
+        qInfo() << "启用采集卡#2";
+
     updataUi();
 }
 
@@ -79,14 +92,20 @@ void DeviceManagerWindow::on_checkBox_board_2_clicked(bool checked)
 
 void DeviceManagerWindow::on_pushButton_disable_3_clicked()
 {
-    PCIeCommSdk::setBoardEnable(3, false);
+    PCIeCommSdk::setBoardEnable(PCIeCommSdk::physicalNoToBoardIndex(3), false);
+    if (!PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(3)))
+        qInfo() << "禁用采集卡#3";
+
     updataUi();
 }
 
 
 void DeviceManagerWindow::on_pushButton_enable_3_clicked()
 {
-    PCIeCommSdk::setBoardEnable(3, true);
+    PCIeCommSdk::setBoardEnable(PCIeCommSdk::physicalNoToBoardIndex(3), true);
+    if (PCIeCommSdk::boardIsEnable(PCIeCommSdk::physicalNoToBoardIndex(3)))
+        qInfo() << "启用采集卡#3";
+
     updataUi();
 }
 

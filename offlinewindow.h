@@ -269,6 +269,8 @@ private slots:
 
     void on_action_cfgParam_triggered();
 
+    void on_action_dataUpload_triggered();
+
 private:
     Ui::OfflineWindow *ui;
     bool mIsDarkTheme = true;// 深色主题

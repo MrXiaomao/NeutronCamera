@@ -201,7 +201,7 @@ QVector<QVector<qint16>> DataCompressWindow::readWave(const std::string &fileNam
         hsize_t numPulses  = dims[0];
         hsize_t numSamples = dims[1];
 
-        if (numSamples != 512) {
+        if (numSamples != H5_DATA_COLS) {
             return {};
         }
 
@@ -287,8 +287,8 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
                   "id INT PRIMARY KEY AUTO_INCREMENT,"
                   "shotNum char(5),"
                   "timestamp datetime,";
-    for (int i=1; i<=512; ++i){
-        if (i==512)
+    for (int i=1; i<=H5_DATA_COLS; ++i){
+        if (i==H5_DATA_COLS)
             sql += QString("data%1 smallint)").arg(i);
         else
             sql += QString("data%1 smallint,").arg(i);
@@ -309,15 +309,15 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
     // 保存到数据库
     {
         QString sql = "INSERT INTO Spectrum (shotNum, timestamp,";
-        for (int i=1; i<=512; ++i){
-            if (i==512)
+        for (int i=1; i<=H5_DATA_COLS; ++i){
+            if (i==H5_DATA_COLS)
                 sql += QString("data%1)").arg(i);
             else
                 sql += QString("data%1,").arg(i);
         }
         sql += " VALUES (:shotNum, :timestamp,";
-        for (int i=1; i<=512; ++i){
-            if (i==512)
+        for (int i=1; i<=H5_DATA_COLS; ++i){
+            if (i==H5_DATA_COLS)
                 sql += QString(":data%1)").arg(i);
             else
                 sql += QString(":data%1,").arg(i);
@@ -329,7 +329,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
         //批量插入，效率高
         QVariantList shotNumList;
         QVariantList timestampList;
-        QVariantList dataList[512];
+        QVariantList dataList[H5_DATA_COLS];
 
         // 单次最大插入512条记录，这里每次插入100条记录吧
         int count = 0;
@@ -337,7 +337,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
             shotNumList << mShotNum;
             timestampList << timestamp;
 
-            for (int j=0; j<512; ++j){
+            for (int j=0; j<H5_DATA_COLS; ++j){
                 dataList[j] << (qint16)wave_CH1[i][j];
                 QApplication::processEvents();
             }
@@ -346,7 +346,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
                 query.prepare(sql);
                 query.bindValue(":shotNum", shotNumList);
                 query.bindValue(":timestamp", timestampList);
-                for (int i=0; i<512; ++i){
+                for (int i=0; i<H5_DATA_COLS; ++i){
                     query.bindValue(QString(":data%1").arg(i+1), dataList[i]);
                 }
 
@@ -361,7 +361,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
                 count = 0;
                 shotNumList.clear();
                 timestampList.clear();
-                for (int j=0; j<512; ++j)
+                for (int j=0; j<H5_DATA_COLS; ++j)
                     dataList[j].clear();
             }
         }
@@ -370,7 +370,7 @@ void DataCompressWindow::on_pushButton_startUpload_clicked()
             query.prepare(sql);
             query.bindValue(":shotNum", shotNumList);
             query.bindValue(":timestamp", timestampList);
-            for (int i=0; i<512; ++i){
+            for (int i=0; i<H5_DATA_COLS; ++i){
                 query.bindValue(QString(":data%1").arg(i+1), dataList[i]);
             }
 

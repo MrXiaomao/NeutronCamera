@@ -60,12 +60,12 @@ public:
     // 当波形信号过多时，该方法明显会出现问题（暂时采用该方法）
     static qint16 calculateBaseline(const QVector<qint16>& data_ch);
 
-    // 根据基线调整数据：根据板卡编号和通道号对数据进行不同的调整
-    // boardNum: 板卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数板卡，2,4,6为偶数板卡）
+    // 根据基线调整数据：根据采集卡编号和通道号对数据进行不同的调整
+    // boardNum: 采集卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数采集卡，2,4,6为偶数采集卡）
     // ch: 1-4 (通道号)
-    //     ch1和ch2：根据板卡编号的奇偶性决定调整方式
-    //     ch3：data - baseline（与板卡编号无关）
-    //     ch4：baseline - data（与板卡编号无关）
+    //     ch1和ch2：根据采集卡编号的奇偶性决定调整方式
+    //     ch3：data - baseline（与采集卡编号无关）
+    //     ch4：baseline - data（与采集卡编号无关）
     static void adjustDataWithBaseline(QVector<qint16>& data_ch, qint16 baseline_ch, int boardNum, int ch);
 
     // 提取超过阈值的有效波形数据
@@ -83,9 +83,9 @@ public:
 
     void getValidWave();
 
-    // 将波形数据按板卡分组写入HDF5文件
+    // 将波形数据按采集卡分组写入HDF5文件
     // filePath: HDF5文件路径
-    // boardNum: 板卡编号 (1-6)
+    // boardNum: 采集卡编号 (1-6)
     // wave_ch0, wave_ch1, wave_ch2, wave_ch3: 4个通道的波形数据
     // 返回: 是否成功写入
     static bool writeWaveformToHDF5(const QString& filePath, int boardNum,
@@ -197,7 +197,7 @@ public:
             return;
         }
 
-        // 2) 通道选择逻辑（0=全通道；否则按相机号映射板卡+通道）
+        // 2) 通道选择逻辑（0=全通道；否则按相机号映射采集卡+通道）
         quint8 deviceIndex = mJob.deviceIndex;
         int cameraNo = 0;
         if (mCameraIndex != 0) {

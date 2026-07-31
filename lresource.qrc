@@ -13,5 +13,6 @@
         <file>resource/image/compress.png</file>
         <file>resource/image/3Dsurface.png</file>
         <file>resource/image/devicemanager.png</file>
+        <file>resource/image/data-upload.png</file>
     </qresource>
 </RCC>

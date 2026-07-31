@@ -149,9 +149,9 @@ bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
             // ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
             // ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
             // ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
-            ch0[j] = static_cast<qint16>(v0)/4; ch0[j+1] = static_cast<qint16>(v1)/4;
-            ch1[j] = static_cast<qint16>(v2)/4; ch1[j+1] = static_cast<qint16>(v3)/4;
-            ch2[j] = static_cast<qint16>(v4)/4; ch2[j+1] = static_cast<qint16>(v5)/4;
+            ch0[j] = static_cast<qint16>(v0); ch0[j+1] = static_cast<qint16>(v1);
+            ch1[j] = static_cast<qint16>(v2); ch1[j+1] = static_cast<qint16>(v3);
+            ch2[j] = static_cast<qint16>(v4); ch2[j+1] = static_cast<qint16>(v5);
         }
     } else {
         // 大端序（Big Endian）处理
@@ -174,9 +174,9 @@ bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
             // ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
             // ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
             // ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
-            ch0[j] = static_cast<qint16>(v0)/4; ch0[j+1] = static_cast<qint16>(v1)/4;
-            ch1[j] = static_cast<qint16>(v2)/4; ch1[j+1] = static_cast<qint16>(v3)/4;
-            ch2[j] = static_cast<qint16>(v4)/4; ch2[j+1] = static_cast<qint16>(v5)/4;
+            ch0[j] = static_cast<qint16>(v0); ch0[j+1] = static_cast<qint16>(v1);
+            ch1[j] = static_cast<qint16>(v2); ch1[j+1] = static_cast<qint16>(v3);
+            ch2[j] = static_cast<qint16>(v4); ch2[j+1] = static_cast<qint16>(v5);
         }
     }
 
@@ -219,8 +219,8 @@ qint16 DataAnalysisWorker::calculateBaseline(const QVector<qint16>& data_ch)
 }
 
 
-// 根据基线调整数据：根据板卡编号和通道号对数据进行不同的调整
-// boardNum: 板卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数板卡，2,4,6为偶数板卡）
+// 根据基线调整数据：根据采集卡编号和通道号对数据进行不同的调整
+// boardNum: 采集卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数采集卡，2,4,6为偶数采集卡）
 // ch: 1-4 (通道号)
 void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16 baseline_ch, int boardNum, int ch)
 {
@@ -229,14 +229,14 @@ void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16
     }
 
     // 当前通道中波形信号有两类，部分为负脉冲信号，部分为正脉冲信号
-    // ch1和ch2：板卡编号、通道号共同决定调整方式
-    // ch3和ch4：通道号决定调整方式，与板卡编号无关
+    // ch1和ch2：采集卡编号、通道号共同决定调整方式
+    // ch3和ch4：通道号决定调整方式，与采集卡编号无关
 
     // bool isPositive = false; //是否为正脉冲信号
-    // //板卡编号为奇数，则2、3为正，1为负
-    // //板卡编号为偶数，则1、3为正，2为负
+    // //采集卡编号为奇数，则2、3为正，1为负
+    // //采集卡编号为偶数，则1、3为正，2为负
 
-    // bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数板卡
+    // bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数采集卡
     // if (isOddBoard)
     // {
     //     if (ch==2 || ch==3)
@@ -263,20 +263,41 @@ QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quin
     QVector<std::array<qint16, H5_DATA_COLS>> wave_ch;
     QVector<int> cross_indices;
 
-    // 丢弃可能不完整的包（比如半个波形）
-    // 从索引21开始（因为需要检查i-20到i的均值）
-    for (int i = pre_points; i < data.size(); ++i) {
-        // 条件：从低于阈值跨越到高于阈值，且前21个点（i-20到i）的均值小于阈值
-        if (data[i - 1] <= threshold && data[i] > threshold) {
-            // 计算从i-20到i（包括i）的21个点的均值
-            qint64 sum = 0;
-            for (int j = i - pre_points; j <= i; ++j) {
-                sum += data[j];
-            }
-            double mean_value = static_cast<double>(sum) / (pre_points + 1);
+    // 点1、3、5、7递增，且第5个点大于阈值
+    if (1){
+       /*
+        *  新的阈值判断方式：
+            取前8个点，分为2组，奇数组为X，偶数组为Y，以奇数组点位（1、3、5、7）为判断主线，
+            点位必须是依次递增的，从点位5开始必须大于阈值，记录下来这个点为触发点位A，以此规则寻找点B、C、D，但是要求A、B、C、D直接的间隔必须大于153*2
+        */
+        for (int i = pre_points; i + WAVEFORM_LENGTH <= data.size(); ++i) {
+            // 条件：从低于阈值跨越到高于阈值，且前21个点（i-20到i）的均值小于阈值
+            if (data[i - 5] < threshold &&
+                data[i - 5] > data[i - 7] &&
+                data[i - 3] >= threshold &&
+                data[i - 1] > data[i - 3]) {
 
-            if (mean_value < threshold) {
                 cross_indices.append(i);
+                i += WAVEFORM_LENGTH;
+            }
+        }
+    }
+    else {
+        // 丢弃可能不完整的包（比如半个波形）
+        // 从索引21开始（因为需要检查i-20到i的均值）
+        for (int i = pre_points; i < data.size(); ++i) {
+            // 条件：从低于阈值跨越到高于阈值，且前21个点（i-20到i）的均值小于阈值
+            if (data[i - 1] <= threshold && data[i] > threshold) {
+                // 计算从i-20到i（包括i）的21个点的均值
+                qint64 sum = 0;
+                for (int j = i - pre_points; j <= i; ++j) {
+                    sum += data[j];
+                }
+                double mean_value = static_cast<double>(sum) / (pre_points + 1);
+
+                if (mean_value < threshold) {
+                    cross_indices.append(i);
+                }
             }
         }
     }
@@ -406,17 +427,17 @@ void DataAnalysisWorker::getValidWave()
 
         QString cardName = QString("%1-%2").arg((deviceIndex+1)/2).arg((deviceIndex%2 == 0) ? "DDR1" : "DDR2");
 
-        // 这里需要判断对应的板卡是否存在数据
+        // 这里需要判断对应的采集卡是否存在数据
         if (tempFileList[deviceIndex-1].size() == 0){
             const int totalProgress = 1;
             const int currentProgress = 1;
             emit progressUpdated(currentProgress, totalProgress);
             processedBoards++;
-            emit logMessage(QString("板卡%1无数据...").arg(cardName), QtInfoMsg);
+            emit logMessage(QString("采集卡%1无数据...").arg(cardName), QtInfoMsg);
             continue;
         }
 
-        emit logMessage(QString("开始处理板卡%1的数据...").arg(cardName), QtInfoMsg);
+        emit logMessage(QString("开始处理采集卡%1的数据...").arg(cardName), QtInfoMsg);
 
         //对每个通道的有效波形数据进行合并
         QVector<std::array<qint16, H5_DATA_COLS>> wave_ch0_all;
@@ -426,7 +447,7 @@ void DataAnalysisWorker::getValidWave()
         int totalFiles = endFile - startFile;
         int processedFiles = 0;
 
-        emit logMessage(QString("正在提取板卡%1的波形数据（读盘-计算流水线）...").arg(cardName), QtInfoMsg);
+        emit logMessage(QString("正在提取采集卡%1的波形数据（读盘-计算流水线）...").arg(cardName), QtInfoMsg);
 
         // 读盘线程：顺序读文件，尽量让磁盘持续满载
         // 队列容量建议 2~4（每个文件约120MB，容量越大占用内存越多）
@@ -456,14 +477,14 @@ void DataAnalysisWorker::getValidWave()
                 const QString fileName = tempFileList[deviceIndex-1][i];// QString("%1data%2.bin").arg(deviceIndex).arg(fileID);
                 const QString filePath = QDir(dataDir).filePath(fileName);
                 if (!QFile::exists(filePath)){
-                    emit logMessage(QString("板卡%1 文件%2: 不存在").arg(cardName).arg(fileName), QtWarningMsg);
+                    emit logMessage(QString("采集卡%1 文件%2: 不存在").arg(cardName).arg(fileName), QtWarningMsg);
                     continue;
                 }
                 int fileID = QFileInfo(fileName).baseName().mid(QFileInfo(fileName).baseName().indexOf("data")+4).toInt();
 
                 // QFile f(filePath);
                 // if (!f.open(QIODevice::ReadOnly)) {
-                //     emit logMessage(QString("板卡%1 文件%2: 打开失败").arg(cardName).arg(fileName), QtWarningMsg);
+                //     emit logMessage(QString("采集卡%1 文件%2: 打开失败").arg(cardName).arg(fileName), QtWarningMsg);
                 //     continue;
                 // }
                 // // 大文件：增大缓冲，减少 read 系统调用次数
@@ -472,14 +493,14 @@ void DataAnalysisWorker::getValidWave()
                 // const qint64 size = f.size();
                 // if (size <= 0) {
                 //     f.close();
-                //     emit logMessage(QString("板卡%1 文件%2: 文件大小异常").arg(cardName).arg(fileName), QtWarningMsg);
+                //     emit logMessage(QString("采集卡%1 文件%2: 文件大小异常").arg(cardName).arg(fileName), QtWarningMsg);
                 //     continue;
                 // }
 
                 // QByteArray buf = f.readAll();
                 // if (buf.isEmpty()) {
                 //     f.close();
-                //     emit logMessage(QString("板卡%1 文件%2: 读取不完整 (%3/%4)")
+                //     emit logMessage(QString("采集卡%1 文件%2: 读取不完整 (%3/%4)")
                 //                     .arg(cardName).arg(fileName), QtWarningMsg);
                 //     continue;
                 // }
@@ -525,7 +546,7 @@ void DataAnalysisWorker::getValidWave()
                     wave_ch2_all.append(wave_ch);
             };
 
-            // 注意：这里 cameraIndex=0 表示 3个通道都处理一次（对应本板卡）
+            // 注意：这里 cameraIndex=0 表示 3个通道都处理一次（对应本采集卡）
             auto *task = new ExtractValidWaveformFromBufferTask(
                 std::move(job),
                 0,
@@ -569,16 +590,16 @@ void DataAnalysisWorker::getValidWave()
             return;
         }
 
-        emit logMessage(QString("板卡%1: 已处理 %2/%3 个文件").arg(cardName).arg(processedFiles).arg(totalFiles), QtInfoMsg);
+        emit logMessage(QString("采集卡%1: 已处理 %2/%3 个文件").arg(cardName).arg(processedFiles).arg(totalFiles), QtInfoMsg);
 
         // 存储有效波形数据到HDF5文件
-        emit logMessage(QString("正在写入板卡%1的波形数据...").arg(cardName), QtInfoMsg);
+        emit logMessage(QString("正在写入采集卡%1的波形数据...").arg(cardName), QtInfoMsg);
         if (!writeWaveformToHDF5(hdf5FilePath, deviceIndex, wave_ch0_all, wave_ch1_all, wave_ch2_all)) {
-            emit logMessage(QString("写入板卡%1的波形数据失败，请检查文件路径和权限").arg(cardName), QtCriticalMsg);
-            emit analysisFinished(false, QString("写入板卡%1的波形数据失败").arg(cardName));
+            emit logMessage(QString("写入采集卡%1的波形数据失败，请检查文件路径和权限").arg(cardName), QtCriticalMsg);
+            emit analysisFinished(false, QString("写入采集卡%1的波形数据失败").arg(cardName));
             return;
         } else {
-            emit logMessage(QString("板卡%1写入成功: 通道%2=%3个波形, 通道%4=%5个波形, 通道%6=%7个波形")
+            emit logMessage(QString("采集卡%1写入成功: 通道%2=%3个波形, 通道%4=%5个波形, 通道%6=%7个波形")
                         .arg(cardName)
                         .arg((deviceIndex-1)*3+1)
                         .arg(wave_ch0_all.size() > 4 ? wave_ch0_all.size()-4 : 0)
@@ -595,7 +616,7 @@ void DataAnalysisWorker::getValidWave()
     emit analysisFinished(true, hdf5FilePath);
 }
 
-// 将波形数据按板卡分组写入HDF5文件
+// 将波形数据按采集卡分组写入HDF5文件
 #include <QTextCodec>
 bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardNum,
                                               const QVector<std::array<qint16, H5_DATA_COLS>>& wave_ch0,
@@ -609,7 +630,7 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
         QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
         H5::H5File file(filePathBytes.toStdString(), fileExists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
 
-        // 创建或打开板卡组
+        // 创建或打开采集卡组
         QString boardGroupName = QString("Board%1").arg(boardNum);
 
         H5::Group boardGroup;
@@ -706,7 +727,7 @@ bool DataAnalysisWorker::writeWaveformHeadToHDF5(const QString& filePath, quint3
         QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
         H5::H5File file(filePathBytes.toStdString(), fileExists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
 
-        // 创建或打开板卡组
+        // 创建或打开采集卡组
         QString configGroupName = "Config";
 
         H5::Group configGroup;
@@ -775,7 +796,7 @@ bool DataAnalysisWorker::readWaveformHeadFromHDF5(const QString& filePath, quint
         QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
         H5::H5File file(filePathBytes.toStdString(), fileExists ? H5F_ACC_RDWR : H5F_ACC_TRUNC);
 
-        // 创建或打开板卡组
+        // 创建或打开采集卡组
         QString configGroupName = "Config";
 
         H5::Group configGroup;

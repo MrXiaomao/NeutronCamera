@@ -1136,8 +1136,9 @@ void OfflineWindow::initCpsPage()
     // customPlot->setInteraction(QCP::iRangeDrag, true);
     // customPlot->setInteraction(QCP::iRangeZoom, true);
     // customPlot->setInteraction(QCP::iSelectPlottables, true);
-    customPlot->legend->setVisible(true);
+    customPlot->legend->setVisible(false);
     customPlot->legend->setWrap(9);
+    customPlot->setAutoAddPlottableToLegend(false);
     customPlot->setNoAntialiasingOnDrag(false);
     customPlot->plotLayout()->clear();
 
@@ -1161,6 +1162,7 @@ void OfflineWindow::initCpsPage()
         // 左上角添加图例
         QCPLegend *legend = new QCPLegend();
         legend->setWrap(9);
+        legend->setCheckable(true);
         spectrumAxisRect->insetLayout()->addElement(legend, Qt::AlignLeft | Qt::AlignTop); // 清空默认布局
 
         QCPAxis *keyAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atBottom);
@@ -1169,6 +1171,7 @@ void OfflineWindow::initCpsPage()
         for (int i=1; i<=18; ++i){            
             QCPGraph *graph = customPlot->addGraph(keyAxis, valueAxis);
             graph->setLineStyle(QCPGraph::lsLine);
+            graph->addToLegend(legend);
             if (i<12){
                 graph->setName(QStringLiteral("HC %1").arg(i));
                 graph->setPen(QPen(mGraphisColor[i-1], 1, Qt::PenStyle::SolidLine));
@@ -1198,6 +1201,7 @@ void OfflineWindow::initCpsPage()
         // 左上角添加图例
         QCPLegend *legend = new QCPLegend();
         legend->setWrap(9);
+        legend->setCheckable(true);
         timeCountsAxisRect->insetLayout()->addElement(legend, Qt::AlignLeft | Qt::AlignTop); // 清空默认布局
 
         QCPAxis *keyAxis = timeCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
@@ -1206,6 +1210,7 @@ void OfflineWindow::initCpsPage()
         for (int i=1; i<=18; ++i){
             QCPGraph *graph = customPlot->addGraph(keyAxis, valueAxis);
             graph->setLineStyle(QCPGraph::lsLine);
+            graph->addToLegend(legend);
             if (i<12){
                 graph->setName(QStringLiteral("HC %1").arg(i));
                 graph->setPen(QPen(mGraphisColor[i-1], 1, Qt::PenStyle::SolidLine));
@@ -1217,21 +1222,21 @@ void OfflineWindow::initCpsPage()
                 graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 5));//显示散点图
             }
 
-            customPlot->legend->removeItem(customPlot->legend->itemWithPlottable(graph)); // 移除与graph关联的图例项，从而隐藏图例
+            //customPlot->legend->removeItem(customPlot->legend->itemWithPlottable(graph)); // 移除与graph关联的图例项，从而隐藏图例
         }
     }
 
     // 时间探测器计数曲线
     QCPAxisRect *timeChannelCountsAxisRect = new QCPAxisRect(customPlot);
     timeChannelCountsAxisRect->setObjectName("timeChannelCountsAxisRect");
-   	timeChannelCountsAxisRect->setRangeZoomFactor(1, 1);//禁止轴缩放
+   	timeChannelCountsAxisRect->setRangeZoomFactor(1, 1);//通过设置缩放比例来禁止轴缩放
    	timeChannelCountsAxisRect->setRangeDragAxes(nullptr, nullptr);// 禁止轴拖拽
     QCPColorScale *timeChannelCountsColorScale = nullptr;
     {
         timeChannelCountsAxisRect->setupFullAxesBox();
         timeChannelCountsAxisRect->setMinimumMargins(QMargins(0,0,0,0));
         timeChannelCountsAxisRect->setMargins(QMargins(0,0,0,0));
-        timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Channel#"));
+        timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("Channel"));
         timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("Time/ms"));
 
         QCPAxis *keyAxis = timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
@@ -1290,8 +1295,9 @@ void OfflineWindow::initCpsPage()
 
     // 计数叠加柱状图
     QCPAxisRect *channelCountsAxisRect = new QCPAxisRect(customPlot);
-    channelCountsAxisRect->setRangeZoomFactor(1, 1.2);//禁止X轴缩放
-    channelCountsAxisRect->setRangeDragAxes(nullptr, nullptr);// 禁止轴拖拽
+    //channelCountsAxisRect->setRangeZoomFactor(1, 1.2);//禁止X轴缩放
+    channelCountsAxisRect->setRangeDragAxes(nullptr, channelCountsAxisRect->axis(QCPAxis::AxisType::atLeft));// 禁止轴拖拽
+    channelCountsAxisRect->setRangeZoom(Qt::Vertical);// 只允许Y轴缩放
     channelCountsAxisRect->setObjectName("channelCountsAxisRect");
     {
         channelCountsAxisRect->setupFullAxesBox();
@@ -1392,8 +1398,8 @@ void OfflineWindow::initCpsPage()
         rightLayout->addElement(1, 0, channelCountsAxisRect);//下面
     }
 
-    customPlotHelper->setGraphCheckBox(customPlot, spectrumAxisRect);
-    customPlotHelper->setGraphCheckBox(customPlot, timeCountsAxisRect);
+    //customPlotHelper->setGraphCheckBoxList(customPlot, spectrumAxisRect);
+    //customPlotHelper->setGraphCheckBoxList(customPlot, timeCountsAxisRect);
 
     customPlot->plotLayout()->clear();
     customPlot->plotLayout()->addElement(0, 0, leftLayout);//左边
@@ -1895,6 +1901,9 @@ void OfflineWindow::on_action_cps_triggered()
 /////////////////////////////////////////////////////////////////////////////////////////////////////
 void OfflineWindow::onWaveform()
 {
+    if (!ui->checkBox_hor->isChecked() && !ui->checkBox_ver->isChecked())
+        return;
+
     //提取有效波形参数
     int startTime = ui->spinBox_startT_1->value(); // 开始时刻
     int endTime = ui->spinBox_endT_1->value(); // 截止时刻
@@ -1924,29 +1933,39 @@ void OfflineWindow::onWaveform()
 
     mWaitingSpinnerWidget->start();
     std::thread producer([=]{
+        if (ui->checkBox_hor->isChecked()){
+            mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
 
-       mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
+            // 水平相机
+            mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, startTime, endTime, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
 
-        // 水平相机
-        mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, startTime, endTime, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+                onWaveformPlot(horCameraIndex, mapPair);
+                if (!ui->checkBox_ver->isChecked()){
+                    QMetaObject::invokeMethod(this, [=](){
+                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedRefresh);
+                        mWaitingSpinnerWidget->stop();
+                    }, Qt::QueuedConnection);
+                }
 
-            onWaveformPlot(horCameraIndex, mapPair);
-        });
+            });
+        }
 
-        mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
+        if (ui->checkBox_ver->isChecked()){
+            mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
 
-        // 垂直相机
-        mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, startTime, endTime , dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+            // 垂直相机
+            mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, startTime, endTime , dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
 
-            onWaveformPlot(verCameraIndex, mapPair);
-            QMetaObject::invokeMethod(this, [=](){
-                mWaveformVerPlot->replot(QCustomPlot::rpQueuedRefresh);
-                mWaveformHorPlot->replot(QCustomPlot::rpQueuedRefresh);
-                mWaitingSpinnerWidget->stop();
-            }, Qt::QueuedConnection);
+                onWaveformPlot(verCameraIndex, mapPair);
+                QMetaObject::invokeMethod(this, [=](){
+                    mWaveformVerPlot->replot(QCustomPlot::rpQueuedRefresh);
+                    if (ui->checkBox_hor->isChecked())
+                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedRefresh);
+                    mWaitingSpinnerWidget->stop();
+                }, Qt::QueuedConnection);
 
-        });
-
+            });
+        }
     });
     producer.detach();
 }
@@ -2582,6 +2601,13 @@ void OfflineWindow::onCpsStatistics(int minPeak, int maxPeak)
     mWaitingSpinnerWidget->start();
     mWaitingSpinnerWidget->setText(QStringLiteral("计数率统计中，请等待..."));
 
+    // 清空之前的能谱图像数据
+    QCPAxisRect* spectrumAxisRect = mCpsPlot->findChild<QCPAxisRect*>("spectrumAxisRect");
+    for (int i=0; i<mCpsPlot->graphCount(spectrumAxisRect); ++i){
+        mCpsPlot->graph(spectrumAxisRect, i)->data()->clear();
+    }
+    mCpsPlot->replot(QCustomPlot::rpQueuedReplot);
+
     // 计数率统计
     //提取有效波形参数
     int timeWidth = ui->spinBox_time1->value(); // 默认值 1ms
@@ -2774,5 +2800,41 @@ void OfflineWindow::on_action_cfgParam_triggered()
     w->setWindowFlags(Qt::WindowCloseButtonHint|Qt::Dialog);
     w->setWindowModality(Qt::ApplicationModal);
     w->showNormal();
+}
+
+#include "hdadataupload.h"
+void OfflineWindow::on_action_dataUpload_triggered()
+{
+    int ret = QMessageBox::question(this, tr("数据上传"), tr("确定要将数据上传到HDA服务器吗？"),
+                                    QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (ret == QMessageBox::No) {
+        return;
+    }
+
+    HDADataUpload hdaClient;
+    if (!hdaClient.connect()){
+        QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("HDA服务器连接失败，数据无法上传！"));
+        return;
+    }
+
+    // int recordCount = 0;
+    // std::string shotTime = commandHelper->mShotTimestamp.toStdString();
+    // for (int channelIdx=0; channelIdx<kSpectrumChannelCount; ++channelIdx){
+    //     const QVector<SpectrumCountsEntry> &entry = m_spectrumCountsByChannel.at(channelIdx);
+    //     if (entry.size() > 0){
+    //         std::vector<double> time/*时间ms*/;
+    //         std::vector<double> values/*能谱计数率*/;
+    //         for (int i = 0; i < m_spectrumCountsByChannel.size(channelIdx); ++i) {
+    //             time.push_back(entry[i].timeMs);
+    //             values.push_back(entry[i].count);
+    //             recordCount++;
+    //         }
+
+    //         hdaClient.startUploadSpectrumCpsData(m_currentShotNumber.toInt(), shotTime, channelIdx+1, time, values);
+    //     }
+    // }
+
+    hdaClient.disconnect();
+    // QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("数据上传完毕，本次上传记录数共%1条！").arg(recordCount));
 }
 

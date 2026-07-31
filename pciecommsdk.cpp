@@ -69,28 +69,30 @@ bool NoBufferingFile::open(const QString &fileName, QIODevice::OpenMode mode)
     return QFile::open(reinterpret_cast<intptr_t>(hFile), mode, QFile::AutoCloseHandle);
 }
 
-
+QStringList PCIeCommSdk::mEnumedDevices;// 搜索出来的采集卡设备列表，对应的是 boardIndex
+QStringList PCIeCommSdk::mPhysicalNames;// 机器插入的采集卡名称列表，对应的是 physicalNo
 PCIeCommSdk::PCIeCommSdk(QObject *parent)
     : QObject{parent}
 {
     QStringList args = QCoreApplication::arguments();
     if (args.size() == 1){
-        mDevices = enumDevices();
-        initCaptureThreads();
+        mPhysicalNames << CARD1_NAME << CARD2_NAME << CARD3_NAME;
+        mEnumedDevices = enumDevices();
+        initCaptureThreads();        
     }
 }
 
 
 PCIeCommSdk::~PCIeCommSdk()
 {
-    for (int cardIndex = 1; cardIndex <= numberOfDevices(); ++cardIndex){
-        auto iter = mMapCaptureThread.find(cardIndex);
-        if (iter != mMapCaptureThread.end()){
+    for (int deviceIndex = 1; deviceIndex <= 6; ++deviceIndex){
+        auto iter = mMapDeviceCaptureThread.find(deviceIndex);
+        if (iter != mMapDeviceCaptureThread.end()){
             CaptureThread *captureThread = iter.value();
             captureThread->stop();
             captureThread->quit();
             captureThread = nullptr;
-            mMapCaptureThread.remove(cardIndex);
+            mMapDeviceCaptureThread.remove(deviceIndex);
         }
     }
 }
@@ -182,7 +184,7 @@ QStringList PCIeCommSdk::enumDevices()
 
 quint32 PCIeCommSdk::numberOfDevices()
 {
-    return mDevices.count();
+    return mEnumedDevices.count();
 }
 
 /*输出设备信息*/
@@ -196,13 +198,14 @@ void PCIeCommSdk::printDevicesInfomation()
         qCritical().noquote() << QStringLiteral("未发现数据采集卡，请检查卡是否松动或是已被禁用！");
     else{
         QStringList lst;
-        for (int boardIndex=1; boardIndex<=3; ++boardIndex)
+        for (int physicalNo=1; physicalNo<=3; ++physicalNo)
         {
+            quint8 boardIndex = boardIndexFromName(mPhysicalNames[physicalNo-1]);
             if (boardExists(boardIndex)){
                 bool isEnable = boardIsEnable(boardIndex);
                 AppConfig::instance().enableBoard(boardIndex, isEnable);
                 AppConfig::instance().setBoardCaptureState(boardIndex, isEnable);
-                lst << QStringLiteral("卡%1%2").arg(boardIndex).arg((isEnable ? "" : "[未启用]"));
+                lst << QStringLiteral("卡%1%2").arg(physicalNo).arg((isEnable ? "" : "[未启用]"));
             }
         }
 
@@ -210,12 +213,12 @@ void PCIeCommSdk::printDevicesInfomation()
     }
 }
 
-/*判断板卡是否存在*/
-bool PCIeCommSdk::boardExists(const quint8& index/*板卡序号1-3*/)
+/*判断采集卡是否存在*/
+bool PCIeCommSdk::boardExists(const quint8& physicalNo/*采集卡序号1-3*/)
 {
     QStringList lst = QStringList() << QStringLiteral("B189E7&0&0020") << QStringLiteral("10D89B97&0&0020") << QStringLiteral("18EC5E6B&0&0020");
-    foreach(QString name, mDevices){
-        if (name.toUpper().contains(lst[index-1]))
+    foreach(QString name, mEnumedDevices){
+        if (name.toUpper().contains(lst[physicalNo-1]))
             return true;
     }
 
@@ -225,10 +228,10 @@ bool PCIeCommSdk::boardExists(const quint8& index/*板卡序号1-3*/)
 #ifdef _WIN32
 #include <processtopologyapi.h> //SetThreadGroupAffinity
 #endif
-void PCIeCommSdk::startCapture(quint32 index, QString fileSavePath, quint32 captureTimeSeconds, QString shotNum/*炮号*/, bool testMode)
+void PCIeCommSdk::startCapture(quint32 deviceIndex, QString fileSavePath, quint32 captureTimeSeconds, QString shotNum/*炮号*/, bool testMode)
 {
-    auto iter = mMapCaptureThread.find(index);
-    if (iter != mMapCaptureThread.end()){
+    auto iter = mMapDeviceCaptureThread.find(deviceIndex);
+    if (iter != mMapDeviceCaptureThread.end()){
         //QString devicePath = mDevices.at(index - 1) + XDMA_FILE_C2H + QStringLiteral().arg();
         // if (i==0)
         //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&B189E7&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
@@ -237,21 +240,21 @@ void PCIeCommSdk::startCapture(quint32 index, QString fileSavePath, quint32 capt
         // else if (i==2)
         //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
 
-        mMapCaptureThread[index]->setParamter(fileSavePath, captureTimeSeconds, testMode);
+        mMapDeviceCaptureThread[deviceIndex]->setParamter(fileSavePath, captureTimeSeconds, testMode);
 
         //启动写文件线程
-        mThreadRunning[index] = true;
-        if (mMapCaptureThread[index]->isRunning())
-            mMapCaptureThread[index]->resume();
+        mDeviceThreadRunning[deviceIndex] = true;
+        if (mMapDeviceCaptureThread[deviceIndex]->isRunning())
+            mMapDeviceCaptureThread[deviceIndex]->resume();
         else
-            mMapCaptureThread[index]->start();
+            mMapDeviceCaptureThread[deviceIndex]->start();
     }
 }
 
-void PCIeCommSdk::stopCapture(quint32 index)
+void PCIeCommSdk::stopCapture(quint32 deviceIndex)
 {
-    auto iter = mMapCaptureThread.find(index);
-    if (iter != mMapCaptureThread.end()){
+    auto iter = mMapDeviceCaptureThread.find(deviceIndex);
+    if (iter != mMapDeviceCaptureThread.end()){
         CaptureThread *captureThread = iter.value();
         //captureThread->pause();
         captureThread->stopMeasure();
@@ -264,11 +267,12 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeSecon
     {
         bool isDDR1 = deviceIndex <= numberOfDevices();
         quint8 cardIndex = (deviceIndex - 1) % numberOfDevices() + 1;
-        quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
-        if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(boardIndex, isDDR1))
+        quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
+        quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
+        if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
             startCapture(deviceIndex, fileSavePath, captureTimeSeconds, shotNum, mMeasureMode & mmTest);
         else
-            mThreadRunning[deviceIndex] = false;
+            mDeviceThreadRunning[deviceIndex] = false;
     }
 }
 
@@ -282,24 +286,21 @@ void PCIeCommSdk::stopAllCapture()
 
 void PCIeCommSdk::init()
 {
-    mDevices = enumDevices();
-    for (int cardIndex = 1; cardIndex <= mDevices.size(); ++cardIndex){
-        quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
+    mEnumedDevices = enumDevices();
+    for (int boardIndex = 1; boardIndex <= mEnumedDevices.size(); ++boardIndex){
+        quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
         if (!boardIsEnable(boardIndex))
             continue;
 
-        if (!mMapCaptureThread.contains(cardIndex))
-            continue;
-
-        HANDLE fUserHandle = PCIeCommSdk::getHandle(mDevices[cardIndex-1] + XDMA_FILE_USER,
+        HANDLE fUserHandle = PCIeCommSdk::getHandle(mPhysicalNames[physicalNo-1] + XDMA_FILE_USER,
                                                     GENERIC_READ | GENERIC_WRITE,
                                                     FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
-        PCIeCommSdk::writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));
+        PCIeCommSdk::writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));
         ::QThread::msleep(100);
-        PCIeCommSdk::writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
+        PCIeCommSdk::writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
         ::QThread::msleep(100);
 
         CloseHandle(fUserHandle);
@@ -308,32 +309,30 @@ void PCIeCommSdk::init()
 
 void PCIeCommSdk::reset()
 {
-    for (int cardIndex = 1; cardIndex <= mDevices.size(); ++cardIndex){
-        quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
+    /*复位*/
+    for (int boardIndex = 1; boardIndex <= mEnumedDevices.size(); ++boardIndex){
+        quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
         if (!boardIsEnable(boardIndex))
             continue;
 
-        if (!mMapCaptureThread.contains(cardIndex))
-            continue;
-
-        HANDLE fUserHandle = PCIeCommSdk::getHandle(mDevices[cardIndex-1] + XDMA_FILE_USER,
+        HANDLE fUserHandle = PCIeCommSdk::getHandle(mPhysicalNames[physicalNo-1] + XDMA_FILE_USER,
                                              GENERIC_READ | GENERIC_WRITE,
                                              FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
-        writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("02 D0 34 12"));//数采
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("02 D0 34 12"));//数采
         QThread::msleep(100);
-        writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
         QThread::msleep(100);
-        writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("01 D0 34 12"));//DDR
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("01 D0 34 12"));//DDR
         QThread::msleep(100);
-        writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
 
         // 初始化，设置测量时间
-        writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));//16-160ms 18-800ms 20-4000ms
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));//16-160ms 18-800ms 20-4000ms
         ::QThread::msleep(100);
-        writeData(cardIndex, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
         ::QThread::msleep(100);
 
         CloseHandle(fUserHandle);
@@ -463,6 +462,12 @@ bool PCIeCommSdk::setBoardEnable(quint8 boardIndex, bool enable)
     return true;
 }
 
+quint8 PCIeCommSdk::physicalNoToBoardIndex(const quint8& physicalNo)
+{
+    quint8 boardIndex = boardIndexFromName(mPhysicalNames[physicalNo - 1]);
+    return boardIndex;
+}
+
 void PCIeCommSdk::reboot()
 {
 
@@ -471,65 +476,141 @@ void PCIeCommSdk::reboot()
 void PCIeCommSdk::setPSDThreshold()
 {
     /* 设置PSD甄别阈值 */    
-    for (quint8 channelIndex = 0; channelIndex <= 17; ++channelIndex){
-        quint8 channelNo = (channelIndex % 6);/*范围0~5*/
-        bool isDDR1 = channelNo <= 2 ? true : false;
-        quint8 cardIndex = (channelIndex / 6) + 1;/*范围1~3*/
-        quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
+    for (quint8 channelIndex = 1; channelIndex <= 18; ++channelIndex){
+        quint8 channelNo = (channelIndex-1) % 6 + 1;/*范围1~6*/
+        bool isDDR1 = channelNo <= 3 ? true : false;
+        quint8 physicalNo = (channelIndex-1) / 6 + 1;/*范围1~3*/
+        quint8 boardIndex = boardIndexFromName(mPhysicalNames[physicalNo - 1]);
 
-        // 判断板卡是否启用
+        // 判断采集卡是否启用
         if (!boardIsEnable(boardIndex))
             continue;
 
         // 判断通道是否启用
-        if (!AppConfig::instance().isEnableCapture(boardIndex, isDDR1))
-            continue;
-
-        if (!mMapCaptureThread.contains(cardIndex))
+        if (!AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
             continue;
 
         quint8 threshold = AppConfig::instance().psdThreshold(channelIndex);
-        HANDLE fUserHandle = PCIeCommSdk::getHandle(mDevices[cardIndex-1] + XDMA_FILE_USER,
+        HANDLE fUserHandle = PCIeCommSdk::getHandle(mPhysicalNames[physicalNo-1] + XDMA_FILE_USER,
                                                     GENERIC_READ | GENERIC_WRITE,
                                                     FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
-        QByteArray command = QByteArray::fromHex("00 FD 34 12");
+        quint64 address = 0x20000;
+        QByteArray command;
+        switch (channelNo){
+        case 1: command = QByteArray::fromHex("00 F1 34 12"); break;
+        case 2: command = QByteArray::fromHex("00 F2 34 12"); break;
+        case 3: command = QByteArray::fromHex("00 F3 34 12"); break;
+        case 4: command = QByteArray::fromHex("00 F4 34 12"); break;
+        case 5: command = QByteArray::fromHex("00 F5 34 12"); break;
+        case 6: command = QByteArray::fromHex("00 F6 34 12"); break;
+        }
         command[0] = threshold;
 
-        quint64 offset = 0x20000;
-        switch (channelNo){
-        case 0: offset = 0x1234F1; break;
-        case 1: offset = 0x1234F2; break;
-        case 2: offset = 0x1234F3; break;
-        case 3: offset = 0x1234F4; break;
-        case 4: offset = 0x1234F5; break;
-        case 5: offset = 0x1234F6; break;
-        }
-        writeData(cardIndex, fUserHandle, offset, command);//PSD阈值
+        writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
         ::QThread::msleep(10);
 
-        writeData(cardIndex, fUserHandle, offset, QByteArray::fromHex("00 00 00 00"));
+        writeData(physicalNo, fUserHandle, address, command);//PSD阈值
         ::QThread::msleep(10);
 
-        qInfo().nospace() << "通道" << (channelIndex+1) << "设置PSD阈值：" << threshold;
+        writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
+        ::QThread::msleep(10);
+
+        qInfo().nospace() << "通道" << ((physicalNo-1)*6 + channelIndex) << "设置PSD阈值：" << threshold;
         CloseHandle(fUserHandle);
     }
 
 }
 
+void PCIeCommSdk::setTriggerThreshold()
+{
+    /* 设置触发阈值 */
+    for (quint8 physicalNo = 1; physicalNo <= 3; ++physicalNo){
+        quint8 boardIndex = boardIndexFromName(mPhysicalNames[physicalNo - 1]);
+
+        // 判断采集卡是否启用
+        if (!boardIsEnable(boardIndex))
+            continue;
+
+        // 判断通道是否启用
+        if (!AppConfig::instance().isEnableCapture(physicalNo, true) && !AppConfig::instance().isEnableCapture(physicalNo, false))
+            continue;
+
+        quint16 threshold = AppConfig::instance().triggerThreshold();
+        HANDLE fUserHandle = PCIeCommSdk::getHandle(mPhysicalNames[physicalNo-1] + XDMA_FILE_USER,
+                                                    GENERIC_READ | GENERIC_WRITE,
+                                                    FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
+        if (fUserHandle == INVALID_HANDLE_VALUE)
+            continue;
+
+        // 保证句柄一定会被释放，避免泄漏
+        QScopeGuard handleGuard([fUserHandle](){ CloseHandle(fUserHandle); });
+
+        using namespace XdmaRegDef;
+        // 拆分高低位寄存器配置
+        quint32 lowCmd = REG_CMD_BASE | THRESHOLD_LOW_OFS | (threshold & 0x00FF);
+        quint32 highCmd = REG_CMD_BASE | THRESHOLD_HIGH_OFS | (threshold >> 8);
+
+        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, lowCmd);
+        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, highCmd);
+
+        // quint64 address = 0x20000;
+
+        // QByteArray command = QByteArray::fromHex("00 F7 34 12");
+        // command[0] = threshold & 0x00FF; // 低位
+        // writeData(physicalNo, fUserHandle, address, command);//触发阈值低位
+        // ::QThread::msleep(10);
+
+        // writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
+        // ::QThread::msleep(10);
+
+        // command = QByteArray::fromHex("00 F8 34 12");
+        // command[0] = threshold >> 8; // 高位
+        // writeData(physicalNo, fUserHandle, address, command);//触发阈值低位
+        // ::QThread::msleep(10);
+
+        // writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
+        // ::QThread::msleep(10);
+
+        qInfo().nospace() << "采集卡#" << (physicalNo) << "设置触发阈值：" << threshold;
+    }
+
+}
+
+// 封装复用的写寄存器+清零握手函数
+inline bool PCIeCommSdk::writeRegAndClear(int physicalNo, HANDLE handle, quint64 addr, quint32 regValue)
+{
+    QByteArray cmd(4, 0x00);
+    // 拆分32位值到4字节（小端对齐，匹配你现有XDMA操作逻辑）
+    memcpy(cmd.data(), &regValue, sizeof(regValue));
+    if (!writeData(physicalNo, handle, addr, cmd)) {
+        qCritical() << "采集卡" << physicalNo << "寄存器0x" << QString::number(addr,16) << "写入失败";
+        return false;
+    }
+    QThread::msleep(XdmaRegDef::REG_OP_WAIT_MS);
+
+    // 写入清零握手
+    memset(cmd.data(), 0, 4);
+    writeData(physicalNo, handle, addr, cmd);
+    QThread::msleep(XdmaRegDef::REG_CLEAR_WAIT_MS);
+    return true;
+}
+
 bool PCIeCommSdk::test()
 {
     bool allOk = true;
-    for (int deviceIndex = 1; deviceIndex <= mDevices.size()*2; ++deviceIndex){
+    for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
+    {
         bool isDDR1 = deviceIndex <= numberOfDevices();
         quint8 cardIndex = (deviceIndex - 1) % numberOfDevices() + 1;
-        quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
+        quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
+        quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
 
-        if (AppConfig::instance().isEnableCapture(boardIndex, isDDR1))
+        if (AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
         {
-            if (mMapCaptureThread[deviceIndex]->dataExistError())
+            if (mMapDeviceCaptureThread[deviceIndex]->dataExistError())
                 allOk = false;
         }
     }
@@ -557,11 +638,11 @@ bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& cameraIndex,
     //根据开始时间和结束时间，过滤掉不在时间范围内的文件
     int startFileId = timeStart / PACKET_TIMELENGTH + 1;
     int endFileId = startFileId + (timeStop - timeStart) / PACKET_TIMELENGTH;
-    //根据通道号判断是板卡的A面还是B面
+    //根据通道号判断是采集卡的A面还是B面
     QString sideFile = "B";
     if ((cameraIndex % 6) >= 1 && (cameraIndex % 6) <= CAMNUMBER_DDR_PER)
         sideFile = "A";
-    //根据通道号计算板卡的索引
+    //根据通道号计算采集卡的索引
     int board_index = (cameraIndex + 5) / 6;
     int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
     //根据通道号计算对应采集卡的第几通道
@@ -697,11 +778,11 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
     //根据开始时间和结束时间，过滤掉不在时间范围内的文件
     int startFileId = timeStart / PACKET_TIMELENGTH + 1;
     int endFileId = startFileId + (timeStop - timeStart) / PACKET_TIMELENGTH;
-    //根据通道号判断是板卡的A面还是B面
+    //根据通道号判断是采集卡的A面还是B面
     QString sideFile = "B";
     if ((cameraIndex % 6) >= 1 && (cameraIndex % 6) <= CAMNUMBER_DDR_PER)
         sideFile = "A";
-    //根据通道号计算板卡的索引
+    //根据通道号计算采集卡的索引
     int board_index = (cameraIndex + 5) / 6;
     int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
     //根据通道号计算对应采集卡的第几通道
@@ -731,7 +812,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
 
             //计算出是当前文件波形的第几个数据点
             int packPos = timeFrom - 1;
-            int point_num = timeTo - timeFrom + 1;
+            int point_num = timeTo - timeFrom;
 
             //扣基线，调整数据
             qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
@@ -741,7 +822,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
             QVector<qint16> waveform = ch[cameraNo].mid(packPos, point_num);
 
             for (int i=0;i<waveform.size();++i)
-                waveformPair.insert(timeStart * 1000 * 1000 + i*2, waveform[i]);
+                waveformPair.insert(id * 1000 * 1000 * PACKET_TIMELENGTH + i*2, waveform[i]);
         }
     }
 
@@ -766,9 +847,9 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
     try {
         H5::H5File file(filePathBytes.toStdString(), H5F_ACC_RDONLY);
 
-        for (int boardNum=1; boardNum<=6; ++boardNum){
-            // 创建或打开板卡组
-            QString boardGroupName = QString("Board%1").arg(boardNum);
+        for (int deviceIndex=1; deviceIndex<=6; ++deviceIndex){
+            // 创建或打开采集卡组
+            QString boardGroupName = QString("Board%1").arg(deviceIndex);
 
             H5::Group boardGroup;
             htri_t existsGroup = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
@@ -825,7 +906,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                 //根据时间段统计计数率
                 QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair;
                 for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
-                    quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
+                    quint8 cameraIndex = (deviceIndex-1)*3 + cameraNo + 1;
 
                     // 1.按照时间段和点位时间间隔分配计数点数组长度
                     quint32 cpsTotal = (timeStop-timeStart)/timeWidth;
@@ -856,7 +937,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                 //根据时间段统计能谱
                 QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPair;
                 for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
-                    quint8 cameraIndex = (boardNum-1)*3 + cameraNo + 1;
+                    quint8 cameraIndex = (deviceIndex-1)*3 + cameraNo + 1;
 
                     //初始化每个道址默认能量值为0
                     for (quint16 channel = 0; channel < channels; ++channel) {
@@ -924,7 +1005,7 @@ bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
     try {
         H5::H5File file(filePathBytes.toStdString(), H5F_ACC_RDONLY);
 
-        // 创建或打开板卡组
+        // 创建或打开采集卡组
         QString boardGroupName = QString("Board%1").arg(deviceIndex);
 
         H5::Group boardGroup;
@@ -952,8 +1033,10 @@ bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
 
                     // 调整容器容量，直接读取到连续内存
                     data.resize(totalRows);
-                    qint16* buffer = data.front().data();
-                    dataset.read(buffer, H5::PredType::NATIVE_INT16);
+                    if (totalRows > 0){
+                        qint16* buffer = data.front().data();
+                        dataset.read(buffer, H5::PredType::NATIVE_INT16);
+                    }
 
                     dataset.close();
                 }
@@ -1073,23 +1156,24 @@ void PCIeCommSdk::writeStopMeasure(){
 
 void PCIeCommSdk::writeCommand(QByteArray& data)
 {
-    for (int cardIndex = 1; cardIndex <= mDevices.size(); ++cardIndex){
-        if (!mMapCaptureThread.contains(cardIndex))
+    for (int boardIndex = 1; boardIndex <= mEnumedDevices.size(); ++boardIndex){
+        quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
+        if (!boardIsEnable(boardIndex))
             continue;
 
-        HANDLE fUserHandle = PCIeCommSdk::getHandle(mDevices[cardIndex-1] + XDMA_FILE_USER,
+        HANDLE fUserHandle = PCIeCommSdk::getHandle(mPhysicalNames[physicalNo-1] + XDMA_FILE_USER,
                                                     GENERIC_READ | GENERIC_WRITE,
                                                     FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
-        writeData(cardIndex, fUserHandle, 0x20000, data);
+        writeData(physicalNo, fUserHandle, 0x20000, data);
 
         CloseHandle(fUserHandle);
     }
 }
 
-bool PCIeCommSdk::writeData(quint8 cardIndex, HANDLE fd, quint64 offset, const QByteArray& data)
+bool PCIeCommSdk::writeData(quint8 physicalNo, HANDLE fd, quint64 offset, const QByteArray& data)
 {
 #ifdef _WIN32
     LARGE_INTEGER address;
@@ -1109,7 +1193,7 @@ bool PCIeCommSdk::writeData(quint8 cardIndex, HANDLE fd, quint64 offset, const Q
     write(fd, data.data(), data.size());
 #endif
 
-    qDebug() << "[" << cardIndex << "] writeData" << QString("0x%1").arg((quint64)offset, 8, 16, QLatin1Char('0')) << data.toHex(' ');
+    qDebug() << "采集卡[" << physicalNo << "] writeData" << QString("0x%1").arg((quint64)offset, 8, 16, QLatin1Char('0')) << data.toHex(' ');
     return true;
 }
 
@@ -1161,9 +1245,9 @@ bool PCIeCommSdk::readData(HANDLE fd, quint64 offset, const QByteArray& data)
     return true;
 }
 
-HANDLE PCIeCommSdk::getHandle(quint8 cardIndex, quint32 flags/* = GENERIC_READ | GENERIC_WRITE*/, quint32 dwFlagsAndAttributes)
+HANDLE PCIeCommSdk::getHandle(quint8 physicalNo, quint32 flags/* = GENERIC_READ | GENERIC_WRITE*/, quint32 dwFlagsAndAttributes)
 {
-    return PCIeCommSdk::getHandle(mDevices.at(cardIndex), flags, dwFlagsAndAttributes);
+    return PCIeCommSdk::getHandle(mPhysicalNames[physicalNo-1], flags, dwFlagsAndAttributes);
 }
 
 HANDLE PCIeCommSdk::getHandle(QString path, quint32 dwDesiredAccess, quint32 dwFlagsAndAttributes)
@@ -1187,49 +1271,57 @@ HANDLE PCIeCommSdk::getHandle(QString path, quint32 dwDesiredAccess, quint32 dwF
 }
 
 /*根据卡名称判断卡序号1~3*/
-quint8 PCIeCommSdk::boardNameToBoardIndex(const QString& name)
+quint8 PCIeCommSdk::boardIndexFromName(const QString& name)
 {
-    // if (i==0)
-    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&B189E7&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
-    // else if (i==1)
-    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&10D89B97&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
-    // else if (i==2)
-    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
-
-    if (name.toUpper().contains(QStringLiteral("B189E7")))
-        return 1;
-    else if (name.toUpper().contains(QStringLiteral("10D89B97")))
-        return 2;
-    else if (name.toUpper().contains(QStringLiteral("18EC5E6B")))
-        return 3;
-    else
-        return 0;
+    return mEnumedDevices.indexOf(name)+1;
 }
 
+/*获取采集卡物理索引值*/
+quint8 PCIeCommSdk::physicalNoFromName(const QString& name)
+{
+    // if (i==0)
+    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&B189E7&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
+    // else if (i==1)
+    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&10D89B97&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
+    // else if (i==2)
+    //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
+    // if (name.toUpper().contains(QStringLiteral("B189E7")))
+    //     return 1;
+    // else if (name.toUpper().contains(QStringLiteral("10D89B97")))
+    //     return 2;
+    // else if (name.toUpper().contains(QStringLiteral("18EC5E6B")))
+    //     return 3;
+    // else
+    //     return 0;
+
+    return mPhysicalNames.indexOf(name)+1;
+}
 
 void PCIeCommSdk::initCaptureThreads()
 {
+    // 先初始化DDR1，再初始化DDR2
     for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
     {
         bool isDDR1 = deviceIndex <= numberOfDevices();
         quint8 cardIndex = (deviceIndex - 1) % numberOfDevices() + 1;
-        quint8 boardIndex = boardNameToBoardIndex(mDevices.at(cardIndex - 1));
-        if (boardIndex == 0)
+        quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
+        quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
+        if (physicalNo == 0)
             continue;
 
-        CaptureThread *captureThread = new CaptureThread(boardIndex, mDevices.at(cardIndex-1), isDDR1);
+        CaptureThread *captureThread = new CaptureThread(deviceIndex, physicalNo, mPhysicalNames[physicalNo-1], isDDR1);
         captureThread->setPriority(QThread::Priority::HighPriority);
-        connect(captureThread, &CaptureThread::threadExitOccurred, this, [=](quint32 index){
-            mMapCaptureThread.remove(index);
-            mThreadRunning[index] = false;
+        connect(captureThread, &CaptureThread::threadExitOccurred, this, [=](quint32 /*index*/){
+            mMapDeviceCaptureThread.remove(deviceIndex);
+            mDeviceThreadRunning[deviceIndex] = false;
         });
-        connect(captureThread, &CaptureThread::captureFinished, this, [=](quint32 cardIndex, bool isDDR1){
-            mThreadRunning[deviceIndex] = false;
+        connect(captureThread, &CaptureThread::captureFinished, this, [=](quint32 /*index*/, bool isDDR1){
+            mDeviceThreadRunning[deviceIndex] = false;
 
             bool allCaptureFinished = true;
             for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
             {
-                if (mThreadRunning[deviceIndex])
+                if (mDeviceThreadRunning[deviceIndex])
                 {
                     allCaptureFinished = false;
                     break;
@@ -1254,8 +1346,8 @@ void PCIeCommSdk::initCaptureThreads()
 
 #endif
 
-        mMapCaptureThread[deviceIndex] = captureThread;
-        mMapCaptureThread[deviceIndex]->start();
+        mMapDeviceCaptureThread[deviceIndex] = captureThread;
+        mMapDeviceCaptureThread[deviceIndex]->start();
     }
 }
 
@@ -1375,9 +1467,10 @@ static char* allocLargePhysicalAlignedBuffer(size_t size){
     return buf;
 }
 
-CaptureThread::CaptureThread(const quint32 cardIndex, const QString& devicePath, bool isDDR1/* = true*/)
-    : mDevPath(devicePath)
-    , mCardIndex(cardIndex)
+CaptureThread::CaptureThread(const quint32 deviceIndex, const quint32 physicalNo, const QString& deviceName, bool isDDR1/* = true*/)
+    : mDeviceName(deviceName)
+    , mDeviceIndex(deviceIndex)
+    , mPhysicalNo(physicalNo)
     , mIsDDR1(isDDR1)
 {
 #if ENABLE_IOCP
@@ -1470,7 +1563,7 @@ void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTime
 bool CaptureThread::startMeasure()
 {
     this->mInterruptSave = false;
-    qInfo().nospace() << "[" << mCardIndex << "] " << "发送开始测量指令";
+    qInfo().nospace() << "采集卡[" << mPhysicalNo << "] " << "发送开始测量指令";
     auto writeData = [=](quint8 cardIndex, HANDLE fd, quint64 offset, const char* data, int size){
 #ifdef _WIN32
         LARGE_INTEGER address;
@@ -1493,7 +1586,7 @@ bool CaptureThread::startMeasure()
         return true;
     };
 
-    HANDLE fHandle = PCIeCommSdk::getHandle(mDevPath + XDMA_FILE_USER,
+    HANDLE fHandle = PCIeCommSdk::getHandle(mDeviceName + XDMA_FILE_USER,
                                          GENERIC_READ | GENERIC_WRITE,
                                          FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
     if (fHandle == INVALID_HANDLE_VALUE)
@@ -1501,14 +1594,14 @@ bool CaptureThread::startMeasure()
 
     //QByteArray cmdClear = QByteArray::fromHex("00 00 00 00");
     char cmdClear[4] = {0x00, 0x00, 0x00, 0x00};
-    writeData(mCardIndex, fHandle, 0x20000, cmdClear, 4);
+    writeData(mPhysicalNo, fHandle, 0x20000, cmdClear, 4);
 
     //::QThread::msleep(1);
     this->delay(1000);
 
     // QByteArray cmdStart = QByteArray::fromHex("01 E0 34 12");
     unsigned char cmdStart[4] = {0x01, 0xE0, 0x34, 0x12};
-    writeData(mCardIndex, fHandle, 0x20000, (const char*)cmdStart, 4);
+    writeData(mPhysicalNo, fHandle, 0x20000, (const char*)cmdStart, 4);
 
     CloseHandle(fHandle);
     return true;
@@ -1521,25 +1614,25 @@ void CaptureThread::stopMeasure()
 
 void CaptureThread::clear()
 {
-    HANDLE fHandle = PCIeCommSdk::getHandle(mDevPath + XDMA_FILE_USER,
+    HANDLE fHandle = PCIeCommSdk::getHandle(mDeviceName + XDMA_FILE_USER,
                                             GENERIC_READ | GENERIC_WRITE,
                                             FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
     if (fHandle == INVALID_HANDLE_VALUE)
         return ;
 
-    PCIeCommSdk::writeData(mCardIndex, fHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
+    PCIeCommSdk::writeData(mPhysicalNo, fHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
     CloseHandle(fHandle);
 }
 
 void CaptureThread::empty()
 {
-    HANDLE fHandle = PCIeCommSdk::getHandle(mDevPath + XDMA_FILE_USER,
+    HANDLE fHandle = PCIeCommSdk::getHandle(mDeviceName + XDMA_FILE_USER,
                                             GENERIC_READ | GENERIC_WRITE,
                                             FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
     if (fHandle == INVALID_HANDLE_VALUE)
         return ;
 
-    PCIeCommSdk::writeData(mCardIndex, fHandle, 0x20000, QByteArray::fromHex("01 F0 34 12"));
+    PCIeCommSdk::writeData(mPhysicalNo, fHandle, 0x20000, QByteArray::fromHex("01 F0 34 12"));
     CloseHandle(fHandle);
 }
 
@@ -1613,32 +1706,32 @@ bool CaptureThread::checkDataError()
     printDebugInfo();
 
     if (!waveformError && !mIsRegisterInvalid){
-        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 波形正常";
-        qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << " 波形正常";
+        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 波形正常";
+        qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 波形正常";
     }
     else{
         if (waveformError){
-            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 波形帧序号异常, 索引 = " << waveformError;
-            qCritical().nospace() << "[" << mCardIndex << "] " << ddrName << " 波形帧序号异常, 索引 = " << waveformErrorIndex;
+            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 波形帧序号异常, 索引 = " << waveformError;
+            qCritical().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 波形帧序号异常, 索引 = " << waveformErrorIndex;
         }
         else if (mIsRegisterInvalid){
-            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
-            qCritical().nospace() << "[" << mCardIndex << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
+            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
+            qCritical().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
         }
     }
 
     if (!spectrumError){
-        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 能谱正常";
-        qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << " 能谱正常";
+        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 能谱正常";
+        qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 能谱正常";
     }
     else{
-        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mCardIndex << "] " << ddrName << " 能谱帧序号异常, 索引 = " << spectrumErrorIndex;
-        qCritical().nospace() << "[" << mCardIndex << "] " << ddrName << " 能谱帧序号异常, 索引 = " << spectrumErrorIndex;
+        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 能谱帧序号异常, 索引 = " << spectrumErrorIndex;
+        qCritical().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 能谱帧序号异常, 索引 = " << spectrumErrorIndex;
     }
 
     if (!mEnableTestMode/*测试模式*/ || mDataError/*数据出现错误*/){
 
-        qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据正在存储到硬盘中，请等待...";
+        qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << "数据正在存储到硬盘中，请等待...";
 
         for (int i = 0; i < mCapturedRef; ++i)
         {
@@ -1646,22 +1739,26 @@ bool CaptureThread::checkDataError()
                 break;
 
             {
-                QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
+                QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mPhysicalNo).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
                 QFile file(filename);
                 if (!file.open(QIODevice::WriteOnly)) {
                     qDebug() << "Cannot open file for writing";
                 }
                 else{
-                    //file.write(mDDRWaveformDatas.at(i));
                     uchar *mappedBuffer = file.map(0, mRAMSpectrumDatas.at(i).size());
-                    memcpy(mappedBuffer, mRAMSpectrumDatas.at(i).data(), mRAMSpectrumDatas.at(i).size());
-                    file.unmap(mappedBuffer);
+                    if (mappedBuffer){
+                        memcpy(mappedBuffer, mRAMSpectrumDatas.at(i).data(), mRAMSpectrumDatas.at(i).size());
+                        file.unmap(mappedBuffer);
+                    }
+                    else {
+                        file.write(mDDRWaveformDatas.at(i));
+                    }
                     file.close();
                 }
             }
 
             {
-                QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mCardIndex).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
+                QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mPhysicalNo).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
                 QFile file(filename);
                 if (!file.open(QIODevice::WriteOnly)) {
                     qDebug() << "Cannot open file for writing";
@@ -1674,7 +1771,7 @@ bool CaptureThread::checkDataError()
 
         }
 
-        qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "数据已经全部存储到硬盘中！";
+        qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << "数据已经全部存储到硬盘中！";
     }
 
     // 清空内存耗时，暂时屏蔽
@@ -1695,9 +1792,9 @@ void CaptureThread::printDebugInfo()
 
     QFile logFile;
     if (mDataError || mIsRegisterInvalid)
-        logFile.setFileName(QStringLiteral("%1/%2_%3_%4.err").arg(mSaveFilePath).arg(QDateTime::currentDateTime().toString("yyyyMMddhhmmss")).arg(mCardIndex).arg(ddrName));
+        logFile.setFileName(QStringLiteral("%1/%2_%3_%4.err").arg(mSaveFilePath).arg(QDateTime::currentDateTime().toString("yyyyMMddhhmmss")).arg(mPhysicalNo).arg(ddrName));
     else
-        logFile.setFileName(QStringLiteral("%1/%2_%3_%4.inf").arg(mSaveFilePath).arg(QDateTime::currentDateTime().toString("yyyyMMddhhmmss")).arg(mCardIndex).arg(ddrName));
+        logFile.setFileName(QStringLiteral("%1/%2_%3_%4.inf").arg(mSaveFilePath).arg(QDateTime::currentDateTime().toString("yyyyMMddhhmmss")).arg(mPhysicalNo).arg(ddrName));
     logFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
     QTextStream out(&logFile);
     // out << QString::fromUtf8("\xEF\xBB\xBF");
@@ -1717,14 +1814,14 @@ void CaptureThread::printDebugInfo()
         if (((headSeq != tailSeq) || ((currentSeq - lastSeq) != 1)) && headSeq!=0){
             index = i+1;
             ok = false;
-            out << "[" << mCardIndex << "] "
+            out << "[" << mPhysicalNo << "] "
                 << ddrName << " [" << i+1 << "] "
                 << pkgHead.toHex(' ')
                 << " ... "
                 << pkgTail.toHex(' ')
                 << "    xxxxxx"  << "\n";
         } else{
-            out << "[" << mCardIndex << "] "
+            out << "[" << mPhysicalNo << "] "
                 << ddrName << " [" << i+1 << "] "
                 << pkgHead.toHex(' ')
                 << " ... "
@@ -1740,7 +1837,7 @@ void CaptureThread::printDebugInfo()
     // 寄存器0值出现的时间段
     out << QStringLiteral("数据来到之前寄存器0值出现的时间段\n");
     for (int i = 0; i < zeroTime.size(); ++i){
-        out << "[" << mCardIndex << "] " << ddrName << " " << zeroTime[i] << "\n";
+        out << "[" << mPhysicalNo << "] " << ddrName << " " << zeroTime[i] << "\n";
     }
 
     // 读寄存器时间
@@ -1749,7 +1846,7 @@ void CaptureThread::printDebugInfo()
         const auto& pairVec = outerPair.second;
         for (int idx=0; idx<pairVec.size(); ++idx){
             const auto& pair = pairVec[idx];
-            out << "[" << mCardIndex << "] " << ddrName << " " << outerKey << " " <<
+            out << "[" << mPhysicalNo << "] " << ddrName << " " << outerKey << " " <<
                 QStringLiteral(" 读寄存器时刻：") << pair.first << "-" << pair.second.first <<
                 QStringLiteral(" 返回值：0x") << QString::number(pair.second.second, 16) << "\n";
         }
@@ -1758,7 +1855,7 @@ void CaptureThread::printDebugInfo()
     out << "================================================================================================\n\n";
     // 读数据时间
     for (int i=1; i<=this->mCapturedRef; ++i){
-        out << "[" << mCardIndex << "] " << ddrName << " " << i <<
+        out << "[" << mPhysicalNo << "] " << ddrName << " " << i <<
             QStringLiteral(" 寄存器值变化时刻：") << mRamChangedTime[i] <<
             QStringLiteral(" 创建读线程时刻：") << mCreateThreadTime[i] << "-" << mAfterCreateThreadTime[i] <<
             QStringLiteral(" 开始读数据时刻：") << mBeforeReadTime[i] <<
@@ -1770,11 +1867,11 @@ void CaptureThread::printDebugInfo()
 
     out << "================================================================================================\n\n";
     if (!ok){
-        out << "[" << mCardIndex << "] " << ddrName << " frames sequence exception, index = " << index;
+        out << "[" << mPhysicalNo << "] " << ddrName << " frames sequence exception, index = " << index;
     }
 
     if (mIsRegisterInvalid){
-        out << "[" << mCardIndex << "] " << ddrName << " frames ramvalue exception, index = " << mRegisterInvalidPosition;
+        out << "[" << mPhysicalNo << "] " << ddrName << " frames ramvalue exception, index = " << mRegisterInvalidPosition;
     }
 
     logFile.close();
@@ -1857,7 +1954,7 @@ void CaptureThread::run()
     QMutex timeMutex;
     quint8 lastRegisterValue = 0x00;// 最后寄存器值
 
-    qDebug().nospace() << "[" << mCardIndex << (mIsDDR1 ? "] DDR1" : "] DDR2") << " 数据采集线程 id:" << this->currentThreadId();
+    qDebug().nospace() << "[" << mPhysicalNo << (mIsDDR1 ? "] DDR1" : "] DDR2") << " 数据采集线程 id:" << this->currentThreadId();
 
     // 创建线程池
     QThreadPool* threadPool = new QThreadPool(this);
@@ -1879,7 +1976,7 @@ void CaptureThread::run()
     //SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 
     // 卡0绑定核心2，卡1绑定核心3，...，卡5绑定核心7
-    //DWORD_PTR affinityMask = 1LL << (mCardIndex + 2);
+    //DWORD_PTR affinityMask = 1LL << (mDeviceIndex + 2);
     //SetThreadAffinityMask(GetCurrentThread(), affinityMask);
     //SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
 
@@ -1893,17 +1990,17 @@ void CaptureThread::run()
             continue;
         }
         qDebug().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
-                           << "[" << mCardIndex << "] "
+                           << "[" << mPhysicalNo << "] "
                            << ddrName
                            << " 苏醒";
 
-        HANDLE fUserHandle = PCIeCommSdk::getHandle(mDevPath + XDMA_FILE_USER,
+        HANDLE fUserHandle = PCIeCommSdk::getHandle(mDeviceName + XDMA_FILE_USER,
                                                 GENERIC_READ | GENERIC_WRITE,
                                                 FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
         if (fUserHandle == INVALID_HANDLE_VALUE)
         {
             qCritical().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
-                               << "[" << mCardIndex << "] "
+                               << "[" << mPhysicalNo << "] "
                                << ddrName
                                << " 设备打开失败";
             pause();
@@ -1943,7 +2040,7 @@ void CaptureThread::run()
         // continue;
 
         elapsedTimer.start();
-        qDebug().nospace() << "[" << mCardIndex << "] "
+        qDebug().nospace() << "[" << mPhysicalNo << "] "
                            << ddrName
                            << " 开始测量>>>>>>>>>>>>>>>>>>>>>>>>"
                            << elapsedTimer.elapsed();
@@ -1968,7 +2065,7 @@ void CaptureThread::run()
                             mRamChangedTime[mCapturedRef] = outnerKey;
                             lastRegisterValue = (quint8)readBuf[0];
                             isOver = true;
-                            qDebug().noquote().nospace() << "[" << mCardIndex << "] "
+                            qDebug().noquote().nospace() << "[" << mPhysicalNo << "] "
                                                   << ddrName
                                                   << " 收到停止测量指令"
                                                   << " 当前寄存器值:0x" << readBuf.toHex()
@@ -1998,7 +2095,7 @@ void CaptureThread::run()
                         if (!isFirstPacket && mCapturedRef == 260/*极限值*/){
                             mRamChangedTime[mCapturedRef] = outnerKey;
                             lastRegisterValue = (quint8)readBuf[0];
-                            qDebug().noquote().nospace() << "[" << mCardIndex << "] "
+                            qDebug().noquote().nospace() << "[" << mPhysicalNo << "] "
                                                   << ddrName
                                                   << " 收到停止测量指令"
                                                   << " 当前寄存器值:0x" << readBuf.toHex()
@@ -2019,7 +2116,7 @@ void CaptureThread::run()
                     isOver = true;
 
                     // 读数失败了(从未进入到这里，如果进入到这里，肯定是硬件出问题了)
-                    qCritical().nospace() << "[" << mCardIndex << "] "
+                    qCritical().nospace() << "[" << mPhysicalNo << "] "
                                           << ddrName << "读寄存器失败，测量时刻：" << elapsedTimer.elapsed();
                     break;
                 }
@@ -2031,7 +2128,7 @@ void CaptureThread::run()
                     if (!isPrintedTimeoutInfo){ //一旦超时，后面数据可能都超时，所以这里只打印一次消息即可
                         isPrintedTimeoutInfo = true;
                         mRegisterInvalidPosition = mCapturedRef;
-                        qCritical().noquote().nospace() << "[" << mCardIndex << "] "
+                        qCritical().noquote().nospace() << "[" << mPhysicalNo << "] "
                                           << ddrName << "寄存器值异常"
                                           << " 当前寄存器值:0x" << readBuf.toHex()
                                           << " 帧序号:" << mCapturedRef;
@@ -2098,19 +2195,19 @@ void CaptureThread::run()
             //     this->clear();
             // }
 
-            //emit captureFinished(mCardIndex, mIsDDR1);
+            //emit captureFinished(mDeviceIndex, mIsDDR1);
 
             threadPool->waitForDone();
-            qInfo().nospace() << "[" << mCardIndex << "] " << ddrName << "采集结束，共采集：" << mCapturedRef;
+            qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << "采集结束，共采集：" << mCapturedRef;
 
             checkDataError();
-            emit captureFinished(mCardIndex, mIsDDR1);
+            emit captureFinished(mPhysicalNo, mIsDDR1);
 
             pause();
             // 暂停逻辑
             {
                 qDebug().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
-                                   << "[" << mCardIndex << "] "
+                                   << "[" << mPhysicalNo << "] "
                                    << ddrName
                                    << " 休眠";
             }
@@ -2122,7 +2219,7 @@ void CaptureThread::run()
     timeEndPeriod(1);
 
     // 报告线程退出
-    emit threadExitOccurred(mCardIndex);
+    emit threadExitOccurred(mDeviceIndex);
     qDebug() << "destroyCaptureThread id:" << this->currentThreadId();
 }
 
@@ -2169,7 +2266,7 @@ bool CaptureThread::readDataAsync(HANDLE fd, quint64 offset, const QByteArray& d
 */
 bool CaptureThread::readWaveformData(quint8 index, const QByteArray& data, const quint64 offset)
 {
-    HANDLE fHandle = PCIeCommSdk::getHandle(mDevPath + XDMA_FILE_C2H + "_" + QString::number(index));//, FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_FLAG_OVERLAPPED);
+    HANDLE fHandle = PCIeCommSdk::getHandle(mDeviceName + XDMA_FILE_C2H + "_" + QString::number(index));//, FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_FLAG_OVERLAPPED);
     bool ret = PCIeCommSdk::readData(fHandle, offset, data);
     CloseHandle(fHandle);
     return ret;
@@ -2184,7 +2281,7 @@ bool CaptureThread::readWaveformData(quint8 index, const QByteArray& data, const
 */
 bool CaptureThread::readSpectrumData(quint8 index, const QByteArray& data, const quint64 offset)
 {
-    HANDLE fHandle = PCIeCommSdk::getHandle(mDevPath + XDMA_FILE_BYPASS,
+    HANDLE fHandle = PCIeCommSdk::getHandle(mDeviceName + XDMA_FILE_BYPASS,
                                            GENERIC_READ | GENERIC_WRITE,
                                            FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
     bool ret = PCIeCommSdk::readData(fHandle, offset, data);

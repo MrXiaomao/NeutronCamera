@@ -158,7 +158,7 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         return {};
 
     // ---------- baseline 计算并扣除 (前 16 点平均) ----------
-    if(0){// 之前以及扣除过一次基线了，这里就不再重复扣除了
+    if(0){// 之前已经扣除过一次基线了，这里就不再重复扣除了
         const int baseSamples = 16;
         for (Pulse &p : pulses) {
             float sum = 0.0f;

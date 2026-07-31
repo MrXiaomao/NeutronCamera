@@ -53,17 +53,18 @@ public:
     Q_SIGNAL void shotnumValueChanged(const QString&);
     Q_SIGNAL void systemTimeValueChanged(const QDateTime&);
     Q_SIGNAL void energenceStopSignalTriggered();
+    Q_SIGNAL void connected();
+    Q_SIGNAL void disconnected();
 
     Q_SLOT void error(QAbstractSocket::SocketError);
     Q_SLOT void readyRead();
-    Q_SLOT void connected();
 
     Q_SLOT void onReadyRead(QByteArray&);
 
 private:
-    QTcpSocket *mTcpClient = nullptr;
     QUdpSocket *mUdpShotReceiver = nullptr;// 炮号接收器
-    QUdpSocket *mUdpStatusClient1 = nullptr;// 设备电压/电流状态检测
+    QUdpSocket *mUdpPerformanceMonitorReceiver = nullptr;// 设备电压/电流/温度等性能监测
+    QTimer* mTimerout;// 网络连接超时
     QLiteThread* mRequestCmdThread = nullptr;
     QByteArray mRawData;
 

@@ -43,7 +43,6 @@ public:
     void initUi();
     void restoreSettings();
     void initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QString axisYLabel);
-    void applyColorTheme();
     void updateTableRowHidden();
     void recordExternalCommand(const QString&);
 
@@ -63,7 +62,7 @@ public slots:
     void onStartMeasure();//开始测量
 
 signals:
-    void WriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
+    void writeLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
     void showNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
     void showGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
     void startMeasure();//开始测量
@@ -156,6 +155,28 @@ private:
     int mCurrentMeasuerCount = 0;
     int mContinueMeasuerCount = 0;
     int mContinueMeasuerFailCount = 0;
+
+private:
+    struct LogItem {
+        QString text;
+        QColor color;
+    };
+    QVector<LogItem> m_logBuffer; // 日志缓存队列
+    QTimer* m_logFlushTimer;      // 定时刷新定时器
+    QMutex m_bufferMutex;         // 多线程防护（如果日志来自后台线程）
+    void appendColoredText(const QString &text, const QColor &color);
+
+    // 新增：自动恢复跟随的状态变量
+    QTimer* m_autoResumeScrollTimer; // 闲置超时计时器
+    // 手动查看模式相关状态
+    bool m_manualViewMode = false;
+    int m_manualViewStayCounter = 0;
+    // 这里可以自定义停留阈值，比如5秒
+    const int m_resumeAutoScrollThreshold = 5;
+    // 新增：鼠标按下状态标记
+    bool m_isMouseHeldDown = false;
+
+    void initLogEvent();
 };
 
 #endif // MAINWINDOW_H

@@ -23,7 +23,7 @@ class AppConfig::Private
 public:
     QtnPropertySet* propSetRoot;
 
-    //板卡通道管理
+    //采集卡通道管理
     QtnPropertySet* propSetBoardChannels;
     QtnPropertySet* propSetBoard1;
     QtnPropertySet* propSetBoard2;
@@ -90,13 +90,13 @@ AppConfig::AppConfig(QObject* parent)
     d->propSetRoot = new QtnPropertySet(this);
 
     quint32 baseId = ID_BOARD_SET;
-    //板卡通道管理
+    //采集卡通道管理
     {
         QtnPropertySet* propSet = qtnCreateProperty<QtnPropertySet>(d->propSetRoot, QStringLiteral("采集卡通道管理"));
         d->propSetBoardChannels = propSet;
-        d->propSetBoard1 = qtnCreateProperty<QtnPropertySet>(propSet, QStringLiteral("板卡#1"));
-        d->propSetBoard2 = qtnCreateProperty<QtnPropertySet>(propSet, QStringLiteral("板卡#2"));
-        d->propSetBoard3 = qtnCreateProperty<QtnPropertySet>(propSet, QStringLiteral("板卡#3"));
+        d->propSetBoard1 = qtnCreateProperty<QtnPropertySet>(propSet, QStringLiteral("采集卡#1"));
+        d->propSetBoard2 = qtnCreateProperty<QtnPropertySet>(propSet, QStringLiteral("采集卡#2"));
+        d->propSetBoard3 = qtnCreateProperty<QtnPropertySet>(propSet, QStringLiteral("采集卡#3"));
 
         d->propBoard1EnableDDR1 = qtnCreateProperty<QtnPropertyBool>(d->propSetBoard1, QStringLiteral("启用DDR#1"));
         d->propBoard1EnableDDR2 = qtnCreateProperty<QtnPropertyBool>(d->propSetBoard1, QStringLiteral("启用DDR#2"));
@@ -158,9 +158,9 @@ AppConfig::AppConfig(QObject* parent)
         d->triggerThreshold->setId(++baseId);
         d->triggerThreshold->setName("触发阈值");
         d->triggerThreshold->setDescription("阈值范围：0 ~ 1000");
-        d->triggerThreshold->setMaxValue(1000);
+        d->triggerThreshold->setMaxValue(16000);
         d->triggerThreshold->setMinValue(0);
-        d->triggerThreshold->setValue(200);
+        d->triggerThreshold->setValue(100);
 
         //能谱刷新时间
         d->spectrumRefreshTimelength = qtnCreateProperty<QtnPropertyInt>(propSet);
@@ -430,29 +430,29 @@ QtnPropertySet* AppConfig::propertySet(int id)
 }
 
 
-// 板卡通道管理
-void AppConfig::enableBoardCapture(quint8 boardIndex)
+// 采集卡通道管理
+void AppConfig::enableBoardCapture(quint8 physicalIndex)
 {
     QtnPropertySet* propSetBoard = nullptr;
-    if (1 == boardIndex)
+    if (1 == physicalIndex)
         propSetBoard = d->propSetBoard1;
-    if (2 == boardIndex)
+    if (2 == physicalIndex)
         propSetBoard = d->propSetBoard2;
-    if (3 == boardIndex)
+    if (3 == physicalIndex)
         propSetBoard = d->propSetBoard3;
 
     if (propSetBoard){
         //propSetBoard->switchState(QtnPropertyStateImmutable, false);
-        if (1 == boardIndex)
+        if (1 == physicalIndex)
         {
             // 设置新值
             d->propBoard1EnableDDR1->setValue(true);
             d->propBoard1EnableDDR2->setValue(true);
-        } else if (2 == boardIndex)
+        } else if (2 == physicalIndex)
         {
             d->propBoard2EnableDDR1->setValue(true);
             d->propBoard2EnableDDR2->setValue(true);
-        } else if (3 == boardIndex)
+        } else if (3 == physicalIndex)
         {
             d->propBoard3EnableDDR1->setValue(true);
             d->propBoard3EnableDDR2->setValue(true);
@@ -460,28 +460,28 @@ void AppConfig::enableBoardCapture(quint8 boardIndex)
     }
 }
 
-void AppConfig::disableBoardCapture(quint8 boardIndex)
+void AppConfig::disableBoardCapture(quint8 physicalIndex)
 {
     QtnPropertySet* propSetBoard = nullptr;
-    if (1 == boardIndex)
+    if (1 == physicalIndex)
         propSetBoard = d->propSetBoard1;
-    if (2 == boardIndex)
+    if (2 == physicalIndex)
         propSetBoard = d->propSetBoard2;
-    if (3 == boardIndex)
+    if (3 == physicalIndex)
         propSetBoard = d->propSetBoard3;
 
     if (propSetBoard){
         //propSetBoard->switchState(QtnPropertyStateImmutable, true);
-        if (1 == boardIndex)
+        if (1 == physicalIndex)
         {
             // 设置新值
             d->propBoard1EnableDDR1->setValue(false);
             d->propBoard1EnableDDR2->setValue(false);
-        } else if (2 == boardIndex)
+        } else if (2 == physicalIndex)
         {
             d->propBoard2EnableDDR1->setValue(false);
             d->propBoard2EnableDDR2->setValue(false);
-        } else if (3 == boardIndex)
+        } else if (3 == physicalIndex)
         {
             d->propBoard3EnableDDR1->setValue(false);
             d->propBoard3EnableDDR2->setValue(false);
@@ -489,36 +489,36 @@ void AppConfig::disableBoardCapture(quint8 boardIndex)
     }
 }
 
-void AppConfig::setBoardCaptureState(quint8 boardIndex, bool isEnable)
+void AppConfig::setBoardCaptureState(quint8 physicalIndex, bool isEnable)
 {
     if (isEnable)
-        enableBoardCapture(boardIndex);
+        enableBoardCapture(physicalIndex);
     else
-        disableBoardCapture(boardIndex);
+        disableBoardCapture(physicalIndex);
 }
 
-bool AppConfig::enableBoard(quint8 boardIndex, bool isEnable)
+bool AppConfig::enableBoard(quint8 physicalIndex, bool isEnable)
 {
     QtnPropertySet* propSetBoard = nullptr;
-    if (1 == boardIndex)
+    if (1 == physicalIndex)
         propSetBoard = d->propSetBoard1;
-    if (2 == boardIndex)
+    if (2 == physicalIndex)
         propSetBoard = d->propSetBoard2;
-    if (3 == boardIndex)
+    if (3 == physicalIndex)
         propSetBoard = d->propSetBoard3;
 
     if (propSetBoard){
         propSetBoard->switchState(QtnPropertyStateImmutable, !isEnable);
-        if (1 == boardIndex)
+        if (1 == physicalIndex)
         {
             // 设置新值
             d->propBoard1EnableDDR1->switchState(QtnPropertyStateImmutable, !isEnable);
             d->propBoard1EnableDDR2->switchState(QtnPropertyStateImmutable, !isEnable);
-        } else if (2 == boardIndex)
+        } else if (2 == physicalIndex)
         {
             d->propBoard2EnableDDR1->switchState(QtnPropertyStateImmutable, !isEnable);
             d->propBoard2EnableDDR2->switchState(QtnPropertyStateImmutable, !isEnable);
-        } else if (3 == boardIndex)
+        } else if (3 == physicalIndex)
         {
             d->propBoard3EnableDDR1->switchState(QtnPropertyStateImmutable, !isEnable);
             d->propBoard3EnableDDR2->switchState(QtnPropertyStateImmutable, !isEnable);
@@ -526,24 +526,24 @@ bool AppConfig::enableBoard(quint8 boardIndex, bool isEnable)
     }
 }
 
-bool AppConfig::isEnableCapture(quint8 boardIndex, bool isDDR1)
+bool AppConfig::isEnableCapture(quint8 physicalIndex, bool isDDR1)
 {
     QtnPropertySet* propSetBoard = nullptr;
-    if (1 == boardIndex)
+    if (1 == physicalIndex)
         propSetBoard = d->propSetBoard1;
-    if (2 == boardIndex)
+    if (2 == physicalIndex)
         propSetBoard = d->propSetBoard2;
-    if (3 == boardIndex)
+    if (3 == physicalIndex)
         propSetBoard = d->propSetBoard3;
 
     QtnPropertyBool* propBoardEnableDDR = nullptr;
-    if (1 == boardIndex)
+    if (1 == physicalIndex)
     {
         propBoardEnableDDR = isDDR1 ? d->propBoard1EnableDDR1 : d->propBoard1EnableDDR2;
-    } else if (2 == boardIndex)
+    } else if (2 == physicalIndex)
     {
         propBoardEnableDDR = isDDR1 ? d->propBoard2EnableDDR1 : d->propBoard2EnableDDR2;
-    } else if (3 == boardIndex)
+    } else if (3 == physicalIndex)
     {
         propBoardEnableDDR = isDDR1 ? d->propBoard3EnableDDR1 : d->propBoard3EnableDDR2;
     }
@@ -559,48 +559,31 @@ int AppConfig::psdThreshold(quint8 channelNo) const {
     return d->psdThreshold[channelNo]->value();
 }
 int AppConfig::deathTime() const { return d->deathTime->value(); }
-void AppConfig::setDeathTime(int deathTime) { d->deathTime->setValue(deathTime); }
 
 int AppConfig::triggerThreshold() const { return d->triggerThreshold->value(); }
-void AppConfig::setTriggerThreshold(int triggerThreshold) { d->triggerThreshold->setValue(triggerThreshold); }
 
 int AppConfig::spectrumRefreshTimelength() const { return d->spectrumRefreshTimelength->value(); }
-void AppConfig::setSpectrumRefreshTimelength(int spectrumRefreshTimelength) { d->spectrumRefreshTimelength->setValue(spectrumRefreshTimelength); }
 
 int AppConfig::triggerMode() const {
     QStringList lst = QStringList()<<"定时触发"<<"正常触发";
     return lst.indexOf(d->triggerMode->value());
-}
-void AppConfig::setTriggerMode(int triggerMode) {
-    QStringList lst = QStringList()<<"定时触发"<<"正常触发";
-    d->triggerMode->setValue(lst.at(triggerMode));
 }
 
 int AppConfig::waveformLength() const {
     QStringList lst = QStringList() << "64" << "128" << "256" << "512";
     return lst.indexOf(d->waveformLength->value());
 }
-void AppConfig::setWaveformLength(int waveformLength) {
-    QStringList lst = QStringList() << "64" << "128" << "256" << "512";
-    d->triggerMode->setValue(lst.at(waveformLength));
-}
 
 // 状态监测模块
 QString AppConfig::ipAddress() const { return d->devIpAddress->value(); }
-void AppConfig::setIpAddress(const QString& ip) { d->devIpAddress->setValue(ip); };
 
 int AppConfig::remotePort() const { return d->devRemotePort->value(); }
-void AppConfig::setRemotePort(int port) { d->devRemotePort->setValue(port); }
 
 int AppConfig::localPort() const { return d->devLocalPort->value(); }
-void AppConfig::setLocalPort(int port){ d->devLocalPort->setValue(port); }
 
 // 数据中心网络
 int AppConfig::boardcastPort() const { return d->cmdUdpBroadcastPort->value(); }
-void AppConfig::setBoardcastPort(int port) { d->cmdUdpBroadcastPort->setValue(port); }
 
 QString AppConfig::dataSrvIpAddress() const { return d->dataSrvIpAddress->value(); }
-void AppConfig::setDataSrvIpAddress(const QString& ip) {d->dataSrvIpAddress->setValue(ip); }
 
 int AppConfig::dataSrvRemotePort() const { return d->dataSrvRemotePort->value(); }
-void AppConfig::setDataSrvRemotePort(int port) { d->dataSrvRemotePort->setValue(port); }

@@ -58,18 +58,14 @@ CommHelper::~CommHelper()
 
 void CommHelper::initSocket()
 {
-    // 初始化TCP
-    this->mTcpClient = new QTcpSocket();
-    //数据到达
-    connect(mTcpClient, SIGNAL(readyRead()), this, SLOT(readyRead()));
-    //网络故障
-    connect(mTcpClient, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(error(QAbstractSocket::SocketError)));
-    //客户端连接
-    connect(mTcpClient, SIGNAL(connected()), this, SLOT(connected()));
-
     // 初始化UDP
-    this->mUdpStatusClient1 = new QUdpSocket();
-    connect(mUdpStatusClient1, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
+    this->mUdpPerformanceMonitorReceiver = new QUdpSocket();
+    connect(mUdpPerformanceMonitorReceiver, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
+    mTimerout = new QTimer(this);
+    mTimerout->setSingleShot(true);
+    connect(mTimerout, &QTimer::timeout, this, [=](){
+        qCritical() << "设备连接失败";
+    });
 
     //炮号接收器
     this->mUdpShotReceiver = new QUdpSocket();
@@ -185,30 +181,34 @@ void CommHelper::readyRead()
 {
     QByteArray datagram;
     do {
-        datagram.resize(int(mUdpStatusClient1->pendingDatagramSize()));
+        QByteArray data;
+        data.resize(int(mUdpPerformanceMonitorReceiver->pendingDatagramSize()));
         QHostAddress sender;
         quint16 senderPort;
-        mUdpStatusClient1->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
+        mUdpPerformanceMonitorReceiver->readDatagram(data.data(), data.size(), &sender, &senderPort);
 
-        //+PLS_12345
-        // if (datagram.size() > 0)
-        //     onReadyRead(datagram);
-        // else
-        //     break;
-    } while (mUdpStatusClient1->hasPendingDatagrams());
+        datagram.append(data);
+    } while (mUdpPerformanceMonitorReceiver->hasPendingDatagrams());
 
-    //读取新的数据
-    //QByteArray tempData = mTcpClient->readAll();
-    // QByteArray tempData = mTcpClient->readAll();
-    // qDebug() << tempData;
     onReadyRead(datagram);
 }
 
 void CommHelper::onReadyRead(QByteArray& tempData)
 {
-    if (tempData.at(0) == 0x5A){
+    if (tempData == "start"){
+        if (mTimerout->isActive())
+            mTimerout->stop();
+
+        emit connected();
+    }
+    else if (tempData == "stop"){
+        emit disconnected();
+
+        mUdpPerformanceMonitorReceiver->close();
+    }
+    else if ((quint8)tempData.at(0) == 0xA5){
         // 选通器状态返回
-        //5A 03 FF FF
+        //A5 03 FF FF
         bool ok = false;
         quint32 v = tempData.toHex().toUInt(&ok, 16);
         //v = qbswap(v);
@@ -356,40 +356,25 @@ void CommHelper::onReadyRead(QByteArray& tempData)
     }
 }
 
-
-void CommHelper::connected()
-{
-    //mTcpClient->write("start");//stop
-}
-
 /*
  打开网络
 */
 bool CommHelper::connectServer()
 {
-    return true;
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();
     quint32 portLocal = AppConfig::instance().localPort();
 
-    this->mUdpStatusClient1->close();
-    if (this->mUdpStatusClient1->bind(QHostAddress::Any, portLocal, QUdpSocket::ShareAddress)){
+    this->mUdpPerformanceMonitorReceiver->close();
+    if (this->mUdpPerformanceMonitorReceiver->bind(QHostAddress::Any, portLocal, QUdpSocket::ShareAddress)){
+        mTimerout->start(1000);
         QByteArray datagram("start");
-        int ret = mUdpStatusClient1->writeDatagram(datagram, QHostAddress(ip), port);
+        int ret = mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port);
         return ret > 0;
     }
     else{
         return false;
     }
-
-    mTcpClient->connectToHost(ip, port);
-    mTcpClient->waitForConnected();
-    if (mTcpClient->state() == QAbstractSocket::ConnectedState){
-        //线程可以查询监控数据了
-        return true;
-    }
-
-    return false;
 }
 
 /*
@@ -401,13 +386,11 @@ void CommHelper::disconnectServer()
     quint32 port = AppConfig::instance().remotePort();
 
     QByteArray datagram("stop");
-    mUdpStatusClient1->writeDatagram(datagram, QHostAddress(ip), port);
-    mUdpStatusClient1->close();
-    return ;
+    if (mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port) <= 0){
+        emit disconnected();
 
-    if (mTcpClient->isOpen())
-        mTcpClient->write("stop");
-    this->mTcpClient->close();
+        mUdpPerformanceMonitorReceiver->close();
+    }
 }
 
 bool CommHelper::switchPower(quint32 channel, bool on)
@@ -465,8 +448,8 @@ bool CommHelper::switchBackupChannel(quint32 channel, bool on)
 
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();
-    mUdpStatusClient1->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
-    //mUdpStatusClient1->writeDatagram(datagram, QHostAddress("192.168.1.212"), 1000);
+    mUdpPerformanceMonitorReceiver->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
+    //mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress("192.168.1.212"), 1000);
     //mTcpClient->write((const char*)&v, sizeof(quint32));
 
     return true;
@@ -491,7 +474,7 @@ bool CommHelper::switchAllBackupChannel(bool on)
 
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();
-    mUdpStatusClient1->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
+    mUdpPerformanceMonitorReceiver->writeDatagram((const char*)&v, sizeof(quint32), QHostAddress(ip), port);
     //mTcpClient->write((const char*)&v, sizeof(quint32));
 
     return true;

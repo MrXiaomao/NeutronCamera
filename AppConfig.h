@@ -27,48 +27,29 @@ public:
     static AppConfig& instance();
 
     // 板卡通道管理
-    void enableBoardCapture(quint8 boardIndex);
-    void disableBoardCapture(quint8 boardIndex);
-    void setBoardCaptureState(quint8 boardIndex, bool isEnable = true);
-    bool enableBoard(quint8 boardIndex, bool isEnable = true);
-    bool isEnableCapture(quint8 boardIndex, bool isDDR1);
+    void enableBoardCapture(quint8 physicalIndex);
+    void disableBoardCapture(quint8 physicalIndex);
+    void setBoardCaptureState(quint8 physicalIndex, bool isEnable = true);
+    bool enableBoard(quint8 physicalIndex, bool isEnable = true);
+    bool isEnableCapture(quint8 physicalIndex, bool isDDR1);
 
     // 探测器测量参数设置
     int psdThreshold(quint8 channelNo/*通道号*/) const;
     int deathTime() const;
-    void setDeathTime(int deathdTime);
-
     int triggerThreshold() const;
-    void setTriggerThreshold(int opacity);
-
     int spectrumRefreshTimelength() const;
-    void setSpectrumRefreshTimelength(int spectrumRefreshTimelength);
-
     int triggerMode() const;
-    void setTriggerMode(int triggerMode);
-
     int waveformLength() const;
-    void setWaveformLength(int waveformLength);
 
     // 状态监测模块
     QString ipAddress() const;
-    void setIpAddress(const QString& ip);
-
     int remotePort() const;
-    void setRemotePort(int port);
-
     int localPort() const;
-    void setLocalPort(int port);
 
     // 数据中心网络
     int boardcastPort() const;
-    void setBoardcastPort(int port);
-
     QString dataSrvIpAddress() const;
-    void setDataSrvIpAddress(const QString& ip);
-
     int dataSrvRemotePort() const;
-    void setDataSrvRemotePort(int port);
 
     // 配置操作接口
     bool save(const QString& filePath = "config.json");

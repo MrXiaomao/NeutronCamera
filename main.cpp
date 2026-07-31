@@ -35,7 +35,7 @@ void AppMessageHandler(QtMsgType type, const QMessageLogContext& context, const 
         return;// 主要用于过滤系统的警告信息
 
     if (mMainWindow && type != QtDebugMsg){
-        QMetaObject::invokeMethod(mMainWindow, "WriteLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(QtMsgType, type));
+        QMetaObject::invokeMethod(mMainWindow, "writeLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(QtMsgType, type));
     }
 
     //这里必须调用，否则消息被拦截，log4qt无法捕获系统日志
@@ -209,11 +209,11 @@ int main(int argc, char *argv[])
     QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
     QGoodWindowHelper w;
     if (args.contains("-m") && args.contains("compress")){
-        QApplication::setApplicationName(QObject::tr("中子伽马相机软件数据压缩与上传"));
+        QApplication::setApplicationName(QObject::tr("中子伽马相机数据压缩与上传软件"));
         mMainWindow = new DataCompressWindow(isDarkTheme, &w);
     }
     else if (args.contains("-m") && args.contains("cps")){
-        QApplication::setApplicationName(QObject::tr("中子伽马相机软件离线数据综合分析"));
+        QApplication::setApplicationName(QObject::tr("中子伽马相机离线数据综合分析软件"));
         mMainWindow = new OfflineWindow(isDarkTheme, &w);
     }
     else{

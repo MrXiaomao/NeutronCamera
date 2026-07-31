@@ -65,7 +65,7 @@ public:
     * @param[out]
     * @return
     */
-    explicit CaptureThread(const quint32 cardIndex, const QString& devPath, bool isDDR1 = true);
+    explicit CaptureThread(const quint32 deviceIndex, const quint32 physicalNo, const QString& deviceName, bool isDDR1 = true);
     ~CaptureThread();
 
     void run() override;
@@ -127,8 +127,9 @@ public:
 
 private:
     quint32 mIsDDR1 = true;//
-    quint32 mCardIndex;//板卡索引
-    QString mDevPath;//板卡设备路径
+    quint32 mDeviceIndex;//采集卡索引 1~6
+    quint32 mPhysicalNo;//采集卡编号 1~3
+    QString mDeviceName;//采集卡设备名称
 #if ENABLE_IOCP
     PcieIocpReader* mPcieReader = nullptr;
 #else
@@ -167,6 +168,27 @@ private:
     QMap<quint16/*包序号*/, QVector<QPair<qint64/*读寄存器前时刻*/, QPair<qint64/*读寄存器前时刻*/, quint8/*寄存器值*/>>>> mRAMReadTime; // 记录RAM读取时间
 };
 
+// 首先把所有硬件相关常量统一定义在PCIe底层头文件，不要散落在业务代码
+namespace XdmaRegDef {
+    // 寄存器映射定义，和FPGA文档一一对应
+    constexpr quint64 USER_CTRL_ADDR = 0x20000; // 寄存器地址
+    constexpr quint8 REG_CMD_BASE = 0x12340000; // 寄存器命令基值
+
+    constexpr quint8 THRESHOLD_LOW_OFS = 0xF7;// 触发阈值低位
+    constexpr quint8 THRESHOLD_HIGH_OFS = 0xF8;// 触发阈值高位
+
+    constexpr quint8 CARD1_PSD_THRESHOLD_OFS = 0xF1;// 卡#1PSD阈值
+    constexpr quint8 CARD2_PSD_THRESHOLD_OFS = 0xF2;// 卡#2PSD阈值
+    constexpr quint8 CARD3_PSD_THRESHOLD_OFS = 0xF3;// 卡#3PSD阈值
+    constexpr quint8 CARD4_PSD_THRESHOLD_OFS = 0xF4;// 卡#4PSD阈值
+    constexpr quint8 CARD5_PSD_THRESHOLD_OFS = 0xF5;// 卡#5PSD阈值
+    constexpr quint8 CARD6_PSD_THRESHOLD_OFS = 0xF6;// 卡#6PSD阈值
+
+    // 操作延时配置，单位毫秒
+    constexpr int REG_OP_WAIT_MS = 10;  // 操作
+    constexpr int REG_CLEAR_WAIT_MS = 5;// 清零
+}
+
 #define CAMNUMBER_DDR_PER   3   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define DETNUMBER_PCIE_PER  6   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define DETNUMBER_MAX       18  // 探测器有效数只用到了18路（11路水平+7路垂直）
@@ -194,6 +216,10 @@ public:
         FOM = 0x2
     };
 
+    const QString CARD1_NAME = "\\\\?\\pci#ven_10ee&dev_9038&subsys_000710ee&rev_00#4&b189e7&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
+    const QString CARD2_NAME = "\\\\?\\pci#ven_10ee&dev_9038&subsys_000710ee&rev_00#4&10d89b97&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
+    const QString CARD3_NAME = "\\\\?\\pci#ven_10ee&dev_9038&subsys_000710ee&rev_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
+
     Q_SIGNAL void reportNotFoundDevices();
     Q_SIGNAL void reportOpenDeviceFail(quint8);
     Q_SIGNAL void captureFailOccurred(quint32, quint32);
@@ -203,16 +229,18 @@ public:
 
     Q_SLOT void onSettingFinished();
 
-    void startCapture(quint32 index, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
+    void startCapture(quint32 deviceIndex, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
     void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
-    void stopCapture(quint32 index);
+    void stopCapture(quint32 deviceIndex);
     void stopAllCapture();
 
     void init(); /* 初始化 */
     void reset();/* 重置 */
     void reboot();/* 重启 */
     void setPSDThreshold();/* 设置PSD甄别阈值 */
+    void setTriggerThreshold();/* 设置触发阈值 */
     bool test();
+    inline bool writeRegAndClear(int physicalNo, HANDLE handle, quint64 addr, quint32 regValue);
 
     /*获取设备数量*/
     quint32 numberOfDevices();
@@ -221,15 +249,18 @@ public:
     void printDevicesInfomation();
 
     /*判断板卡是否存在*/
-    bool boardExists(const quint8& index/*板卡序号1-3*/);
+    bool boardExists(const quint8& physicalNo/*板卡序号1-3*/);
     static bool boardIsEnable(quint8 boardIndex);
     static bool setBoardEnable(quint8 boardIndex, bool enable);
+    static quint8 physicalNoToBoardIndex(const quint8& physicalNo);
 
     /*获取设备列表*/
     static QStringList enumDevices();
 
     /*根据卡名称判断卡序号*/
-    static quint8 boardNameToBoardIndex(const QString& name);
+    static quint8 boardIndexFromName(const QString& name);
+    /*获取板卡物理索引值*/
+    static quint8 physicalNoFromName(const QString& name);
 
     /*初始化*/
     void initCaptureThreads();
@@ -322,10 +353,10 @@ public:
     //发送指令
     void writeCommand(QByteArray& data);
 
-    inline static bool writeData(quint8 cardIndex, HANDLE hFile, quint64 offset, const QByteArray& data);
+    inline static bool writeData(quint8 physicalNo, HANDLE hFile, quint64 offset, const QByteArray& data);
     inline static bool readData(HANDLE hFile, quint64 offset, const QByteArray& data);
 
-    HANDLE getHandle(quint8 cardIndex, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
+    HANDLE getHandle(quint8 physicalNo, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
     static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_FLAG_NO_BUFFERING);//O_RDWR
 
     enum MeasureMode{
@@ -340,9 +371,13 @@ public:
 signals:
 
 private:
-    QMap<quint32, CaptureThread*> mMapCaptureThread;
-    QStringList mDevices;
-    QMap<quint32, bool> mThreadRunning;
+    QMap<quint32, CaptureThread*> mMapDeviceCaptureThread;/*3张卡，6个设备*/
+    QMap<quint32, bool> mDeviceThreadRunning;
+
+    // 由于不同机器搜索出来的板卡名称顺序不一致，这里需要定义2个列表
+    static QStringList mEnumedDevices;// 搜索出来的采集卡设备列表，对应的是 boardIndex
+    static QStringList mPhysicalNames;// 机器插入的采集卡名称列表，对应的是 physicalNo
+
     MeasureMode mMeasureMode = mmSingle;
 };
 

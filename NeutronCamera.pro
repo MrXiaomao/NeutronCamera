@@ -17,6 +17,7 @@ SOURCES += \
     datacompresswindow.cpp \
     devicemanagerwindow.cpp \
     globalsettings.cpp \
+    hdadataupload.cpp \
     main.cpp \
     mainwindow.cpp \
     n_gamma.cpp \
@@ -34,6 +35,7 @@ HEADERS += \
     dataanalysisworker.h \
     datacompresswindow.h \
     devicemanagerwindow.h \
+    hdadataupload.h \
     n_gamma.h \
     offlinewindow.h \
     pciecommsdk.h \
@@ -201,3 +203,11 @@ win32 {
         # }
         }
 }
+
+# HDA服务器数据上传
+win32:CONFIG(release, debug|release): LIBS += -L$$PWD/ -lhda_client
+else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/ -lhda_client
+
+INCLUDEPATH += $$PWD/.
+DEPENDPATH += $$PWD/.
+

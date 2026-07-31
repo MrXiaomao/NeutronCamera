@@ -45,10 +45,11 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     ui->setupUi(this);    
 
     initUi();
-    restoreSettings();
-    applyColorTheme();
+    initLogEvent();
 
-    connect(this, SIGNAL(WriteLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
+    restoreSettings();
+
+    connect(this, SIGNAL(writeLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
     connect(this, SIGNAL(showNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
     connect(this, SIGNAL(showGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
     connect(this, SIGNAL(startMeasure()), this, SLOT(onStartMeasure()));
@@ -66,17 +67,15 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     ui->pushButton_closeVoltage_2->setEnabled(false);
     ui->pushButton_selChannel1->setEnabled(false);
     ui->pushButton_selChannel2->setEnabled(false);
+    ui->action_startMeasure->setEnabled(false);
+    ui->action_stopMeasure->setEnabled(false);
 
     if (mPCIeCommSdk.numberOfDevices() <= 0){
-        ui->action_init->setEnabled(false);
-        ui->action_startMeasure->setEnabled(false);
-        ui->action_stopMeasure->setEnabled(false);
+        //ui->action_init->setEnabled(false);
         ui->action_reset->setEnabled(false);
     }
     else{
         ui->action_init->setEnabled(true);
-        ui->action_startMeasure->setEnabled(false);
-        ui->action_stopMeasure->setEnabled(false);
     }
     connect(ui->statusbar,&QStatusBar::messageChanged,this,[&](const QString &message){
         if(message.isEmpty()) {
@@ -101,7 +100,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         }
 
         if (mEnableContinueMeasuer){
-            WriteLog(QString("连续测量次数：%1，累计次数：%2，累计异常次数:%3").arg(++mCurrentMeasuerCount).arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
+            emit writeLog(QString("连续测量次数：%1，累计次数：%2，累计异常次数:%3").arg(++mCurrentMeasuerCount).arg(++mContinueMeasuerCount).arg(mContinueMeasuerFailCount), testOk ?  QtDebugMsg : QtCriticalMsg);
             if (testOk){
                 QTimer::singleShot(ui->spinBox_intervalSeconds->value() * 1000, this, [=](){
                     QTimer::singleShot(3000, this, [=](){
@@ -479,6 +478,8 @@ void MainWindow::initUi()
                 }
             }
         }
+
+        emit writeLog(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz"));
     });
     systemClockTimer->start(900);
 
@@ -741,6 +742,11 @@ void MainWindow::initUi()
         }
         else
         {
+            // 批量更新前
+            ui->tableWidget_status->setUpdatesEnabled(false);
+            ui->tableWidget_status->setSortingEnabled(false); // 临时关闭排序，避免每次插入都重排
+            ui->tableWidget_status->blockSignals(true); // 暂停itemChanged等信号发射
+
             //温度
             ui->tableWidget_status->item(0, moduleNo+1)->setText(QString::number(pairs["PSD1"].first, 'f', 2));
             ui->tableWidget_status->item(1, moduleNo+1)->setText(QString::number(pairs["PSD2"].first, 'f', 2));
@@ -829,6 +835,12 @@ void MainWindow::initUi()
             checkValueValid(25, pairs["PSD2-AMP"].second, 0, 20, tr("PSD2运放板电流异常，值："));
             checkValueValid(26, pairs["LBD-AMP"].second, 0, 20, tr("LBD运放板电流异常，值："));
             checkValueValid(27, pairs["LSD-AMP"].second, 0, 20, tr("LSD运放板电流异常，值："));
+
+            // 更新完成后恢复
+            ui->tableWidget_status->blockSignals(false);
+            ui->tableWidget_status->setSortingEnabled(true);
+            ui->tableWidget_status->setUpdatesEnabled(true);
+            ui->tableWidget_status->viewport()->update(); // 手动触发一次全局重绘，避免界面不刷新
         }
     });
 
@@ -981,12 +993,151 @@ void MainWindow::initUi()
             }
         }
     });
+    connect(mCommHelper, &CommHelper::connected, this, [=](){
+        ui->action_init->setText(QStringLiteral("断开设备"));
+        qInfo().noquote() << tr("设备已连接");
+
+        if (mPCIeCommSdk.numberOfDevices() > 0){
+            mPCIeCommSdk.init();
+            qInfo().noquote() << tr("采集卡初始化成功");
+            ui->action_startMeasure->setEnabled(true);
+            ui->action_stopMeasure->setEnabled(false);
+        }
+
+        ui->tableWidget_camera->setEnabled(true);
+        ui->pushButton_openPower->setEnabled(true);
+        ui->pushButton_closePower->setEnabled(true);
+        ui->pushButton_openVoltage->setEnabled(true);
+        ui->pushButton_closeVoltage->setEnabled(true);
+        ui->pushButton_openPower_2->setEnabled(true);
+        ui->pushButton_closePower_2->setEnabled(true);
+        ui->pushButton_openVoltage_2->setEnabled(true);
+        ui->pushButton_closeVoltage_2->setEnabled(true);
+        ui->pushButton_selChannel1->setEnabled(true);
+        ui->pushButton_selChannel2->setEnabled(true);
+
+        QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/pictogram.png"), QSize(36, 36), QColor::fromRgb(0xff,0x00,0x00,0xff));
+        ui->action_init->setIcon(QIcon(pixmap));
+    });
+    connect(mCommHelper, &CommHelper::disconnected, this, [=](){
+        ui->action_init->setText(QStringLiteral("连接设备"));
+        QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/pictogram.png"), QSize(36, 36), QColor::fromRgb(0x7c,0xfc,0x00,0xff));
+        ui->action_init->setIcon(QIcon(pixmap));
+
+        qInfo().noquote() << tr("设备断开连接");
+    });
 
     connect(ui->comboBox_horCamera, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int){
         emit ui->pushButton_preview->clicked();
     });
     connect(ui->comboBox_verCamera, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int){
         emit ui->pushButton_preview->clicked();
+    });
+
+    connect(qGoodStateHolder, &QGoodStateHolder::currentThemeChanged, this, [=](){
+        bool isDarkTheme = qGoodStateHolder->isCurrentThemeDark();
+
+        QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
+        for (auto customPlot : customPlots){
+            QPalette palette = customPlot->palette();
+            if (isDarkTheme)
+            {
+                if (this->mThemeColorEnable)
+                {
+                    CustomColorDarkStyle darkStyle(mThemeColor);
+                    darkStyle.polish(palette);
+                }
+                else
+                {
+                    DarkStyle darkStyle;
+                    darkStyle.polish(palette);
+                }
+
+                // 创建一个 QTextCursor
+                QTextCursor cursor = ui->plainTextEdit_log->textCursor();
+                QTextDocument *document = cursor.document();
+                QString html = document->toHtml();
+                html = html.replace("color:#000000", "color:#ffffff");
+                document->setHtml(html);
+            }
+            else
+            {
+                if (this->mThemeColorEnable)
+                {
+                    CustomColorLightStyle lightStyle(mThemeColor);
+                    lightStyle.polish(palette);
+                }
+                else
+                {
+                    LightStyle lightStyle;
+                    lightStyle.polish(palette);
+                }
+
+                QTextCursor cursor = ui->plainTextEdit_log->textCursor();
+                QTextDocument *document = cursor.document();
+                QString html = document->toHtml();
+                html = html.replace("color:#ffffff", "color:#000000");
+                document->setHtml(html);
+            }
+            //日志窗体
+            QString styleSheet = isDarkTheme ?
+                                     QString("background-color:rgb(%1,%2,%3);color:white;")
+                                         .arg(palette.color(QPalette::Dark).red())
+                                         .arg(palette.color(QPalette::Dark).green())
+                                         .arg(palette.color(QPalette::Dark).blue())
+                                              : QString("background-color:white;color:black;");
+
+            //更新样式表
+            QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
+            int i = 0;
+            for (auto checkBox : checkBoxs){
+                checkBox->setStyleSheet(styleSheet);
+            }
+
+            QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
+            if (colorMap){
+                colorMap->colorScale()->axis()->axisRect()->axis(QCPAxis::atBottom)->setTickLabelColor(isDarkTheme ? Qt::white : Qt::black); // 设置底部轴的刻度标签颜色
+                colorMap->colorScale()->axis()->axisRect()->axis(QCPAxis::atRight)->setTickLabelColor(isDarkTheme ? Qt::white : Qt::black); // 设置右侧轴的刻度标签颜色
+            }
+
+            // 窗体背景色
+            customPlot->setBackground(QBrush(isDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
+            // 四边安装轴并显示
+            customPlot->axisRect()->setupFullAxesBox();
+            customPlot->axisRect()->setBackground(QBrush(isDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
+            // 坐标轴线颜色
+            customPlot->xAxis->setBasePen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->xAxis2->setBasePen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->yAxis->setBasePen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->yAxis2->setBasePen(QPen(palette.color(QPalette::WindowText)));
+            // 刻度线颜色
+            customPlot->xAxis->setTickPen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->xAxis2->setTickPen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->yAxis->setTickPen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->yAxis2->setTickPen(QPen(palette.color(QPalette::WindowText)));
+            // 子刻度线颜色
+            customPlot->xAxis->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->xAxis2->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->yAxis->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
+            customPlot->yAxis2->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
+            // 坐标轴文本标签颜色
+            customPlot->xAxis->setLabelColor(palette.color(QPalette::WindowText));
+            customPlot->xAxis2->setLabelColor(palette.color(QPalette::WindowText));
+            customPlot->yAxis->setLabelColor(palette.color(QPalette::WindowText));
+            customPlot->yAxis2->setLabelColor(palette.color(QPalette::WindowText));
+            // 坐标轴刻度文本标签颜色
+            customPlot->xAxis->setTickLabelColor(palette.color(QPalette::WindowText));
+            customPlot->xAxis2->setTickLabelColor(palette.color(QPalette::WindowText));
+            customPlot->yAxis->setTickLabelColor(palette.color(QPalette::WindowText));
+            customPlot->yAxis2->setTickLabelColor(palette.color(QPalette::WindowText));
+            // 隐藏x2、y2刻度线
+            customPlot->xAxis2->setTicks(false);
+            customPlot->yAxis2->setTicks(false);
+            customPlot->xAxis2->setSubTicks(false);
+            customPlot->yAxis2->setSubTicks(false);
+
+            customPlot->replot();
+        }
     });
 }
 
@@ -1008,6 +1159,7 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
         QColor colors[] = {Qt::red, Qt::blue};
         QString title[] = {"水平", "垂直"};
         customPlot->legend->setVisible(true);
+        customPlot->legend->setCheckable(true);
         for (int i=0; i<2; ++i){
             QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
             graph->setAntialiased(false);
@@ -1020,7 +1172,7 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
         }
 
         QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
-        customPlotHelper->setGraphCheckBox(customPlot);
+        //customPlotHelper->setGraphCheckBoxList(customPlot);
     }
 
     customPlot->replot();
@@ -1047,6 +1199,24 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event){
     if (watched != this){
+        if(watched == ui->plainTextEdit_log){
+            // 鼠标按下：立刻标记为按住状态，重置停留计时器
+            if(event->type() == QEvent::MouseButtonPress){
+                m_isMouseHeldDown = true;
+                m_manualViewMode = true;
+                m_manualViewStayCounter = 0;
+            }
+            // 鼠标完全释放：清除按住标记，准备重新开始计时
+            if(event->type() == QEvent::MouseButtonRelease){
+                m_isMouseHeldDown = false;
+            }
+            // 滚轮、键盘操作同样重置状态
+            if(event->type() == QEvent::Wheel || event->type() == QEvent::KeyPress){
+                m_manualViewMode = true;
+                m_manualViewStayCounter = 0;
+            }
+        }
+
         if (event->type() == QEvent::MouseButtonPress){
             QMouseEvent *e = reinterpret_cast<QMouseEvent*>(event);
             if (watched->inherits("QCustomPlot")){
@@ -1095,43 +1265,67 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event){
 
 void MainWindow::onWriteLog(const QString &msg, QtMsgType msgType)
 {
-    // 创建一个 QTextCursor
-    QTextCursor cursor = ui->plainTextEdit_log->textCursor();
-    // 将光标移动到文本末尾
-    cursor.movePosition(QTextCursor::End);
+    //QTextCharFormat format;
+    const QString ts = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz>>");
+    QString logLine;
 
-    // 先插入时间
-    QString color = "black";
-    if (mIsDarkTheme)
-        color = "white";
-    cursor.insertHtml(QString("<span style='color:%1;'>%2</span>").arg(color, QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz >> ")));
-    // 再插入文本
-    if (msgType == QtDebugMsg || msgType == QtInfoMsg)
-        cursor.insertHtml(QString("<span style='color:%1;'>%2</span>").arg(color, msg));
-    else if (msgType == QtCriticalMsg || msgType == QtFatalMsg)
-        cursor.insertHtml(QString("<span style='color:red;'>%1</span>").arg(msg));
-    else
-        cursor.insertHtml(QString("<span style='color:green;'>%1</span>").arg(msg));
-
-    // 最后插入换行符
-    cursor.insertHtml("<br>");
-
-    // 确保 QTextEdit 显示了光标的新位置
-    ui->plainTextEdit_log->setTextCursor(cursor);
-
-    //限制行数
-    QTextDocument *document = ui->plainTextEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件
-    int rowCount = document->blockCount(); // 获取输出区的行数
-    int maxRowNumber = 2000;//设定最大行
-    if(rowCount > maxRowNumber){//超过最大行则开始删除
-        QTextCursor cursor = QTextCursor(document); // 创建光标对象
-        cursor.movePosition(QTextCursor::Start); //移动到开头，就是TXT文件开头
-
-        for (int var = 0; var < rowCount - 500; ++var) {
-            cursor.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor); // 向下移动并选中当前行
-        }
-        cursor.removeSelectedText();//删除选择的文本
+    if (msgType == QtWarningMsg) {
+        //format.setForeground(Qt::blue);
+        logLine = QStringLiteral("%1 [WARN] %2").arg(ts).arg(msg);
+        appendColoredText(logLine, Qt::blue);
+    } else if (msgType == QtCriticalMsg || msgType == QtFatalMsg) {
+        //format.setForeground(Qt::red);
+        logLine = QStringLiteral("%1 [ERROR] %2").arg(ts).arg(msg);
+        appendColoredText(logLine, Qt::red);
+    } else {
+        // QtDebugMsg、QtInfoMsg、QtSystemMsg 等：不打印级别字样
+        logLine = QStringLiteral("%1 %2").arg(ts).arg(msg);
+        appendColoredText(logLine, Qt::black);
     }
+
+    // QTextCursor cursor = ui->plainTextEdit_log->textCursor();
+    // cursor.movePosition(QTextCursor::End);
+    // cursor.insertText(logLine, format);
+    // cursor.insertBlock();
+    // ui->plainTextEdit_log->setTextCursor(cursor);
+
+    // // 创建一个 QTextCursor
+    // QTextCursor cursor = ui->plainTextEdit_log->textCursor();
+    // // 将光标移动到文本末尾
+    // cursor.movePosition(QTextCursor::End);
+
+    // // 先插入时间
+    // QString color = "black";
+    // if (mIsDarkTheme)
+    //     color = "white";
+    // cursor.insertHtml(QString("<span style='color:%1;'>%2</span>").arg(color, QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz >> ")));
+    // // 再插入文本
+    // if (msgType == QtDebugMsg || msgType == QtInfoMsg)
+    //     cursor.insertHtml(QString("<span style='color:%1;'>%2</span>").arg(color, msg));
+    // else if (msgType == QtCriticalMsg || msgType == QtFatalMsg)
+    //     cursor.insertHtml(QString("<span style='color:red;'>%1</span>").arg(msg));
+    // else
+    //     cursor.insertHtml(QString("<span style='color:green;'>%1</span>").arg(msg));
+
+    // // 最后插入换行符
+    // cursor.insertHtml("<br>");
+
+    // // 确保 QTextEdit 显示了光标的新位置
+    // ui->plainTextEdit_log->setTextCursor(cursor);
+
+    // //限制行数
+    // QTextDocument *document = ui->plainTextEdit_log->document(); // 获取文档对象，想象成打开了一个TXT文件
+    // int rowCount = document->blockCount(); // 获取输出区的行数
+    // int maxRowNumber = 2000;//设定最大行
+    // if(rowCount > maxRowNumber){//超过最大行则开始删除
+    //     QTextCursor cursor = QTextCursor(document); // 创建光标对象
+    //     cursor.movePosition(QTextCursor::Start); //移动到开头，就是TXT文件开头
+
+    //     for (int var = 0; var < rowCount - 500; ++var) {
+    //         cursor.movePosition(QTextCursor::Down, QTextCursor::KeepAnchor); // 向下移动并选中当前行
+    //     }
+    //     cursor.removeSelectedText();//删除选择的文本
+    // }
 }
 
 
@@ -1254,7 +1448,6 @@ void MainWindow::on_action_lightTheme_triggered()
     if(mThemeColorEnable) QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
     GlobalSettings settings;
     settings.setValue("Global/Startup/darkTheme","false");
-    applyColorTheme();
 }
 
 
@@ -1266,7 +1459,6 @@ void MainWindow::on_action_darkTheme_triggered()
     if(mThemeColorEnable) QGoodWindow::setAppCustomTheme(mIsDarkTheme,mThemeColor);
     GlobalSettings settings;
     settings.setValue("Global/Startup/darkTheme","true");
-    applyColorTheme();
 }
 
 
@@ -1285,112 +1477,6 @@ void MainWindow::on_action_colorTheme_triggered()
         qGoodStateHolder->setCurrentThemeDark(mIsDarkTheme);
     }
     settings.setValue("Global/Startup/themeColorEnable",mThemeColorEnable);
-    applyColorTheme();
-}
-
-void MainWindow::applyColorTheme()
-{
-    QList<QCustomPlot*> customPlots = this->findChildren<QCustomPlot*>();
-    for (auto customPlot : customPlots){
-        QPalette palette = customPlot->palette();
-        if (mIsDarkTheme)
-        {
-            if (this->mThemeColorEnable)
-            {
-                CustomColorDarkStyle darkStyle(mThemeColor);
-                darkStyle.polish(palette);
-            }
-            else
-            {
-                DarkStyle darkStyle;
-                darkStyle.polish(palette);
-            }
-
-            // 创建一个 QTextCursor
-            QTextCursor cursor = ui->plainTextEdit_log->textCursor();
-            QTextDocument *document = cursor.document();
-            QString html = document->toHtml();
-            html = html.replace("color:#000000", "color:#ffffff");
-            document->setHtml(html);
-        }
-        else
-        {
-            if (this->mThemeColorEnable)
-            {
-                CustomColorLightStyle lightStyle(mThemeColor);
-                lightStyle.polish(palette);
-            }
-            else
-            {
-                LightStyle lightStyle;
-                lightStyle.polish(palette);
-            }
-
-            QTextCursor cursor = ui->plainTextEdit_log->textCursor();
-            QTextDocument *document = cursor.document();
-            QString html = document->toHtml();
-            html = html.replace("color:#ffffff", "color:#000000");
-            document->setHtml(html);
-        }
-        //日志窗体
-        QString styleSheet = mIsDarkTheme ?
-                                 QString("background-color:rgb(%1,%2,%3);color:white;")
-                                    .arg(palette.color(QPalette::Dark).red())
-                                    .arg(palette.color(QPalette::Dark).green())
-                                    .arg(palette.color(QPalette::Dark).blue())
-                                : QString("background-color:white;color:black;");
-
-        //更新样式表
-        QList<QCheckBox*> checkBoxs = customPlot->findChildren<QCheckBox*>();
-        int i = 0;
-        for (auto checkBox : checkBoxs){
-            checkBox->setStyleSheet(styleSheet);
-        }
-
-        QCPColorMap *colorMap = qobject_cast<QCPColorMap*>(customPlot->plottable("colorMap"));
-        if (colorMap){
-            colorMap->colorScale()->axis()->axisRect()->axis(QCPAxis::atBottom)->setTickLabelColor(mIsDarkTheme ? Qt::white : Qt::black); // 设置底部轴的刻度标签颜色
-            colorMap->colorScale()->axis()->axisRect()->axis(QCPAxis::atRight)->setTickLabelColor(mIsDarkTheme ? Qt::white : Qt::black); // 设置右侧轴的刻度标签颜色
-        }
-
-        // 窗体背景色
-        customPlot->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
-        // 四边安装轴并显示
-        customPlot->axisRect()->setupFullAxesBox();
-        customPlot->axisRect()->setBackground(QBrush(mIsDarkTheme ? palette.color(QPalette::Dark) : Qt::white));
-        // 坐标轴线颜色
-        customPlot->xAxis->setBasePen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->xAxis2->setBasePen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis->setBasePen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis2->setBasePen(QPen(palette.color(QPalette::WindowText)));
-        // 刻度线颜色
-        customPlot->xAxis->setTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->xAxis2->setTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis->setTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis2->setTickPen(QPen(palette.color(QPalette::WindowText)));
-        // 子刻度线颜色
-        customPlot->xAxis->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->xAxis2->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
-        customPlot->yAxis2->setSubTickPen(QPen(palette.color(QPalette::WindowText)));
-        // 坐标轴文本标签颜色
-        customPlot->xAxis->setLabelColor(palette.color(QPalette::WindowText));
-        customPlot->xAxis2->setLabelColor(palette.color(QPalette::WindowText));
-        customPlot->yAxis->setLabelColor(palette.color(QPalette::WindowText));
-        customPlot->yAxis2->setLabelColor(palette.color(QPalette::WindowText));
-        // 坐标轴刻度文本标签颜色
-        customPlot->xAxis->setTickLabelColor(palette.color(QPalette::WindowText));
-        customPlot->xAxis2->setTickLabelColor(palette.color(QPalette::WindowText));
-        customPlot->yAxis->setTickLabelColor(palette.color(QPalette::WindowText));
-        customPlot->yAxis2->setTickLabelColor(palette.color(QPalette::WindowText));
-        // 隐藏x2、y2刻度线
-        customPlot->xAxis2->setTicks(false);
-        customPlot->yAxis2->setTicks(false);
-        customPlot->xAxis2->setSubTicks(false);
-        customPlot->yAxis2->setSubTicks(false);
-
-        customPlot->replot();
-    }
 }
 
 void MainWindow::restoreSettings()
@@ -1427,15 +1513,27 @@ qint64 MainWindow::getDiskFreeSpace(const QString& disk)
     return ret;
 }
 
+// QPixmap MainWindow::maskPixmap(QPixmap pixmap, QSize sz, QColor clrMask)
+// {
+//     // 更新图标颜色
+//     QPixmap result = pixmap.scaled(sz);
+//     QPainter painter(&result);
+//     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+//     painter.fillRect(pixmap.rect(), clrMask);
+//     return result;
+// }
+
 QPixmap MainWindow::maskPixmap(QPixmap pixmap, QSize sz, QColor clrMask)
 {
-    // 更新图标颜色
-    QPixmap result = pixmap.scaled(sz);
+    QPixmap result = pixmap.scaled(sz, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     QPainter painter(&result);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-    painter.fillRect(pixmap.rect(), clrMask);
+    painter.fillRect(result.rect(), clrMask); // 修正为用缩放后result的尺寸，而非原图
     return result;
 }
+
 
 QPixmap MainWindow::roundPixmap(QSize sz, QColor clrOut)
 {
@@ -1475,8 +1573,10 @@ QPixmap MainWindow::dblroundPixmap(QSize sz, QColor clrIn, QColor clrOut)
 
 void MainWindow::on_pushButton_openPower_clicked()
 {
-    for (int moduleNo=1; moduleNo<=18; ++moduleNo)
+    for (int moduleNo=1; moduleNo<=18; ++moduleNo){
         mCommHelper->switchPower(moduleNo, true);
+        mCommHelper->switchBackupPower(moduleNo, false);
+    }
 }
 
 
@@ -1820,7 +1920,7 @@ void MainWindow::on_pushButton_preview_clicked()
     quint8 horCameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
     quint8 verCameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
 
-    QString dataDir = ui->lineEdit_savePath->text();// this->mCurrentSavePath;
+    QString dataDir = this->mCurrentSavePath;
     {        
         // 水平相机
         mPCIeCommSdk.analyzeHistorySpectrumData(horCameraIndex,
@@ -1866,31 +1966,17 @@ void MainWindow::on_pushButton_preview_clicked()
 
 void MainWindow::on_action_init_triggered()
 {
-    if (mCommHelper->connectServer()){
-        mPCIeCommSdk.init();
-        qInfo().noquote() << tr("初始化成功");
-        ui->action_startMeasure->setEnabled(true);
-        ui->action_stopMeasure->setEnabled(false);
+    if (ui->action_init->text() == QStringLiteral("连接设备")){
+        if (mCommHelper->connectServer()){
 
-        ui->tableWidget_camera->setEnabled(true);
-        ui->pushButton_openPower->setEnabled(true);
-        ui->pushButton_closePower->setEnabled(true);
-        ui->pushButton_openVoltage->setEnabled(true);
-        ui->pushButton_closeVoltage->setEnabled(true);
-        ui->pushButton_openPower_2->setEnabled(true);
-        ui->pushButton_closePower_2->setEnabled(true);
-        ui->pushButton_openVoltage_2->setEnabled(true);
-        ui->pushButton_closeVoltage_2->setEnabled(true);
-        ui->pushButton_selChannel1->setEnabled(true);
-        ui->pushButton_selChannel2->setEnabled(true);
-
-        QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/pictogram.png"), QSize(36, 36), QColor::fromRgb(0x7c,0xfc,0x00,0xff));
-        ui->action_init->setIcon(QIcon(pixmap));
+        }
+        else{
+            qInfo().noquote() << tr("连接设备失败");
+        }
     }
     else{
-        qInfo().noquote() << tr("初始化失败");
+        mCommHelper->disconnectServer();
     }
-
     //emit mPCIeCommSdk.onSettingFinished();
 }
 
@@ -1984,3 +2070,100 @@ void MainWindow::on_action_deviceManager_triggered()
     mDeviceManagerWindow->show();
 }
 
+
+void MainWindow::appendColoredText(const QString &text, const QColor &color)
+{
+    if (QThread::currentThread() != this->thread()) {
+        QMetaObject::invokeMethod(this, "appendColoredText", Qt::QueuedConnection,
+                                  Q_ARG(QString, text), Q_ARG(QColor, color));
+        return;
+    }
+
+    QMutexLocker lock(&m_bufferMutex);
+    m_logBuffer.push_back({text, color});
+}
+
+void MainWindow::initLogEvent()
+{
+    // 原来的日志刷新定时器代码不变
+    m_logFlushTimer = new QTimer(this);
+    m_logFlushTimer->start(10);
+    connect(m_logFlushTimer, &QTimer::timeout, this, [this](){ /* 你原来的批量写日志逻辑 */ });
+
+    // 新增闲置定时器，每秒检查一次用户操作状态
+    m_autoResumeScrollTimer = new QTimer(this);
+    m_autoResumeScrollTimer->start(1000);
+    connect(m_autoResumeScrollTimer, &QTimer::timeout, this, [this](){
+        if(!m_manualViewMode) return;
+        auto* logEdit = ui->plainTextEdit_log;
+
+        // 鼠标处于按住状态，直接跳过计时，不做任何操作
+        if(m_isMouseHeldDown) {
+            m_manualViewStayCounter = 0; // 按住期间持续清零，避免偷偷累计
+            return;
+        }
+
+        bool isNowAtEnd = logEdit->verticalScrollBar()->value() >= (logEdit->verticalScrollBar()->maximum() - 10);
+        if(isNowAtEnd){
+            m_manualViewMode = false;
+            m_manualViewStayCounter = 0;
+            return;
+        }
+
+        m_manualViewStayCounter++;
+    });
+
+    connect(m_logFlushTimer, &QTimer::timeout, this, [this](){
+        QMutexLocker lock(&m_bufferMutex);
+        if (m_logBuffer.isEmpty()) return;
+        auto* logEdit = ui->plainTextEdit_log;
+
+        // 写入前记录用户当前的所有状态
+        QTextCursor oldCursor = logEdit->textCursor();
+        int oldScrollValue = logEdit->verticalScrollBar()->value();
+        int oldSelStart = oldCursor.selectionStart();
+        int oldSelEnd = oldCursor.selectionEnd();
+
+        bool wasOriginAtEnd = (oldCursor.position() == logEdit->document()->characterCount() - 1);
+        // 叠加判断：原本就在末尾 + 满足停留超时 + 鼠标完全没有按下，三个条件同时满足才执行跳转
+        bool needResumeFollow = wasOriginAtEnd
+                                || (m_manualViewStayCounter >= m_resumeAutoScrollThreshold
+                                    && !m_isMouseHeldDown);
+
+        // 批量写入日志的原有逻辑完全不变
+        QTextCursor newCursor = oldCursor;
+        newCursor.beginEditBlock();
+        newCursor.movePosition(QTextCursor::End);
+        for (const auto& item : m_logBuffer) {
+            QTextCharFormat format;
+            format.setForeground(item.color);
+            newCursor.setCharFormat(format);
+            newCursor.insertText(item.text + "\n");
+        }
+        newCursor.endEditBlock();
+
+        // 写完之后统一处理跳转逻辑
+        if(needResumeFollow){
+            // 恢复自动跟随，滚动到刚写完的最新日志末尾
+            m_manualViewMode = false;
+            m_manualViewStayCounter = 0;
+            newCursor.movePosition(QTextCursor::End);
+            logEdit->setTextCursor(newCursor);
+            logEdit->ensureCursorVisible();
+        }else{
+            // 还没到恢复条件，完全还原用户之前的选中、光标、滚动条位置
+            m_manualViewMode = true;
+            newCursor.setPosition(oldSelStart);
+            newCursor.setPosition(oldSelEnd, QTextCursor::KeepAnchor);
+            logEdit->setTextCursor(newCursor);
+            logEdit->verticalScrollBar()->setValue(oldScrollValue);
+        }
+
+        m_logBuffer.clear();
+    });
+
+    m_logBuffer.reserve(5000);
+    // 使用 QPlainTextEdit 内建限行能力，自动丢弃最早日志
+    ui->plainTextEdit_log->document()->setMaximumBlockCount(5000);
+    ui->plainTextEdit_log->installEventFilter(this);
+}
