@@ -719,18 +719,22 @@ void MainWindow::initUi()
     }
 
     connect(mCommHelper, &CommHelper::shotnumValueChanged, this, [=](const QString& shotnum){
-        qInfo().noquote() << "接收指令，发射炮号：" << shotnum;
-        ui->lineEdit_shotNum->setText(shotnum);
+        if (mExternalTriggerMode && !mExternalSignalTriggered){ // 只有启动了外触发模式，且测量还没开始，炮号接收才有效
+            qInfo().noquote() << "接收指令，发射炮号：" << shotnum;
+            ui->lineEdit_shotNum->setText(shotnum);
+        }
 
         // 记录指令
         recordExternalCommand(QString("炮号：%1").arg(shotnum));
     });
     connect(mCommHelper, &CommHelper::systemTimeValueChanged, this, [=](const QDateTime& tm){
-        qInfo().noquote() << "接收指令，同步时钟：" << tm.toString("yyyy-MM-dd hh:mm:ss.zzz");
-        ui->dateTime_shotTime->setDateTime(QDateTime::currentDateTime());
-        ui->dateTimeEdit_startTime->setDateTime(tm);
-        ui->lineEdit_triggerflag->setText(QStringLiteral("等待测量"));
-        mExternalSignalTriggered = true;
+        if (mExternalTriggerMode && !mExternalSignalTriggered){ // 只有启动了外触发模式，且测量还没开始，炮号接收才有效
+            qInfo().noquote() << "接收指令，同步时钟：" << tm.toString("yyyy-MM-dd hh:mm:ss.zzz");
+            ui->dateTime_shotTime->setDateTime(QDateTime::currentDateTime());
+            ui->dateTimeEdit_startTime->setDateTime(tm);
+            ui->lineEdit_triggerflag->setText(QStringLiteral("等待测量"));
+            mExternalSignalTriggered = true;
+        }
 
         // 记录指令
         recordExternalCommand(QString("时钟：%1").arg(tm.toString("yyyy-MM-dd hh:mm:ss.zzz")));
@@ -741,10 +745,10 @@ void MainWindow::initUi()
         //软件立马控制软件停止测量，并将已测的数据继续保存，在界面打印“紧急停机”日志。然后发送电源断开指令、偏压关闭指令到设备来控制测量系统进行断电。
         //qInfo().noquote() << "自动停止测量、切断电压和关闭偏压";
 
-        for (int row = 0; row < 18; ++row){
-            mCommHelper->switchPower(row + 1, false);
-            mCommHelper->switchVoltage(row + 1, false);
-        }
+        // for (int row = 0; row < 18; ++row){
+        //     mCommHelper->switchPower(row + 1, false);
+        //     mCommHelper->switchVoltage(row + 1, false);
+        // }
 
         // 记录指令
         recordExternalCommand(QStringLiteral("紧急停机"));
