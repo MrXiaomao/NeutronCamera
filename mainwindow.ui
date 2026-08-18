@@ -287,22 +287,12 @@
             </column>
             <column>
              <property name="text">
-              <string>1#电源</string>
+              <string>电源</string>
              </property>
             </column>
             <column>
              <property name="text">
-              <string>1#偏压</string>
-             </property>
-            </column>
-            <column>
-             <property name="text">
-              <string>2#电源</string>
-             </property>
-            </column>
-            <column>
-             <property name="text">
-              <string>2#偏压</string>
+              <string>偏压</string>
              </property>
             </column>
             <column>
@@ -401,30 +391,12 @@
             <property name="text">
              <string>1#电源开</string>
             </property>
-            <property name="icon">
-             <iconset resource="../3rdParty/resource/resource.qrc">
-              <normaloff>:/work-on.png</normaloff>:/work-on.png</iconset>
-            </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="pushButton_openVoltage">
             <property name="text">
              <string>1#偏压开</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="pushButton_openPower_2">
-            <property name="text">
-             <string>2#电源开</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="pushButton_openVoltage_2">
-            <property name="text">
-             <string>2#偏压开</string>
             </property>
            </widget>
           </item>
@@ -465,32 +437,14 @@
           <item>
            <widget class="QPushButton" name="pushButton_closePower">
             <property name="text">
-             <string>1#电源关</string>
-            </property>
-            <property name="icon">
-             <iconset resource="../3rdParty/resource/resource.qrc">
-              <normaloff>:/work-off.png</normaloff>:/work-off.png</iconset>
+             <string>2#电源开</string>
             </property>
            </widget>
           </item>
           <item>
            <widget class="QPushButton" name="pushButton_closeVoltage">
             <property name="text">
-             <string>1#偏压关</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="pushButton_closePower_2">
-            <property name="text">
-             <string>2#电源关</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="pushButton_closeVoltage_2">
-            <property name="text">
-             <string>2#偏压关</string>
+             <string>2#偏压开</string>
             </property>
            </widget>
           </item>

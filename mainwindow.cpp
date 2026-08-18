@@ -61,10 +61,6 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     ui->pushButton_closePower->setEnabled(false);
     ui->pushButton_openVoltage->setEnabled(false);
     ui->pushButton_closeVoltage->setEnabled(false);
-    ui->pushButton_openPower_2->setEnabled(false);
-    ui->pushButton_closePower_2->setEnabled(false);
-    ui->pushButton_openVoltage_2->setEnabled(false);
-    ui->pushButton_closeVoltage_2->setEnabled(false);
     ui->pushButton_selChannel1->setEnabled(false);
     ui->pushButton_selChannel2->setEnabled(false);
     ui->action_startMeasure->setEnabled(false);
@@ -256,17 +252,17 @@ void MainWindow::initUi()
         ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);//编号
         ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);//1#电源
         ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Fixed);//1#偏压
-        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);//1#电源
-        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);//1#偏压
-        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Fixed);//选通
+        // ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);//2#电源
+        // ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Fixed);//2#偏压
+        ui->tableWidget_camera->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Fixed);//选通
         ui->tableWidget_camera->horizontalHeader()->setFixedHeight(30);
         ui->tableWidget_camera->setColumnWidth(0, 35);
         ui->tableWidget_camera->setColumnWidth(1, 50);
         ui->tableWidget_camera->setColumnWidth(2, 77);
         ui->tableWidget_camera->setColumnWidth(3, 77);
         ui->tableWidget_camera->setColumnWidth(4, 77);
-        ui->tableWidget_camera->setColumnWidth(5, 77);
-        ui->tableWidget_camera->setColumnWidth(6, 77);
+        // ui->tableWidget_camera->setColumnWidth(5, 77);
+        // ui->tableWidget_camera->setColumnWidth(6, 77);
         for (int i=0; i<DETNUMBER_MAX; ++i)
             ui->tableWidget_camera->setRowHeight(i, 30);
         quint16 maxWidth = 0;
@@ -289,31 +285,45 @@ void MainWindow::initUi()
         }
 
         for (int row=0; row<ui->tableWidget_camera->rowCount(); ++row){
-            for (int column=2; column<=6; ++column){
+            for (int column=2; column<=4; ++column){
                 SwitchButton* cell = new SwitchButton(this);
                 cell->setContentsMargins(5, 2, 5, 2);
                 if (column == 2){
-                    cell->setObjectName(QString("1#Power#%1").arg(row+1));
+                    cell->setObjectName(QString("Power#%1").arg(row+1));
+                    cell->setText("#1", "#2");
                     cell->setProperty("isPower", true);
                     cell->setProperty("index", row + 1);
-                    cell->setChecked(true);
+                    cell->setAutoChecked(false);
+
+                    QColor bgColorOff = cell->getBgColorOff();
+                    QColor bgColorOn = cell->getBgColorOn();
+                    bgColorOff = QColor(82, 0, 195);
+                    cell->setBgColor(bgColorOn, bgColorOff);
+                    cell->setChecked(false);
                 }
                 else if (column == 3){
-                    cell->setObjectName(QString("1#Voltage#%1").arg(row+1));
+                    cell->setObjectName(QString("Voltage#%1").arg(row+1));
+                    cell->setText("#1", "#2");
                     cell->setProperty("isVoltage", true);
                     cell->setProperty("index", row + 1);
-                    cell->setChecked(true);
+                    cell->setAutoChecked(false);
+
+                    QColor bgColorOff = cell->getBgColorOff();
+                    QColor bgColorOn = cell->getBgColorOn();
+                    bgColorOff = QColor(82, 0, 195);
+                    cell->setBgColor(bgColorOn, bgColorOff);
+                    cell->setChecked(false);
                 }
-                else if (column == 4){
-                    cell->setObjectName(QString("2#Power#%1").arg(row+1));
-                    cell->setProperty("isPower", true);
-                    cell->setProperty("index", row + 1);
-                }
-                else if (column == 5){
-                    cell->setObjectName(QString("2#Voltage#%1").arg(row+1));
-                    cell->setProperty("isVoltage", true);
-                    cell->setProperty("index", row + 1);
-                }
+                // else if (column == 4){
+                //     cell->setObjectName(QString("2#Power#%1").arg(row+1));
+                //     cell->setProperty("isPower", true);
+                //     cell->setProperty("index", row + 1);
+                // }
+                // else if (column == 5){
+                //     cell->setObjectName(QString("2#Voltage#%1").arg(row+1));
+                //     cell->setProperty("isVoltage", true);
+                //     cell->setProperty("index", row + 1);
+                // }
                 else {
                     cell->setObjectName(QString("BackupChannel#%1").arg(row+1));
                     cell->setText("单通", "加和");
@@ -324,33 +334,39 @@ void MainWindow::initUi()
                     QColor bgColorOff = cell->getBgColorOff();
                     QColor bgColorOn = cell->getBgColorOn();
                     bgColorOff = QColor(82, 0, 195);
-                    cell->setBgColor(bgColorOff, bgColorOn);
+                    cell->setBgColor(bgColorOn, bgColorOff);
                     cell->setChecked(false);
                 }
                 ui->tableWidget_camera->setCellWidget(row, column, cell);                
 
-                connect(cell, &SwitchButton::clicked, this, [=](bool checked){
-                    SwitchButton* button = qobject_cast<SwitchButton*>(sender());
-                    if (column == 2) {
-                        mCommHelper->switchPower(row + 1, checked);
-                        mCommHelper->switchBackupPower(row + 1, !checked);
-                    }
-                    else if (column == 3) {
-                        mCommHelper->switchVoltage(row + 1, checked);
-                        mCommHelper->switchBackupVoltage(row + 1, !checked);
-                    }
-                    else if (column == 4) {
-                        mCommHelper->switchBackupPower(row + 1, checked);
-                        mCommHelper->switchPower(row + 1, !checked);
-                    }
-                    else if (column == 5) {
-                        mCommHelper->switchBackupVoltage(row + 1, checked);
-                        mCommHelper->switchVoltage(row + 1, !checked);
-                    }                    
-                });
+                // connect(cell, &SwitchButton::clicked, this, [=](bool checked){
+                //     SwitchButton* button = qobject_cast<SwitchButton*>(sender());
+                //     if (column == 2) {
+                //         mCommHelper->switchPower(row + 1, checked);
+                //         mCommHelper->switchBackupPower(row + 1, !checked);
+                //     }
+                //     else if (column == 3) {
+                //         mCommHelper->switchVoltage(row + 1, checked);
+                //         mCommHelper->switchBackupVoltage(row + 1, !checked);
+                //     }
+                //     else if (column == 4) {
+                //         mCommHelper->switchBackupPower(row + 1, checked);
+                //         mCommHelper->switchPower(row + 1, !checked);
+                //     }
+                //     else if (column == 5) {
+                //         mCommHelper->switchBackupVoltage(row + 1, checked);
+                //         mCommHelper->switchVoltage(row + 1, !checked);
+                //     }
+                // });
                 connect(cell, &SwitchButton::toggled, this, [=](bool checked){
                     SwitchButton* button = qobject_cast<SwitchButton*>(sender());
-                    if (column == 6) {
+                    if (column == 2) {
+                        mCommHelper->switchBackupPower(row + 1, checked);
+                    }
+                    else if (column == 3) {
+                        mCommHelper->switchBackupVoltage(row + 1, checked);
+                    }
+                    else if (column == 4) {
                         // 选通切换
                         mCommHelper->switchBackupChannel(row + 1, checked);
                     }
@@ -359,25 +375,25 @@ void MainWindow::initUi()
         }
 
         connect(mCommHelper, &CommHelper::powerStatusChanged, this, [=](quint32 moduleNo, bool on){
-            SwitchButton* button = this->findChild<SwitchButton*>(QString("1#Power#%1").arg(moduleNo));
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("Power#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
         });
         connect(mCommHelper, &CommHelper::voltageStatusChanged, this, [=](quint32 moduleNo, bool on){
-            SwitchButton* button = this->findChild<SwitchButton*>(QString("1#Voltage#%1").arg(moduleNo));
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("Voltage#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
         });
         connect(mCommHelper, &CommHelper::backupPowerStatusChanged, this, [=](quint32 moduleNo, bool on){
-            SwitchButton* button = this->findChild<SwitchButton*>(QString("2#Power#%1").arg(moduleNo));
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("Power#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
         });
         connect(mCommHelper, &CommHelper::backupVoltageStatusChanged, this, [=](quint32 moduleNo, bool on){
-            SwitchButton* button = this->findChild<SwitchButton*>(QString("2#Voltage#%1").arg(moduleNo));
+            SwitchButton* button = this->findChild<SwitchButton*>(QString("Voltage#%1").arg(moduleNo));
             if (button){
                 button->setChecked(on);
             }
@@ -1008,10 +1024,6 @@ void MainWindow::initUi()
         ui->pushButton_closePower->setEnabled(true);
         ui->pushButton_openVoltage->setEnabled(true);
         ui->pushButton_closeVoltage->setEnabled(true);
-        ui->pushButton_openPower_2->setEnabled(true);
-        ui->pushButton_closePower_2->setEnabled(true);
-        ui->pushButton_openVoltage_2->setEnabled(true);
-        ui->pushButton_closeVoltage_2->setEnabled(true);
         ui->pushButton_selChannel1->setEnabled(true);
         ui->pushButton_selChannel2->setEnabled(true);
 

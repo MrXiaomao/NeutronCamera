@@ -276,7 +276,7 @@ AppConfig::AppConfig(QObject* parent)
         propSet->addChildProperty(d->dataSrvRemotePort);
     }
 
-    //this->load();
+    this->load();
 
     // 类型安全的绑定，自动识别属性类型
     //    bindPropertyValueChange(d->port, &AppConfig::portChanged);

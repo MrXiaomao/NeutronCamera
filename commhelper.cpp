@@ -187,10 +187,14 @@ void CommHelper::readyRead()
         quint16 senderPort;
         mUdpPerformanceMonitorReceiver->readDatagram(data.data(), data.size(), &sender, &senderPort);
 
-        datagram.append(data);
+        QString srcIp = sender.toString();
+        if (srcIp == AppConfig::instance().ipAddress() && senderPort == AppConfig::instance().remotePort())
+            datagram.append(data);
+
     } while (mUdpPerformanceMonitorReceiver->hasPendingDatagrams());
 
-    onReadyRead(datagram);
+    if (!datagram.isEmpty())
+        onReadyRead(datagram);
 }
 
 void CommHelper::onReadyRead(QByteArray& tempData)
@@ -206,18 +210,20 @@ void CommHelper::onReadyRead(QByteArray& tempData)
 
         mUdpPerformanceMonitorReceiver->close();
     }
-    else if ((quint8)tempData.at(0) == 0xA5){
+    else if ((quint8)tempData.at(0) == 0xA5 && tempData.size()==4){// 对返回的数据头部和长度做个限制，避免接收到无效数据
         // 选通器状态返回
         //A5 03 FF FF
         bool ok = false;
         quint32 v = tempData.toHex().toUInt(&ok, 16);
-        //v = qbswap(v);
-        std::bitset<32> bits(v);
-        for (int i=0; i<18; ++i){
-            if (mMapChannel[i+1] != bits.test(i))
-            {
-                mMapChannel[i+1] = bits.test(i);
-                emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+        if (ok){
+            //v = qbswap(v);
+            std::bitset<32> bits(v);
+            for (int i=0; i<18; ++i){
+                if (mMapChannel[i+1] != bits.test(i))
+                {
+                    mMapChannel[i+1] = bits.test(i);
+                    emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+                }
             }
         }
 
@@ -366,7 +372,7 @@ bool CommHelper::connectServer()
     quint32 portLocal = AppConfig::instance().localPort();
 
     this->mUdpPerformanceMonitorReceiver->close();
-    if (this->mUdpPerformanceMonitorReceiver->bind(QHostAddress::Any, portLocal, QUdpSocket::ShareAddress)){
+    if (this->mUdpPerformanceMonitorReceiver->bind(QHostAddress::AnyIPv4, portLocal, QUdpSocket::ShareAddress)){
         mTimerout->start(1000);
         QByteArray datagram("start");
         int ret = mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port);
