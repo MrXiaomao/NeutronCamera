@@ -127,17 +127,17 @@ AppConfig::AppConfig(QObject* parent)
         propSet->setName("探测器参数设置");
         propSet->setId(ID_DETECTOR_SET);
 
-        // PSD甄别阈值
+        // 甄别阈值
         QtnPropertySet* propSetPSDThreshold = new QtnPropertySet(d->propSetRoot);
         propSet->addChildProperty(propSetPSDThreshold);
-        propSetPSDThreshold->setName("PSD甄别阈值");
+        propSetPSDThreshold->setName("甄别阈值");
         propSetPSDThreshold->setId(++baseId);
         propSetPSDThreshold->collapse();
 
         for (int i=0; i<18; ++i){
             d->psdThreshold[i] = qtnCreateProperty<QtnPropertyInt>(propSetPSDThreshold);
             d->psdThreshold[i]->setId(++baseId);
-            d->psdThreshold[i]->setName(QStringLiteral("[通道#%1]PSD甄别阈值").arg(i+1));
+            d->psdThreshold[i]->setName(QStringLiteral("[通道#%1]甄别阈值").arg(i+1));
             d->psdThreshold[i]->setDescription("范围：0 ~ 255");
             d->psdThreshold[i]->setMaxValue(255);
             d->psdThreshold[i]->setMinValue(0);

@@ -749,6 +749,7 @@ void MainWindow::initUi()
         //     mCommHelper->switchPower(row + 1, false);
         //     mCommHelper->switchVoltage(row + 1, false);
         // }
+        mCommHelper->closeAllPower();
 
         // 记录指令
         recordExternalCommand(QStringLiteral("紧急停机"));
@@ -1679,7 +1680,7 @@ void MainWindow::on_pushButton_selChannel2_clicked()
 void MainWindow::on_action_typeLSD_triggered(bool checked)
 {
     if (checked){
-        ui->tableWidget_camera->setColumnHidden(6, true);
+        ui->tableWidget_camera->setColumnHidden(4, true);
 
         quint16 maxWidth = 0;
         for (int i=0; i<ui->tableWidget_camera->columnCount(); ++i){
@@ -1710,7 +1711,7 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
 void MainWindow::on_action_typePSD_triggered(bool checked)
 {
     if (checked){
-        ui->tableWidget_camera->setColumnHidden(6, false);
+        ui->tableWidget_camera->setColumnHidden(4, false);
 
         quint16 maxWidth = 0;
         for (int i=0; i<ui->tableWidget_camera->columnCount(); ++i){
@@ -1741,7 +1742,7 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
 void MainWindow::on_action_typeLBD_triggered(bool checked)
 {
     if (checked){
-        ui->tableWidget_camera->setColumnHidden(6, true);
+        ui->tableWidget_camera->setColumnHidden(4, true);
 
         quint16 maxWidth = 0;
         for (int i=0; i<ui->tableWidget_camera->columnCount(); ++i){
@@ -2182,3 +2183,4 @@ void MainWindow::initLogEvent()
     ui->plainTextEdit_log->document()->setMaximumBlockCount(5000);
     ui->plainTextEdit_log->installEventFilter(this);
 }
+

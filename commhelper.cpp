@@ -211,21 +211,21 @@ void CommHelper::onReadyRead(QByteArray& tempData)
         mUdpPerformanceMonitorReceiver->close();
     }
     else if ((quint8)tempData.at(0) == 0xA5 && tempData.size()==4){// 对返回的数据头部和长度做个限制，避免接收到无效数据
-        // 选通器状态返回
+        // 选通器切换指令返回
         //A5 03 FF FF
-        bool ok = false;
-        quint32 v = tempData.toHex().toUInt(&ok, 16);
-        if (ok){
-            //v = qbswap(v);
-            std::bitset<32> bits(v);
-            for (int i=0; i<18; ++i){
-                if (mMapChannel[i+1] != bits.test(i))
-                {
-                    mMapChannel[i+1] = bits.test(i);
-                    emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
-                }
-            }
-        }
+        // bool ok = false;
+        // quint32 v = tempData.toHex().toUInt(&ok, 16);
+        // if (ok){
+        //     //v = qbswap(v);
+        //     std::bitset<32> bits(v);
+        //     for (int i=0; i<18; ++i){
+        //         if (mMapChannel[i+1] != bits.test(i))
+        //         {
+        //             mMapChannel[i+1] = bits.test(i);
+        //             emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+        //         }
+        //     }
+        // }
 
         return;
     }
@@ -282,7 +282,20 @@ void CommHelper::onReadyRead(QByteArray& tempData)
             UTD = 0x3938353834315100002F0017
             FeSoftV=Unknown
             FeHardy=Unknown
-            FeAddr = 01
+            FeAddr =
+
+            @01*TIMEOUT@02*TIMEOUT@03*TIMEOUT@04*TIMEOUT@05*TIMEOUT@06*TIMEOUT@07*TIMEOUT@08*TIMEOUT@09*TIMEOUT@10*TIMEOUT@11*TIMEOUT@12*TIMEOUT@13*TIMEOUT@14*TIMEOUT@15*TIMEOUT@16*TIMEOUT@17*TIMEOUT@18*TIMEOUT@19*999*GETR*01*
+            INA226_01 (0x40) = 12.71V, 399.76mA
+            INA226_02 (0x45) = 5.09V, 213.17mA
+            IO_BIN = 5A 00 00 01
+            #
+            @22*999*GETR*01*
+            01 = 0.11V, 0.00A
+            02 = 0.05V, 0.00A
+            #
+            @22*999*GETR*01*
+            01 = 48.08V, 0.00A
+            02 = 48.05V, 1.05A
             #
         */
         if (1)
@@ -291,12 +304,14 @@ void CommHelper::onReadyRead(QByteArray& tempData)
             QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(rawData);
             emit temperatureAndVoltageChanged(moduleNo, result);
 
-            std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
-            for (int i=0; i<18; ++i){
-                if (mMapChannel[i+1] != bits.test(i))
-                {
-                     mMapChannel[i+1] = bits.test(i);
-                    emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+            if (result.contains("IO_BIN")){
+                std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
+                for (int i=0; i<18; ++i){
+                    if (mMapChannel[i+1] != bits.test(i))
+                    {
+                         mMapChannel[i+1] = bits.test(i);
+                        emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+                    }
                 }
             }
         }
@@ -374,13 +389,14 @@ bool CommHelper::connectServer()
     this->mUdpPerformanceMonitorReceiver->close();
     if (this->mUdpPerformanceMonitorReceiver->bind(QHostAddress::AnyIPv4, portLocal, QUdpSocket::ShareAddress)){
         mTimerout->start(1000);
-        QByteArray datagram("start");
-        int ret = mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port);
-        return ret > 0;
+        if (this->openAllPower()){
+            QByteArray datagram("start");
+            int ret = mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port);
+            return ret > 0;
+        }
     }
-    else{
-        return false;
-    }
+
+    return false;
 }
 
 /*
@@ -413,6 +429,26 @@ bool CommHelper::switchVoltage(quint32 channel, bool on)
 
     emit voltageStatusChanged(channel, on);
     return true;
+}
+
+bool CommHelper::openAllPower()
+{
+    qInfo().noquote() << "打开电源";
+
+    QString ip = AppConfig::instance().ipAddress();
+    quint32 port = AppConfig::instance().remotePort();
+    QByteArray datagram("openA");
+    return mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port) > 0;
+}
+
+bool CommHelper::closeAllPower()
+{
+    qInfo().noquote() << "关闭电源";
+
+    QString ip = AppConfig::instance().ipAddress();
+    quint32 port = AppConfig::instance().remotePort();
+    QByteArray datagram("closeA");
+    return mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port) > 0;
 }
 
 bool CommHelper::switchBackupPower(quint32 channel, bool on)

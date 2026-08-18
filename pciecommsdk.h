@@ -282,7 +282,7 @@ public:
                                 const quint32& timeStop/*结束时刻ms*/,
                                 const QString& fileDir/*文件存储路径*/,
                                 std::function<void(
-                                    const QMap<quint64/*时刻（ns）*/,qint16/*数值*/>&
+                                    const QMap<quint64/*时刻（ns）*/,qint16/*扣基线后的数值*/>&
                                     )> callback);
 
     // 从H5文件解析计数率信息和能谱信息

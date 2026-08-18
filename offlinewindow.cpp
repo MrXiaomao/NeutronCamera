@@ -1576,7 +1576,7 @@ void OfflineWindow::initCpsPage()
 }
 
 #include <QtMath>
-void OfflineWindow::onWaveformPlot(quint8/*通道号*/ channel, const QMap<quint64/*时刻*/,qint16/*波形值*/>& mapPair)
+void OfflineWindow::onWaveformPlot(quint8/*通道号*/ channel, const QMap<quint64/*时刻*/,qint16/*扣基线后的波形值*/>& mapPair)
 {
     double yMax = 0;
 

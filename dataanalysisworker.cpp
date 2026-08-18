@@ -71,9 +71,9 @@ void DataAnalysisWorker::startAnalysis()
  * @return true 读取成功，false 读取失败（文件不存在、格式错误、映射失败等）
  */
 bool DataAnalysisWorker::readBin3Ch_fast(const QString& filePath,
-                                         QVector<qint16>& ch0,
-                                         QVector<qint16>& ch1,
-                                         QVector<qint16>& ch2,
+                                         QVector<quint16>& ch0,
+                                         QVector<quint16>& ch1,
+                                         QVector<quint16>& ch2,
                                          bool littleEndian /*= true*/)
 {
     // 打开文件进行只读访问
@@ -85,10 +85,10 @@ bool DataAnalysisWorker::readBin3Ch_fast(const QString& filePath,
     return DataAnalysisWorker::readBin3Ch_fast(buf, ch0, ch1, ch2, littleEndian);
 }
 
-bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
-                                         QVector<qint16>& ch0,
-                                         QVector<qint16>& ch1,
-                                         QVector<qint16>& ch2,
+bool DataAnalysisWorker::readBin3Ch_fast(const QByteArray& fileData,
+                                         QVector<quint16>& ch0,
+                                         QVector<quint16>& ch1,
+                                         QVector<quint16>& ch2,
                                          bool littleEndian/* = true*/)
 {
     // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
@@ -149,9 +149,9 @@ bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
             // ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
             // ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
             // ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
-            ch0[j] = static_cast<qint16>(v0); ch0[j+1] = static_cast<qint16>(v1);
-            ch1[j] = static_cast<qint16>(v2); ch1[j+1] = static_cast<qint16>(v3);
-            ch2[j] = static_cast<qint16>(v4); ch2[j+1] = static_cast<qint16>(v5);
+            ch0[j] = static_cast<quint16>(v0); ch0[j+1] = static_cast<quint16>(v1);
+            ch1[j] = static_cast<quint16>(v2); ch1[j+1] = static_cast<quint16>(v3);
+            ch2[j] = static_cast<quint16>(v4); ch2[j+1] = static_cast<quint16>(v5);
         }
     } else {
         // 大端序（Big Endian）处理
@@ -174,9 +174,9 @@ bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
             // ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
             // ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
             // ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
-            ch0[j] = static_cast<qint16>(v0); ch0[j+1] = static_cast<qint16>(v1);
-            ch1[j] = static_cast<qint16>(v2); ch1[j+1] = static_cast<qint16>(v3);
-            ch2[j] = static_cast<qint16>(v4); ch2[j+1] = static_cast<qint16>(v5);
+            ch0[j] = static_cast<quint16>(v0); ch0[j+1] = static_cast<quint16>(v1);
+            ch1[j] = static_cast<quint16>(v2); ch1[j+1] = static_cast<quint16>(v3);
+            ch2[j] = static_cast<quint16>(v4); ch2[j+1] = static_cast<quint16>(v5);
         }
     }
 
@@ -184,7 +184,7 @@ bool DataAnalysisWorker::  readBin3Ch_fast(const QByteArray& fileData,
 }
 
 // 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
-qint16 DataAnalysisWorker::calculateBaseline(const QVector<qint16>& data_ch)
+qint16 DataAnalysisWorker::calculateBaseline(const QVector<quint16>& data_ch)
 {
     if (data_ch.isEmpty()) {
         return 0;
@@ -222,10 +222,11 @@ qint16 DataAnalysisWorker::calculateBaseline(const QVector<qint16>& data_ch)
 // 根据基线调整数据：根据采集卡编号和通道号对数据进行不同的调整
 // boardNum: 采集卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数采集卡，2,4,6为偶数采集卡）
 // ch: 1-4 (通道号)
-void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16 baseline_ch, int boardNum, int ch)
+QVector<qint16> DataAnalysisWorker::adjustDataWithBaseline(QVector<quint16>& data_ch, qint16 baseline_ch, int boardNum, int ch)
 {
+    QVector<qint16> result;
     if (data_ch.isEmpty()) {
-        return;
+        return result;
     }
 
     // 当前通道中波形信号有两类，部分为负脉冲信号，部分为正脉冲信号
@@ -247,12 +248,12 @@ void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch, qint16
     //         isPositive = true;
     // }
     bool isPositive = true;// 全部为正脉冲信号
-
+    result.resize(data_ch.size());
     for (int i = 0; i < data_ch.size(); ++i) {
         if (isPositive) {
-            data_ch[i] = data_ch[i] - baseline_ch;
+            result[i] = data_ch[i] - baseline_ch;
         } else {
-            data_ch[i] = baseline_ch - data_ch[i];
+            result[i] = baseline_ch - data_ch[i];
         }
     }
 }

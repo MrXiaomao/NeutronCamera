@@ -518,7 +518,7 @@ void PCIeCommSdk::setPSDThreshold()
         writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
         ::QThread::msleep(10);
 
-        qInfo().nospace() << "通道" << ((physicalNo-1)*6 + channelIndex) << "设置PSD阈值：" << threshold;
+        qInfo().nospace() << "通道" << channelIndex << "设置PSD阈值：" << threshold;
         CloseHandle(fUserHandle);
     }
 
@@ -770,7 +770,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
                                         const quint32& timeStart/*开始时刻ms*/,
                                         const quint32& timeStop/*结束时刻ms*/,
                                         const QString& fileDir/*文件存储路径*/,
-                                        std::function<void(const QMap<quint64/*时刻（ns）*/,qint16/*数值*/>&)> callback
+                                        std::function<void(const QMap<quint64/*时刻（ns）*/,qint16/*扣基线后的数值*/>&)> callback
                                         )
 {
     QMap<quint64/*时刻*/,qint16/*数值*/> waveformPair;
@@ -789,7 +789,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
     quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
     for (int id = startFileId; id <= endFileId; ++id){
         QString filePath = QString("%1/%2%3data%4.bin").arg(fileDir).arg(board_index).arg(sideFile).arg(id);
-        QVector<QVector<qint16>> ch(3);
+        QVector<QVector<quint16>> ch(3);
         if (DataAnalysisWorker::readBin3Ch_fast(filePath, ch[0], ch[1], ch[2], true)) {
 
             //计算出是当前文件波形的第几个数据点
@@ -816,10 +816,10 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
 
             //扣基线，调整数据
             qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
-            DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, deviceIndex, cameraNo + 1);
+            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, deviceIndex, cameraNo + 1);
 
             //提取通道号的数据cameraNo
-            QVector<qint16> waveform = ch[cameraNo].mid(packPos, point_num);
+            QVector<qint16> waveform = baselineAdjustData.mid(packPos, point_num);
 
             for (int i=0;i<waveform.size();++i)
                 waveformPair.insert((quint64)((id-startFileId)* PACKET_TIMELENGTH + timeStart) * 1000 * 1000  + i*2, waveform[i]);

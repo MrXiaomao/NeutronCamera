@@ -36,6 +36,8 @@ public:
 
     bool switchPower(quint32, bool);
     bool switchVoltage(quint32, bool);
+    bool openAllPower();
+    bool closeAllPower();
     bool switchBackupPower(quint32, bool);
     bool switchBackupVoltage(quint32, bool);
     bool switchBackupChannel(quint32, bool);
