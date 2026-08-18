@@ -822,7 +822,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
             QVector<qint16> waveform = ch[cameraNo].mid(packPos, point_num);
 
             for (int i=0;i<waveform.size();++i)
-                waveformPair.insert(id * 1000 * 1000 * PACKET_TIMELENGTH + i*2, waveform[i]);
+                waveformPair.insert((quint64)((id-startFileId)* PACKET_TIMELENGTH + timeStart) * 1000 * 1000  + i*2, waveform[i]);
         }
     }
 

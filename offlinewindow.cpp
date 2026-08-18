@@ -2682,7 +2682,7 @@ void OfflineWindow::on_action_save_triggered()
     if (dirPath.isEmpty())
         return ;
 
-    if (ui->action_ngamma->isChecked()){
+    if (ui->action_ngamma->isChecked()){ // n-γ甄别
 
         // 水平PSD
         {
@@ -2710,7 +2710,7 @@ void OfflineWindow::on_action_save_triggered()
             file.close();
         }
 
-    } else {
+    } else {    // 能谱分析
 
         // 能谱
         {

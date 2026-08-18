@@ -316,7 +316,7 @@ void MainWindow::initUi()
                 }
                 else {
                     cell->setObjectName(QString("BackupChannel#%1").arg(row+1));
-                    cell->setText("#1", "#2");
+                    cell->setText("单通", "加和");
                     cell->setProperty("isSelChannel", true);
                     cell->setProperty("index", row + 1);
                     cell->setAutoChecked(false);
@@ -479,7 +479,6 @@ void MainWindow::initUi()
             }
         }
 
-        emit writeLog(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz"));
     });
     systemClockTimer->start(900);
 
@@ -1167,7 +1166,7 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
             graph->selectionDecorator()->setPen(QPen(colors[i]));
             graph->setLineStyle(QCPGraph::lsLine);
             graph->setSelectable(QCP::SelectionType::stNone);
-            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, colors[i], 6));
+            graph->setScatterStyle(QCPScatterStyle(i==0 ? QCPScatterStyle::ssCircle : QCPScatterStyle::ssCross, colors[i], 6));
             graph->setName(title[i]);
         }
 

@@ -431,7 +431,7 @@
           <item>
            <widget class="QPushButton" name="pushButton_selChannel1">
             <property name="text">
-             <string>选通#1</string>
+             <string>切换至单通</string>
             </property>
            </widget>
           </item>
@@ -497,7 +497,7 @@
           <item>
            <widget class="QPushButton" name="pushButton_selChannel2">
             <property name="text">
-             <string>选通#2</string>
+             <string>切换至加和</string>
             </property>
            </widget>
           </item>

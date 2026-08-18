@@ -269,13 +269,18 @@ QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quin
         *  新的阈值判断方式：
             取前8个点，分为2组，奇数组为X，偶数组为Y，以奇数组点位（1、3、5、7）为判断主线，
             点位必须是依次递增的，从点位5开始必须大于阈值，记录下来这个点为触发点位A，以此规则寻找点B、C、D，但是要求A、B、C、D直接的间隔必须大于153*2
+            keep = data(candidate_positions) > thr ...
+                & data(candidate_positions-4) < data(candidate_positions-2) ...
+                & data(candidate_positions-2) < data(candidate_positions) ...
+                & data(candidate_positions) < data(candidate_positions+2);
+            cross_indices = candidate_positions(keep);
         */
         for (int i = pre_points; i + WAVEFORM_LENGTH <= data.size(); ++i) {
-            // 条件：从低于阈值跨越到高于阈值，且前21个点（i-20到i）的均值小于阈值
-            if (data[i - 5] < threshold &&
-                data[i - 5] > data[i - 7] &&
-                data[i - 3] >= threshold &&
-                data[i - 1] > data[i - 3]) {
+            if (i%2==0 &&// 仅判断奇数组数据
+                data[i] > threshold &&
+                data[i - 4] < data[i - 2] &&
+                data[i - 2] < data[i] &&
+                data[i] < data[i + 2]) {
 
                 cross_indices.append(i);
                 i += WAVEFORM_LENGTH;
@@ -335,7 +340,7 @@ QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quin
                 peak = std::max(peak, data[start_idx + i]);
             }
             segment_data[1] = peak;
-
+            qDebug() << a << start_idx << peak << segment_data[0] << segment_data[1] << segment_data[2] << segment_data[3] << segment_data[4] << segment_data[5] << segment_data[6] << segment_data[7] << segment_data[8];
             wave_ch.append(segment_data);
         }
         catch (...) {
@@ -425,7 +430,7 @@ void DataAnalysisWorker::getValidWave()
             }
         }
 
-        QString cardName = QString("%1-%2").arg((deviceIndex+1)/2).arg((deviceIndex%2 == 0) ? "DDR1" : "DDR2");
+        QString cardName = QString("%1-%2").arg((deviceIndex+1)/2).arg((deviceIndex%2 == 1) ? "DDR1" : "DDR2");
 
         // 这里需要判断对应的采集卡是否存在数据
         if (tempFileList[deviceIndex-1].size() == 0){
@@ -481,6 +486,8 @@ void DataAnalysisWorker::getValidWave()
                     continue;
                 }
                 int fileID = QFileInfo(fileName).baseName().mid(QFileInfo(fileName).baseName().indexOf("data")+4).toInt();
+                if (fileID < startFile || fileID > endFile)
+                    continue;
 
                 // QFile f(filePath);
                 // if (!f.open(QIODevice::ReadOnly)) {
