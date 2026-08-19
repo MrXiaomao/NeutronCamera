@@ -821,40 +821,42 @@ void MainWindow::initUi()
                 }
             };
 
-            checkValueValid(0, pairs["PSD1"].first, 10, 50, tr("PSD1温度异常，值："));
-            checkValueValid(1, pairs["PSD2"].first, 10, 50, tr("PSD2温度异常，值："));
-            checkValueValid(2, pairs["LBD"].first, 10, 50, tr("LBD温度异常，值："));
-            checkValueValid(3, pairs["LSD"].first, 10, 50, tr("LSD温度异常，值："));
+            if (ui->action_typePSD->isChecked()){
+                checkValueValid(0, pairs["PSD1"].first, 10, 50, tr("PSD1温度异常，值："));
+                checkValueValid(1, pairs["PSD2"].first, 10, 50, tr("PSD2温度异常，值："));
+                checkValueValid(4, pairs["PSD1_29V"].first, 28, 30, tr("PSD1_29V电压异常，值："));
+                checkValueValid(5, pairs["PSD2_29V"].first, 28, 30, tr("PSD2_29V电压异常，值："));
+                checkValueValid(8, pairs["PSD1_29V"].second, 0, 20, tr("PSD1_29V电流异常，值："));
+                checkValueValid(9, pairs["PSD2_29V"].second, 0, 20, tr("PSD2_29V电流异常，值："));
+                checkValueValid(12, pairs["PSD1_48V"].first, 45, 50, tr("PSD1_48V电压异常，值："));
+                checkValueValid(13, pairs["PSD2_48V"].first, 45, 50, tr("PSD2_48V电压异常，值："));
+                checkValueValid(16, pairs["PSD1_48V"].second, 0, 20, tr("PSD1_48V电流异常，值："));
+                checkValueValid(17, pairs["PSD2_48V"].second, 0, 20, tr("PSD2_48V电流异常，值："));
+                checkValueValid(20, pairs["PSD1-AMP"].first, 45, 50, tr("PSD1运放板电压异常，值："));
+                checkValueValid(21, pairs["PSD2-AMP"].first, 45, 50, tr("PSD2运放板电压异常，值："));
+                checkValueValid(24, pairs["PSD1-AMP"].second, 0, 20, tr("PSD1运放板电流异常，值："));
+                checkValueValid(25, pairs["PSD2-AMP"].second, 0, 20, tr("PSD2运放板电流异常，值："));
+            }
 
-            checkValueValid(4, pairs["PSD1_29V"].first, 28, 30, tr("PSD1_29V电压异常，值："));
-            checkValueValid(5, pairs["PSD2_29V"].first, 28, 30, tr("PSD2_29V电压异常，值："));
-            checkValueValid(6, pairs["LBD_29V"].first, 28, 30, tr("LBD_29V电压异常，值："));
-            checkValueValid(7, pairs["LSD_29V"].first, 28, 30, tr("LSD_29V电压异常，值："));
+            if (ui->action_typeLBD->isChecked()){
+                checkValueValid(2, pairs["LBD"].first, 10, 50, tr("LBD温度异常，值："));
+                checkValueValid(6, pairs["LBD_29V"].first, 28, 30, tr("LBD_29V电压异常，值："));
+                checkValueValid(10, pairs["LBD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
+                checkValueValid(14, pairs["LBD_48V"].first, 45, 50, tr("LBD_48V电压异常，值："));
+                checkValueValid(18, pairs["LBD_48V"].second, 0, 20, tr("LBD_48V电流异常，值："));
+                checkValueValid(22, pairs["LBD-AMP"].first, 45, 50, tr("LBD运放板电压异常，值："));
+                checkValueValid(26, pairs["LBD-AMP"].second, 0, 20, tr("LBD运放板电流异常，值："));
+            }
 
-            checkValueValid(8, pairs["PSD1_29V"].second, 0, 20, tr("PSD1_29V电流异常，值："));
-            checkValueValid(9, pairs["PSD2_29V"].second, 0, 20, tr("PSD2_29V电流异常，值："));
-            checkValueValid(10, pairs["LBD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
-            checkValueValid(11, pairs["LSD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
-
-            checkValueValid(12, pairs["PSD1_48V"].first, 45, 50, tr("PSD1_48V电压异常，值："));
-            checkValueValid(13, pairs["PSD2_48V"].first, 45, 50, tr("PSD2_48V电压异常，值："));
-            checkValueValid(14, pairs["LBD_48V"].first, 45, 50, tr("LBD_48V电压异常，值："));
-            checkValueValid(15, pairs["LSD_48V"].first, 45, 50, tr("LSD_48V电压异常，值："));
-
-            checkValueValid(16, pairs["PSD1_48V"].second, 0, 20, tr("PSD1_48V电流异常，值："));
-            checkValueValid(17, pairs["PSD2_48V"].second, 0, 20, tr("PSD2_48V电流异常，值："));
-            checkValueValid(18, pairs["LBD_48V"].second, 0, 20, tr("LBD_48V电流异常，值："));
-            checkValueValid(19, pairs["LSD_48V"].second, 0, 20, tr("LSD_48V电流异常，值："));
-
-            checkValueValid(20, pairs["PSD1-AMP"].first, 45, 50, tr("PSD1运放板电压异常，值："));
-            checkValueValid(21, pairs["PSD2-AMP"].first, 45, 50, tr("PSD2运放板电压异常，值："));
-            checkValueValid(22, pairs["LBD-AMP"].first, 45, 50, tr("LBD运放板电压异常，值："));
-            checkValueValid(23, pairs["LSD-AMP"].first, 45, 50, tr("LSD运放板电压异常，值："));
-
-            checkValueValid(24, pairs["PSD1-AMP"].second, 0, 20, tr("PSD1运放板电流异常，值："));
-            checkValueValid(25, pairs["PSD2-AMP"].second, 0, 20, tr("PSD2运放板电流异常，值："));
-            checkValueValid(26, pairs["LBD-AMP"].second, 0, 20, tr("LBD运放板电流异常，值："));
-            checkValueValid(27, pairs["LSD-AMP"].second, 0, 20, tr("LSD运放板电流异常，值："));
+            if (ui->action_typeLSD->isChecked()){
+                checkValueValid(3, pairs["LSD"].first, 10, 50, tr("LSD温度异常，值："));
+                checkValueValid(7, pairs["LSD_29V"].first, 28, 30, tr("LSD_29V电压异常，值："));
+                checkValueValid(11, pairs["LSD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
+                checkValueValid(15, pairs["LSD_48V"].first, 45, 50, tr("LSD_48V电压异常，值："));
+                checkValueValid(19, pairs["LSD_48V"].second, 0, 20, tr("LSD_48V电流异常，值："));
+                checkValueValid(23, pairs["LSD-AMP"].first, 45, 50, tr("LSD运放板电压异常，值："));
+                checkValueValid(27, pairs["LSD-AMP"].second, 0, 20, tr("LSD运放板电流异常，值："));
+            }
 
             // 更新完成后恢复
             ui->tableWidget_status->blockSignals(false);

@@ -65,7 +65,7 @@ public:
 
 private:
     QUdpSocket *mUdpShotReceiver = nullptr;// 炮号接收器
-    QUdpSocket *mUdpPerformanceMonitorReceiver = nullptr;// 设备电压/电流/温度等性能监测
+    QUdpSocket *mUdpPerformanceMonitorReceiver = nullptr;// 设备电压/电流/温度等性能监测，所有发送端口都是8000，接收端口ip100:1000,ip101:8080,ip102:8081
     QTimer* mTimerout;// 网络连接超时
     QLiteThread* mRequestCmdThread = nullptr;
     QByteArray mRawData;

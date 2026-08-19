@@ -1562,8 +1562,6 @@ void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTime
 
 bool CaptureThread::startMeasure()
 {
-    this->mInterruptSave = false;
-    qInfo().nospace() << "采集卡[" << mPhysicalNo << "] " << "发送开始测量指令";
     auto writeData = [=](quint8 cardIndex, HANDLE fd, quint64 offset, const char* data, int size){
 #ifdef _WIN32
         LARGE_INTEGER address;
@@ -2027,6 +2025,9 @@ void CaptureThread::run()
         mDDRReadTime.clear();
         mRAMReadTime.clear();
 		zeroTime.clear();
+
+        this->mInterruptSave = false;
+        qInfo().nospace() << "采集卡[" << mPhysicalNo << "] " << "发送开始测量指令";
 
         if (mIsDDR1){ // 1张卡只需要发一次开始测量指令
             startMeasure();
