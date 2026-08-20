@@ -195,7 +195,7 @@ void PCIeCommSdk::printDevicesInfomation()
         return; // 离线处理不需要检测卡是否存在
 
     if (0 == numberOfDevices())
-        qCritical().noquote() << QStringLiteral("未发现数据采集卡，请检查卡是否松动或是已被禁用！");
+        qCritical().noquote() << QStringLiteral("未发现数据采集卡，请检查卡是否松动或是处于被禁用状态！");
     else{
         QStringList lst;
         for (int physicalNo=1; physicalNo<=3; ++physicalNo)

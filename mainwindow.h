@@ -135,16 +135,15 @@ private:
     Ui::MainWindow *ui;
     CommHelper* mCommHelper = nullptr;
     PCIeCommSdk mPCIeCommSdk;
-    SettingWindow *mSettingWindow = nullptr;
-    DeviceManagerWindow* mDeviceManagerWindow = nullptr;
+    SettingWindow *mSettingWindow = nullptr;// 系统参数配置界面
+    DeviceManagerWindow* mDeviceManagerWindow = nullptr; // 设备管理器界面
 
-    bool mIsAlarm[2] = {false, false};//0-温度 1-电压
+    std::atomic<bool> mIsAlarm = false;// 性能监测是否出现异常
     bool mIsMeasuring = false;// 测量是否正在进行
-    quint8 mCurrentPageIndex = 1;
-    DetectorType mCurrentDetectorType = dtLSD; // 1-LSD 2-PSD 3-LBD
-    QString mCurrentSavePath;
+    DetectorType mCurrentDetectorType = dtLSD; // 当前探测器类型：1-LSD 2-PSD 3-LBD
+    QString mCurrentSavePath;// 本次实验数据存储路径
 
-    bool mIsDarkTheme = true;
+    bool mIsDarkTheme = false;
     bool mThemeColorEnable = true;
     QColor mThemeColor = QColor(255,255,255);
 
@@ -155,6 +154,7 @@ private:
     int mCurrentMeasuerCount = 0;
     int mContinueMeasuerCount = 0;
     int mContinueMeasuerFailCount = 0;
+    bool mVoltageSwitcherOpened = false;// 48V电压开关是否打开
 
 private:
     struct LogItem {

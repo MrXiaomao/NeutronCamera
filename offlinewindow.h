@@ -255,6 +255,8 @@ private slots:
 
     void on_comboBox_h5Files_currentTextChanged(const QString &arg1);
 
+    void on_comboBox_h5Files_2_currentTextChanged(const QString &arg1);
+
     void on_action_waveform_triggered();
 
     void on_action_process_triggered();

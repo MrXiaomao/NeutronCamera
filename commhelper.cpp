@@ -2,128 +2,12 @@
 #include "globalsettings.h"
 #include "AppConfig.h"
 
+#include <bitset>
+#include <QtEndian>
 #include <QTimer>
 #include <QDataStream>
 #include <QNetworkSession>
 #include <QNetworkConfigurationManager>
-
-CommHelper::CommHelper(QObject *parent)
-    : QObject{parent}
-{
-    /*初始化网络*/
-    initSocket();
-
-    // mRequestCmdThread = new QLiteThread(this);
-    // mRequestCmdThread->setObjectName("mRequestCmdThread");
-    // mRequestCmdThread->setWorkThreadProc([=](){
-    //     while (!mRequestCmdThread->isInterruptionRequested())
-    //     {
-    //         if (mTcpClient->isOpen()){
-    //             //发送查询指令
-    //             //@01*999*GET*01*#
-    //             for (int i=1; i<=18; ++i){
-    //                 QString askCommand = QString("@%1*999*GET*01*#").arg(i, 2, 10, QLatin1Char('0'));
-    //                 mTcpClient->write(askCommand.toLatin1());
-    //                 mTcpClient->waitForBytesWritten();
-
-    //                 QThread::msleep(500);
-    //             }
-    //         }
-
-    //         QThread::msleep(1000);
-    //     }
-    // });
-    // mRequestCmdThread->start();
-    // connect(this, &CommHelper::destroyed, [=]() {
-    //     mRequestCmdThread->exit(0);
-    //     mRequestCmdThread->wait(500);
-    // });
-
-    for (int cardIndex = 1; cardIndex <= 18; ++cardIndex){
-        mMapPower[cardIndex] = true;
-        mMapVoltage[cardIndex] = true;
-        mMapChannel[cardIndex] = false;
-    }
-}
-
-CommHelper::~CommHelper()
-{
-    // mRequestCmdThread->requestInterruption();
-    // mRequestCmdThread->quit();
-    // mRequestCmdThread->wait();
-    // mRequestCmdThread->deleteLater();
-
-    this->disconnectServer();
-}
-
-void CommHelper::initSocket()
-{
-    // 初始化UDP
-    this->mUdpPerformanceMonitorReceiver = new QUdpSocket();
-    connect(mUdpPerformanceMonitorReceiver, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
-    mTimerout = new QTimer(this);
-    mTimerout->setSingleShot(true);
-    connect(mTimerout, &QTimer::timeout, this, [=](){
-        qCritical() << "设备连接失败";
-    });
-
-    //炮号接收器
-    this->mUdpShotReceiver = new QUdpSocket();
-    this->mUdpShotReceiver->setSocketOption(QAbstractSocket::MulticastLoopbackOption, true);
-    connect (mUdpShotReceiver, &QUdpSocket::readyRead, this, [=](){
-        while (mUdpShotReceiver->hasPendingDatagrams()) {
-            QByteArray datagram;
-            datagram.resize(int(mUdpShotReceiver->pendingDatagramSize()));
-            QHostAddress sender;
-            quint16 senderPort;
-            mUdpShotReceiver->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
-            //+PLS_12345
-
-            qInfo().noquote() << "接收广播消息：" << datagram;
-            if (datagram.startsWith("+PLS_")){
-                //解析炮号
-                QRegularExpression regex("\\d+");
-                QRegularExpressionMatchIterator iterator = regex.globalMatch(datagram);
-                if (iterator.hasNext()) {
-                    QRegularExpressionMatch match = iterator.next();
-                    QString shotNum = match.captured(0);
-                    emit shotnumValueChanged(shotNum);
-                }
-            }
-            else if (datagram.startsWith("TIME_")){
-                QRegularExpression regex("TIME_(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})\\.(\\d{3})");
-                QRegularExpressionMatchIterator iterator = regex.globalMatch(datagram);
-                if (iterator.hasNext()) {
-                    QRegularExpressionMatch match = iterator.next();
-                    // 提取各个时间组件
-                    QString year = match.captured(1);    // 年
-                    QString month = match.captured(2);   // 月
-                    QString day = match.captured(3);     // 日
-                    QString hour = match.captured(4);    // 时
-                    QString minute = match.captured(5);  // 分
-                    QString second = match.captured(6);  // 秒
-                    QString millisecond = match.captured(7); // 毫秒
-                    QDateTime tm(QDate(year.toUInt(),month.toUInt(),day.toUInt()),
-                                 QTime(hour.toUInt(),minute.toUInt(),second.toUInt(),millisecond.toUInt()));
-                    emit systemTimeValueChanged(tm);
-                }
-            }
-            else if (datagram.startsWith("EMERGENCE_STOP")){
-                emit energenceStopSignalTriggered();
-            }
-        }
-    });
-    if (this->mUdpShotReceiver->bind(QHostAddress::Any, 12100, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)){
-        this->mUdpShotReceiver->joinMulticastGroup(QHostAddress::LocalHost);
-    }
-}
-
-void CommHelper::error(QAbstractSocket::SocketError error)
-{
-    if (error != QAbstractSocket::SocketTimeoutError){
-
-    }
-}
 
 #include <QRegularExpression>
 // 从带单位字符串中提取纯数值（支持负数、小数）
@@ -175,8 +59,281 @@ QMap<QString, QPair<double, double>> parseKeyValuePairsWithDefault(const QString
     return parsedData;
 }
 
-#include <bitset>
-#include <QtEndian>
+
+UdpDataProcessor::UdpDataProcessor(QObject *parent)
+    : QObject(parent)
+{
+    for (int cardIndex = 1; cardIndex <= 18; ++cardIndex){
+        mMapChannel[cardIndex] = false;
+    }
+}
+
+void UdpDataProcessor::enqueueDatagram(const QByteArray &gram)
+{
+    QMutexLocker locker(&m_queueMutex);
+    m_pendingQueue.append(gram);
+    // 唤醒正在等待的后台线程
+    m_waitCondition.wakeOne();
+}
+
+void UdpDataProcessor::stop()
+{
+    QMutexLocker locker(&m_queueMutex);
+    m_isRunning = false;
+    m_waitCondition.wakeAll();
+}
+
+void UdpDataProcessor::processLoop()
+{
+    m_isRunning = true;
+    QByteArray currentGram;
+    while (m_isRunning) {
+        // 临界区：安全取出队列里的报文
+        {
+            QMutexLocker locker(&m_queueMutex);
+            if (m_pendingQueue.isEmpty()) {
+                // 队列为空时线程进入休眠，等待新报文到来唤醒
+                m_waitCondition.wait(&m_queueMutex);
+            }
+            // 被唤醒后确认队列非空且线程仍在运行，取出队首报文
+            if (!m_pendingQueue.isEmpty() && m_isRunning) {
+                currentGram.append(m_pendingQueue);
+            }
+        }
+
+        // 完全释放锁之后再执行耗时操作，避免阻塞主线程入队
+        if (!currentGram.isEmpty()) {
+            while (currentGram.contains('@') && currentGram.contains('#')){
+                quint32 start = currentGram.indexOf('@');
+                quint32 end = currentGram.indexOf('#', start);
+                quint32 start2 = currentGram.indexOf('@', start + 1);
+                if (start2 < end)
+                    start = start2;
+                QByteArray rawData = currentGram.mid(start, end - start + 1);
+                currentGram.remove(0, end + 1);
+                quint8 moduleNo = rawData.mid(1, 2).toInt();
+                /*
+                    @01*999*GETR*01*
+                    PSD1_48V=46.60V,2.41mA
+                    PSD1_29V=29.29V,0.03mA
+                    PSD1-AMP=46.56V,12.04mA
+                    PSD2_48V=46.61V,2.68mA
+                    PSD2_29V=29.39V,0.03mA
+                    PSD2-AMP=46.55V,11.74mA
+                    LSD_48V=46.59V,2.36mA
+                    LSD_29V=29.17V,0.03mA
+                    LSD-AMP=46.56V,11.95mA
+                    LBD_48V=46.60V,3.46mA
+                    LBD_29V=29.41V,0.03mA
+                    LBD-AMP=46.56V,11.75mA
+                    PSD1=16.81
+                    LBD=16.63
+                    PSD2=16.63
+                    LSD=16.63
+                    #
+
+                    @01*999*GETR*01*
+                    -----Voltage &Current Data-----
+                    IHA238_01 = 0.00V, 0.00mA
+                    IHA238_02 = 0.00V, 0.00mA
+                    IHA238_03 = 0.00V, 0.00mA
+                    IHA238_04 = 0.00V, 0.00mA
+                    IHA238_05 = 0.00V. 0.00mA
+                    IHA238_06 = 0.00V, 0.00mA
+                    IHA238_07 = 0.00V, 0.00mA
+                    IHA238_08 = 0.00V, 0.00mA
+                    IHA238_09 = 0.00V, 0.00mA
+                    IHA238_10 = 0.00V, 0.00mA
+                    IHA238_11 = 0.00V, 0.00mA
+                    IHA238_12 = 0.00V, 0.00mA
+
+                    -----Temperature ata-----
+                    DS18B20_01 = 0.00°C
+                    DS18B20_02 = 0.00°C
+                    DS18B20_03 = 0.00°C
+                    DS18B20_04 = 0.00°C
+
+                    -----Device Info-----
+                    UTD = 0x3938353834315100002F0017
+                    FeSoftV=Unknown
+                    FeHardy=Unknown
+                    FeAddr =
+
+                    @01*TIMEOUT@02*TIMEOUT@03*TIMEOUT@04*TIMEOUT@05*TIMEOUT@06*TIMEOUT@07*TIMEOUT@08*TIMEOUT@09*TIMEOUT@10*TIMEOUT@11*TIMEOUT@12*TIMEOUT@13*TIMEOUT@14*TIMEOUT@15*TIMEOUT@16*TIMEOUT@17*TIMEOUT@18*TIMEOUT@19*999*GETR*01*
+                    INA226_01 (0x40) = 12.71V, 399.76mA
+                    INA226_02 (0x45) = 5.09V, 213.17mA
+                    IO_BIN = 5A 00 00 01
+                    #
+                    @22*999*GETR*01*
+                    01 = 0.11V, 0.00A
+                    02 = 0.05V, 0.00A
+                    #
+                    @22*999*GETR*01*
+                    01 = 48.08V, 0.00A
+                    02 = 48.05V, 1.05A
+                    #
+                */
+
+                rawData.replace('\n', ',');
+                QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(rawData);
+                emit temperatureAndVoltageChanged(moduleNo, std::move(result));
+
+                if (result.contains("IO_BIN")){ // 对应的moduleNo==19
+                    std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
+                    for (int i=0; i<18; ++i){
+                        if (mMapChannel[i+1] != bits.test(i))
+                        {
+                            mMapChannel[i+1] = bits.test(i);
+                            emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+CommHelper::CommHelper(QObject *parent)
+    : QObject{parent}
+{
+    /*初始化网络*/
+    initSocket();
+
+    // mRequestCmdThread = new QLiteThread(this);
+    // mRequestCmdThread->setObjectName("mRequestCmdThread");
+    // mRequestCmdThread->setWorkThreadProc([=](){
+    //     while (!mRequestCmdThread->isInterruptionRequested())
+    //     {
+    //         if (mTcpClient->isOpen()){
+    //             //发送查询指令
+    //             //@01*999*GET*01*#
+    //             for (int i=1; i<=18; ++i){
+    //                 QString askCommand = QString("@%1*999*GET*01*#").arg(i, 2, 10, QLatin1Char('0'));
+    //                 mTcpClient->write(askCommand.toLatin1());
+    //                 mTcpClient->waitForBytesWritten();
+
+    //                 QThread::msleep(500);
+    //             }
+    //         }
+
+    //         QThread::msleep(1000);
+    //     }
+    // });
+    // mRequestCmdThread->start();
+    // connect(this, &CommHelper::destroyed, [=]() {
+    //     mRequestCmdThread->exit(0);
+    //     mRequestCmdThread->wait(500);
+    // });
+
+    // 2. 初始化后台处理线程
+    m_workThread = new QThread(this);
+    mUdpPerformanceDataProcessor = new UdpDataProcessor;
+    mUdpPerformanceDataProcessor->moveToThread(m_workThread);
+
+    // 绑定线程启动信号到处理循环槽
+    connect(m_workThread, &QThread::started, mUdpPerformanceDataProcessor, &UdpDataProcessor::processLoop);
+    // 处理完成结果回调主线程更新UI
+    connect(mUdpPerformanceDataProcessor, &UdpDataProcessor::backupChannelStatusChanged, this, &CommHelper::backupChannelStatusChanged);
+    connect(mUdpPerformanceDataProcessor, &UdpDataProcessor::temperatureAndVoltageChanged, this, &CommHelper::temperatureAndVoltageChanged);
+    // 窗口关闭时安全退出线程
+    connect(this, &CommHelper::destroyed, mUdpPerformanceDataProcessor, &UdpDataProcessor::stop);
+    connect(m_workThread, &QThread::finished, m_workThread, &QThread::deleteLater);
+
+    m_workThread->start();
+
+    for (int cardIndex = 1; cardIndex <= 18; ++cardIndex){
+        mMapPower[cardIndex] = true;
+        mMapVoltage[cardIndex] = true;
+        mMapChannel[cardIndex] = false;
+    }
+}
+
+CommHelper::~CommHelper()
+{
+    // mRequestCmdThread->requestInterruption();
+    // mRequestCmdThread->quit();
+    // mRequestCmdThread->wait();
+    // mRequestCmdThread->deleteLater();
+
+    this->disconnectServer();
+    mUdpPerformanceDataProcessor->stop();
+    m_workThread->quit();
+    m_workThread->wait();
+}
+
+void CommHelper::initSocket()
+{
+    // 初始化UDP
+    this->mUdpPerformanceMonitorReceiver = new QUdpSocket();
+    connect(mUdpPerformanceMonitorReceiver, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
+    mTimerout = new QTimer(this);
+    mTimerout->setSingleShot(true);
+    connect(mTimerout, &QTimer::timeout, this, [=](){
+        qCritical() << "设备连接失败";
+    });
+
+    //炮号接收器
+    this->mUdpShotReceiver = new QUdpSocket();
+    this->mUdpShotReceiver->setSocketOption(QAbstractSocket::MulticastLoopbackOption, true);
+    connect (mUdpShotReceiver, &QUdpSocket::readyRead, this, [=](){
+        while (mUdpShotReceiver->hasPendingDatagrams()) {
+            QByteArray datagram;
+            datagram.resize(int(mUdpShotReceiver->pendingDatagramSize()));
+            QHostAddress sender;
+            quint16 senderPort;
+            mUdpShotReceiver->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
+            //+PLS_12345
+
+            qInfo().noquote() << "接收广播消息：" << datagram;
+            if (datagram.startsWith("+PLS_")){
+                //解析炮号
+                QRegularExpression regex("\\d+");
+                QRegularExpressionMatchIterator iterator = regex.globalMatch(datagram);
+                if (iterator.hasNext()) {
+                    QRegularExpressionMatch match = iterator.next();
+                    QString shotNum = match.captured(0);
+                    emit shotnumValueChanged(shotNum);
+                }
+            }
+            else if (datagram.startsWith("TIME_")){
+                QRegularExpression regex("TIME_(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})\\.(\\d{3})");
+                if (!datagram.contains('.'))
+                    datagram.append(".000");
+                    //regex.setPattern("TIME_(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})");
+                QRegularExpressionMatchIterator iterator = regex.globalMatch(datagram);
+                if (iterator.hasNext()) {
+                    QRegularExpressionMatch match = iterator.next();
+                    // 提取各个时间组件
+                    QString year = match.captured(1);    // 年
+                    QString month = match.captured(2);   // 月
+                    QString day = match.captured(3);     // 日
+                    QString hour = match.captured(4);    // 时
+                    QString minute = match.captured(5);  // 分
+                    QString second = match.captured(6);  // 秒
+                    QString millisecond = match.captured(7); // 毫秒
+                    QDateTime tm(QDate(year.toUInt(),month.toUInt(),day.toUInt()),
+                                 QTime(hour.toUInt(),minute.toUInt(),second.toUInt(),millisecond.toUInt()));
+                    emit systemTimeValueChanged(tm);
+                }
+            }
+            else if (datagram.startsWith("EMERGENCE_STOP")){
+                emit energenceStopSignalTriggered();
+            }
+        }
+    });
+    if (this->mUdpShotReceiver->bind(QHostAddress::Any, 12100, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)){
+        this->mUdpShotReceiver->joinMulticastGroup(QHostAddress::LocalHost);
+    }
+}
+
+void CommHelper::error(QAbstractSocket::SocketError error)
+{
+    if (error != QAbstractSocket::SocketTimeoutError){
+
+    }
+}
+
 void CommHelper::readyRead()
 {
     QByteArray datagram;
@@ -199,6 +356,10 @@ void CommHelper::readyRead()
 
 void CommHelper::onReadyRead(QByteArray& tempData)
 {
+    qDebug() << "================================================================";
+    qDebug() << tempData;
+    qDebug() << "================================================================\n";
+
     if (tempData == "start"){
         if (mTimerout->isActive())
             mTimerout->stop();
@@ -230,10 +391,17 @@ void CommHelper::onReadyRead(QByteArray& tempData)
         return;
     }
 
+    // 直接把原始报文送入后台处理队列，主线程无任何阻塞
+    mUdpPerformanceDataProcessor->enqueueDatagram(tempData);
+    return;
+
     mRawData.append(tempData);
     while (mRawData.contains('@') && mRawData.contains('#')){
         quint32 start = mRawData.indexOf('@');
         quint32 end = mRawData.indexOf('#', start);
+        quint32 start2 = mRawData.indexOf('@', start + 1);
+        if (start2 < end)
+            start = start2;
         QByteArray rawData = mRawData.mid(start, end - start + 1);
         mRawData.remove(0, end + 1);
         quint8 moduleNo = rawData.mid(1, 2).toInt();
@@ -302,9 +470,9 @@ void CommHelper::onReadyRead(QByteArray& tempData)
         {
             rawData.replace('\n', ',');
             QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(rawData);
-            emit temperatureAndVoltageChanged(moduleNo, result);
+            emit temperatureAndVoltageChanged(moduleNo, std::move(result));
 
-            if (result.contains("IO_BIN")){
+            if (result.contains("IO_BIN")){ // 对应的moduleNo==19
                 std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
                 for (int i=0; i<18; ++i){
                     if (mMapChannel[i+1] != bits.test(i))
@@ -408,7 +576,7 @@ void CommHelper::disconnectServer()
     quint32 port = AppConfig::instance().remotePort();
 
     QByteArray datagram("stop");
-    if (mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port) <= 0){
+    if (mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port) > 0){
         emit disconnected();
 
         mUdpPerformanceMonitorReceiver->close();
@@ -433,7 +601,7 @@ bool CommHelper::switchVoltage(quint32 channel, bool on)
 
 bool CommHelper::openAllPower()
 {
-    qInfo().noquote() << "打开电源";
+    //qInfo().noquote() << "打开电源";
 
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();
@@ -443,7 +611,7 @@ bool CommHelper::openAllPower()
 
 bool CommHelper::closeAllPower()
 {
-    qInfo().noquote() << "关闭电源";
+    //qInfo().noquote() << "关闭电源";
 
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();

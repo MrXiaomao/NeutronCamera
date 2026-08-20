@@ -651,12 +651,16 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
         );
 
     ui->comboBox_h5Files->clear();
+    ui->comboBox_h5Files_2->clear();
     for (auto item : fileinfoList){
         ui->comboBox_h5Files->addItem(item.baseName());
+        ui->comboBox_h5Files_2->addItem(item.baseName());
     }
 
-    if (ui->comboBox_h5Files->count() > 0)
+    if (ui->comboBox_h5Files->count() > 0){
         emit ui->comboBox_h5Files->currentIndexChanged(0);
+        emit ui->comboBox_h5Files_2->currentIndexChanged(0);
+    }
 
     if (fileinfoList.size() == 0)
         emit writeLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
@@ -950,6 +954,10 @@ void OfflineWindow::initWaveformPage()
     mGraphisColor.push_back(QColor::fromRgb(232,88,39));
 
     QCustomPlot *customPlotHor = new QCustomPlot(this);
+    customPlotHor->setNotAntialiasedElements(QCP::aeAll); // 全关抗锯齿
+    customPlotHor->setNoAntialiasingOnDrag(true);// 开启拖拽自动关抗锯齿
+    customPlotHor->setOpenGl(true);
+    customPlotHor->setPlottingHints(QCP::phFastPolylines | QCP::phImmediateRefresh | QCP::phCacheLabels);// 组合三个高性能标记，最大化缩放流畅度
     //customPlotHor->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
     QCustomPlotHelper* customPlotHelperHor = new QCustomPlotHelper(customPlotHor, this);
     {
@@ -958,6 +966,7 @@ void OfflineWindow::initWaveformPage()
         customPlotHor->yAxis->setRange(QCPRange(0, 16000));
         customPlotHor->setNoAntialiasingOnDrag(false);
         QCPGraph *graph = customPlotHor->addGraph();
+        graph->setAdaptiveSampling(true);
         graph->setLineStyle(QCPGraph::lsLine);
         graph->setName(QStringLiteral("水平相机"));
         graph->setPen(QPen(mGraphisColor[0], 2, Qt::PenStyle::SolidLine));
@@ -966,6 +975,10 @@ void OfflineWindow::initWaveformPage()
     }
 
     QCustomPlot *customPlotVer = new QCustomPlot(this);
+    customPlotVer->setNotAntialiasedElements(QCP::aeAll); // 全关抗锯齿
+    customPlotVer->setNoAntialiasingOnDrag(true);
+    customPlotVer->setOpenGl(true);
+    customPlotVer->setPlottingHints(QCP::phFastPolylines | QCP::phImmediateRefresh | QCP::phCacheLabels);// 组合三个高性能标记，最大化缩放流畅度
     //customPlotVer->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
     QCustomPlotHelper* customPlotHelperVer = new QCustomPlotHelper(customPlotVer, this);
     {
@@ -974,6 +987,7 @@ void OfflineWindow::initWaveformPage()
         customPlotVer->yAxis->setRange(QCPRange(0, 16000));
         customPlotVer->setNoAntialiasingOnDrag(false);
         QCPGraph *graph = customPlotVer->addGraph();
+        graph->setAdaptiveSampling(true);
         graph->setLineStyle(QCPGraph::lsLine);
         graph->setName(QStringLiteral("垂直相机"));
         graph->setPen(QPen(mGraphisColor[11], 2, Qt::PenStyle::DashLine));
@@ -1864,13 +1878,27 @@ void OfflineWindow::on_comboBox_h5Files_currentTextChanged(const QString &arg1)
     }
 }
 
+void OfflineWindow::on_comboBox_h5Files_2_currentTextChanged(const QString &arg1)
+{
+    QString filePath = mFileDir + "/" + arg1 + ".h5";
+    quint32 packerStartTime, packerEndTime, threshold;
+    if (QFileInfo(filePath).exists() && DataAnalysisWorker::readWaveformHeadFromHDF5(filePath, packerStartTime, packerEndTime, threshold))
+    {
+        ui->line_measure_startT_4->setText(QString::number(packerStartTime));
+        ui->line_measure_endT_4->setText(QString::number(packerEndTime));
+        ui->spinBox_threshold_5->setValue(threshold);
+
+        ui->spinBox_startT_4->setValue(packerStartTime);
+        ui->spinBox_endT_4->setValue(packerEndTime);
+    }
+}
 
 void OfflineWindow::on_action_waveform_triggered()
 {
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_waveform);
     ui->optionStackedWidget->setCurrentWidget(ui->page_waveform);
     ui->page_waveform->layout()->addWidget(ui->logWidget);
-    ui->action_save->setVisible(false);
+    //ui->action_save->setVisible(false);
 }
 
 
@@ -1879,7 +1907,7 @@ void OfflineWindow::on_action_process_triggered()
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_process);
     ui->optionStackedWidget->setCurrentWidget(ui->page_process);
     ui->page_process->layout()->addWidget(ui->logWidget);
-    ui->action_save->setVisible(false);
+    //ui->action_save->setVisible(false);
 }
 
 void OfflineWindow::on_action_ngamma_triggered()
@@ -1887,7 +1915,7 @@ void OfflineWindow::on_action_ngamma_triggered()
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_ngamma);
     ui->optionStackedWidget->setCurrentWidget(ui->page_ngamma);
     ui->page_ngamma->layout()->addWidget(ui->logWidget);
-    ui->action_save->setVisible(true);
+    //ui->action_save->setVisible(true);
 }
 
 void OfflineWindow::on_action_cps_triggered()
@@ -1895,7 +1923,7 @@ void OfflineWindow::on_action_cps_triggered()
     ui->centralStackedWidget->setCurrentWidget(ui->pageInfoWidget_cps);
     ui->optionStackedWidget->setCurrentWidget(ui->page_cps);
     ui->page_cps->layout()->addWidget(ui->logWidget);
-    ui->action_save->setVisible(true);
+    //ui->action_save->setVisible(true);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1942,7 +1970,7 @@ void OfflineWindow::onWaveform()
                 onWaveformPlot(horCameraIndex, mapPair);
                 if (!ui->checkBox_ver->isChecked()){
                     QMetaObject::invokeMethod(this, [=](){
-                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedRefresh);
+                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
                         mWaitingSpinnerWidget->stop();
                     }, Qt::QueuedConnection);
                 }
@@ -1958,9 +1986,9 @@ void OfflineWindow::onWaveform()
 
                 onWaveformPlot(verCameraIndex, mapPair);
                 QMetaObject::invokeMethod(this, [=](){
-                    mWaveformVerPlot->replot(QCustomPlot::rpQueuedRefresh);
+                    mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
                     if (ui->checkBox_hor->isChecked())
-                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedRefresh);
+                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
                     mWaitingSpinnerWidget->stop();
                 }, Qt::QueuedConnection);
 
@@ -2190,10 +2218,13 @@ void OfflineWindow::onAnalysisFinished(bool success, const QString& message)
         );
 
     ui->comboBox_h5Files->clear();
+    ui->comboBox_h5Files_2->clear();
     for (auto item : fileinfoList){
         ui->comboBox_h5Files->addItem(item.baseName());
+        ui->comboBox_h5Files_2->addItem(item.baseName());
     }
     emit ui->comboBox_h5Files->currentIndexChanged(0);
+    emit ui->comboBox_h5Files_2->currentIndexChanged(0);
 }
 
 void OfflineWindow::onAnalysisError(const QString& error)
@@ -2278,7 +2309,7 @@ void OfflineWindow::onNGammaFilter()
         consumerWall.start();                 // ✅ 消费者阶段开始（墙钟）
 
         // 直接从H5文件种获取波形数据
-        QString h5FilePath = mFileDir + "/waveform_data.h5";
+        QString h5FilePath = mFileDir + "/" + ui->comboBox_h5Files_2->currentText() + ".h5";// "/waveform_data.h5";
         if (QFile::exists(h5FilePath))
         {
             mPCIeCommSdk.takeWaveformData(cameraIndex, h5FilePath, ch_all_valid_wave);
@@ -2619,7 +2650,7 @@ void OfflineWindow::onCpsStatistics(int minPeak, int maxPeak)
 
     std::thread producer([=]{
         // 查找目录下的h5文件
-	    QString h5FilePath = mFileDir + "/waveform_data.h5";
+        QString h5FilePath = mFileDir + "/" + ui->comboBox_h5Files->currentText() + ".h5";// "/waveform_data.h5";
 	    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPairs;
 	    QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPairs;
 	    if (QFileInfo::exists(h5FilePath) &&
@@ -2837,4 +2868,3 @@ void OfflineWindow::on_action_dataUpload_triggered()
     hdaClient.disconnect();
     // QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("数据上传完毕，本次上传记录数共%1条！").arg(recordCount));
 }
-

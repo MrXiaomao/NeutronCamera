@@ -13,6 +13,33 @@
 #include <QEventLoop>
 #include "qlitethread.h"
 
+class UdpDataProcessor : public QObject
+{
+    Q_OBJECT
+public:
+    explicit UdpDataProcessor(QObject *parent = nullptr);
+    // 主线程调用：往工作队列里放入新报文
+    void enqueueDatagram(const QByteArray &gram);
+    // 停止后台处理线程
+    void stop();
+
+signals:
+    // 处理完成后发回主线程的轻量化结果，仅用于UI更新
+    Q_SIGNAL void backupChannelStatusChanged(quint32, bool);
+    Q_SIGNAL void temperatureAndVoltageChanged(quint8, const QMap<QString, QPair<double, double>>&);
+
+public slots:
+    // 后台线程主循环
+    void processLoop();
+
+private:
+    QByteArray m_pendingQueue;
+    QMutex m_queueMutex;
+    QWaitCondition m_waitCondition;
+    bool m_isRunning = false;
+    QMap<quint32, bool> mMapChannel;//选通开关,false-1#,true-2#
+};
+
 class CommHelper : public QObject
 {
     Q_OBJECT
@@ -51,7 +78,7 @@ public:
 
     Q_SIGNAL void temperatureChanged(quint8, QVector<float>&);
     Q_SIGNAL void voltageAndCurrentChanged(quint8, QVector<QPair<float,float>>&);
-    Q_SIGNAL void temperatureAndVoltageChanged(quint8, QMap<QString, QPair<double, double>>&);
+    Q_SIGNAL void temperatureAndVoltageChanged(quint8, const QMap<QString, QPair<double, double>>&);
     Q_SIGNAL void shotnumValueChanged(const QString&);
     Q_SIGNAL void systemTimeValueChanged(const QDateTime&);
     Q_SIGNAL void energenceStopSignalTriggered();
@@ -69,6 +96,10 @@ private:
     QTimer* mTimerout;// 网络连接超时
     QLiteThread* mRequestCmdThread = nullptr;
     QByteArray mRawData;
+
+    // 性能监测数据处理线程
+    QThread *m_workThread;
+    UdpDataProcessor* mUdpPerformanceDataProcessor;
 
     QMap<quint32, bool> mMapPower;//探测器的1#电源开关
     QMap<quint32, bool> mMapVoltage;//探测器的1#电压开关

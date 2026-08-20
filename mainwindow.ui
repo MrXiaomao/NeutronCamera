@@ -1037,6 +1037,9 @@
                     <verstretch>0</verstretch>
                    </sizepolicy>
                   </property>
+                  <property name="toolTip">
+                   <string>  </string>
+                  </property>
                   <property name="minimum">
                    <number>40</number>
                   </property>
@@ -1897,10 +1900,13 @@
     <bool>true</bool>
    </property>
    <property name="checked">
-    <bool>true</bool>
+    <bool>false</bool>
    </property>
    <property name="text">
     <string>测试模式</string>
+   </property>
+   <property name="toolTip">
+    <string>测试模式，测量数据不存盘</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

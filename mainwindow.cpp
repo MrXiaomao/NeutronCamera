@@ -150,6 +150,11 @@ MainWindow::~MainWindow()
 
 void MainWindow::initUi()
 {
+    ui->label->setVisible(false);
+    ui->spinBox_intervalSeconds->setVisible(false);
+    ui->pushButton->setVisible(false);
+    ui->pushButton_2->setVisible(false);
+
     if (!isRunAsAdmin()){
         //ui->action_deviceManager->setEnabled(false);
         ui->action_deviceManager->setToolTip(QStringLiteral("非管理员身份禁止使用设备管理器！"));
@@ -422,7 +427,7 @@ void MainWindow::initUi()
     label_Idle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     label_Idle->setFixedWidth(300);
     label_Idle->setText(tr("准备就绪"));
-    connect(ui->statusbar,&QStatusBar::messageChanged,this,[&](const QString &message){
+    connect(ui->statusbar,&QStatusBar::messageChanged,this,[=](const QString &message){
         label_Idle->setText(message);
     });
 
@@ -438,6 +443,9 @@ void MainWindow::initUi()
     label_alarm->setObjectName("label_alarm");
     label_alarm->setFixedSize(QSize(24, 24));
     label_alarm->setPixmap(QPixmap(":/resource/image/tip.png").scaled(24, 24));
+    label_alarm->installEventFilter(this);
+    label_alarm->setToolTip(tr("单击取消报警提示"));
+    label_alarm->setCursor(Qt::CursorShape::PointingHandCursor);
 
     ui->statusbar->addWidget(new QLabel(ui->statusbar), 1);
     ui->statusbar->addWidget(nullptr, 1);
@@ -467,13 +475,13 @@ void MainWindow::initUi()
             //监测温度和电压报警状态
             static quint32 ref = 0;
             ref = (ref==0) ? 1 : 0;
-            if (mIsAlarm[0] || mIsAlarm[1]){
+            if (mIsAlarm){
                 if (ref == 0){
                     QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0xff,0x00,0x00,0xff));
                     this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
                 }
                 else {
-                    QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0xff,0x00,0x00,0x00));
+                    QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/tip.png"), QSize(24, 24), QColor::fromRgb(0x7c,0xfc,0x00,0xff));
                     this->findChild<QLabel*>("label_alarm")->setPixmap(pixmap);
                 }
             }
@@ -749,16 +757,54 @@ void MainWindow::initUi()
         //     mCommHelper->switchPower(row + 1, false);
         //     mCommHelper->switchVoltage(row + 1, false);
         // }
-        mCommHelper->closeAllPower();
+        if (mCommHelper->closeAllPower()){
+            ui->detectorControlWidget->setEnabled(false);
+            mVoltageSwitcherOpened = false;
+            ui->statusbar->showMessage(tr("48V电压开关处于关闭状态"));
+            qInfo().noquote().nospace() << tr("48V电压已关闭");
+        }
+
+        // 停止测量
+        emit ui->action_stopMeasure->trigger();
+
+        // 断开设备连接
+        mCommHelper->disconnectServer();
 
         // 记录指令
         recordExternalCommand(QStringLiteral("紧急停机"));
     });
 
-    connect(mCommHelper, &CommHelper::temperatureAndVoltageChanged, this, [=](quint8 moduleNo, QMap<QString, QPair<double, double>>& pairs){
+    connect(mCommHelper, &CommHelper::temperatureAndVoltageChanged, this, [=](quint8 moduleNo, const QMap<QString, QPair<double, double>>& pairs){
+        // 全局统一比较容差
+        static const double VOLTAGE_EPS = 1.0;
+
         if (moduleNo < 1 || moduleNo > 18)
         {
+            if (moduleNo == 19){ // 选通
 
+            }
+            else if (moduleNo == 20){ // 48V总开关
+
+                // 48V总电压
+                if ( qAbs(pairs["01"].first-48.0)<=VOLTAGE_EPS && qAbs(pairs["02"].first-48.0)<=VOLTAGE_EPS){
+                    // 电压开启 准备就绪
+                    if (!mVoltageSwitcherOpened){
+                        ui->detectorControlWidget->setEnabled(true);
+                        mVoltageSwitcherOpened = true;
+                        ui->statusbar->showMessage(tr("48V电压开关处于开启状态"));
+                        qInfo().noquote().nospace() << tr("48V电压已开启");
+                    }
+                }
+                else if (qAbs(pairs["01"].first)<=VOLTAGE_EPS && qAbs(pairs["02"].first)<=VOLTAGE_EPS){
+                    // 电压关闭
+                    if (mVoltageSwitcherOpened){
+                        ui->detectorControlWidget->setEnabled(false);
+                        mVoltageSwitcherOpened = false;
+                        ui->statusbar->showMessage(tr("48V电压开关处于关闭状态"));
+                        qInfo().noquote().nospace() << tr("48V电压已关闭");
+                    }
+                }
+            }
         }
         else
         {
@@ -768,55 +814,80 @@ void MainWindow::initUi()
             ui->tableWidget_status->blockSignals(true); // 暂停itemChanged等信号发射
 
             //温度
-            ui->tableWidget_status->item(0, moduleNo+1)->setText(QString::number(pairs["PSD1"].first, 'f', 2));
-            ui->tableWidget_status->item(1, moduleNo+1)->setText(QString::number(pairs["PSD2"].first, 'f', 2));
-            ui->tableWidget_status->item(2, moduleNo+1)->setText(QString::number(pairs["LBD"].first, 'f', 2));
-            ui->tableWidget_status->item(3, moduleNo+1)->setText(QString::number(pairs["LSD"].first, 'f', 2));
+            // 可以把这个工具函数放到全局工具类或者当前类的private区域
+            auto updateTableItemIfNeed = [=](QTableWidget* table, int row, int col, double newValue, double eps)
+            {
+                // 先安全获取原有item，避免空指针崩溃
+                QTableWidgetItem* item = table->item(row, col);
+                if (!item) return;
+
+                // 只有新旧值的绝对差超过容差时才执行更新
+                if (qAbs(item->text().toFloat() - newValue) > eps)
+                {
+                    item->setText(QString::number(newValue, 'f', 2));
+                }
+            };
+
+            //温度
+            updateTableItemIfNeed(ui->tableWidget_status, 0, moduleNo+1, pairs["PSD1"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 1, moduleNo+1, pairs["PSD2"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 2, moduleNo+1, pairs["LBD"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 3, moduleNo+1, pairs["LSD"].first, VOLTAGE_EPS);
             //29V电压
-            ui->tableWidget_status->item(4, moduleNo+1)->setText(QString::number(pairs["PSD1_29V"].first, 'f', 2));
-            ui->tableWidget_status->item(5, moduleNo+1)->setText(QString::number(pairs["PSD2_29V"].first, 'f', 2));
-            ui->tableWidget_status->item(6, moduleNo+1)->setText(QString::number(pairs["LBD_29V"].first, 'f', 2));
-            ui->tableWidget_status->item(7, moduleNo+1)->setText(QString::number(pairs["LSD_29V"].first, 'f', 2));
+            updateTableItemIfNeed(ui->tableWidget_status, 4, moduleNo+1, pairs["PSD1_29V"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 5, moduleNo+1, pairs["PSD2_29V"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 6, moduleNo+1, pairs["LBD_29V"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 7, moduleNo+1, pairs["LSD_29V"].first, VOLTAGE_EPS);
             //29V电流
-            ui->tableWidget_status->item(8, moduleNo+1)->setText(QString::number(pairs["PSD1_29V"].second, 'f', 2));
-            ui->tableWidget_status->item(9, moduleNo+1)->setText(QString::number(pairs["PSD2_29V"].second, 'f', 2));
-            ui->tableWidget_status->item(10, moduleNo+1)->setText(QString::number(pairs["LBD_29V"].second, 'f', 2));
-            ui->tableWidget_status->item(11, moduleNo+1)->setText(QString::number(pairs["LSD_29V"].second, 'f', 2));
+            updateTableItemIfNeed(ui->tableWidget_status, 8, moduleNo+1, pairs["PSD1_29V"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 9, moduleNo+1, pairs["PSD2_29V"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 10, moduleNo+1, pairs["LBD_29V"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 11, moduleNo+1, pairs["LSD_29V"].first, VOLTAGE_EPS);
             //48V电压
-            ui->tableWidget_status->item(12, moduleNo+1)->setText(QString::number(pairs["PSD1_48V"].first, 'f', 2));
-            ui->tableWidget_status->item(13, moduleNo+1)->setText(QString::number(pairs["PSD2_48V"].first, 'f', 2));
-            ui->tableWidget_status->item(14, moduleNo+1)->setText(QString::number(pairs["LBD_48V"].first, 'f', 2));
-            ui->tableWidget_status->item(15, moduleNo+1)->setText(QString::number(pairs["LSD_48V"].first, 'f', 2));
+            updateTableItemIfNeed(ui->tableWidget_status, 12, moduleNo+1, pairs["PSD1_48"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 13, moduleNo+1, pairs["PSD2_48"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 14, moduleNo+1, pairs["LBD_48V"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 15, moduleNo+1, pairs["LSD_48V"].first, VOLTAGE_EPS);
             //48V电流
-            ui->tableWidget_status->item(16, moduleNo+1)->setText(QString::number(pairs["PSD1_48V"].second, 'f', 2));
-            ui->tableWidget_status->item(17, moduleNo+1)->setText(QString::number(pairs["PSD2_48V"].second, 'f', 2));
-            ui->tableWidget_status->item(18, moduleNo+1)->setText(QString::number(pairs["LBD_48V"].second, 'f', 2));
-            ui->tableWidget_status->item(19, moduleNo+1)->setText(QString::number(pairs["LSD_48V"].second, 'f', 2));
+            updateTableItemIfNeed(ui->tableWidget_status, 16, moduleNo+1, pairs["PSD1_48"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 17, moduleNo+1, pairs["PSD2_48"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 18, moduleNo+1, pairs["LBD_48V"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 19, moduleNo+1, pairs["LSD_48V"].first, VOLTAGE_EPS);
             //运放板电压
-            ui->tableWidget_status->item(20, moduleNo+1)->setText(QString::number(pairs["PSD1-AMP"].first, 'f', 2));
-            ui->tableWidget_status->item(21, moduleNo+1)->setText(QString::number(pairs["PSD2-AMP"].first, 'f', 2));
-            ui->tableWidget_status->item(22, moduleNo+1)->setText(QString::number(pairs["LBD-AMP"].first, 'f', 2));
-            ui->tableWidget_status->item(23, moduleNo+1)->setText(QString::number(pairs["LSD-AMP"].first, 'f', 2));
+            updateTableItemIfNeed(ui->tableWidget_status, 20, moduleNo+1, pairs["PSD1-AMP"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 21, moduleNo+1, pairs["PSD2-AMP"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 22, moduleNo+1, pairs["LBD-AMP"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 23, moduleNo+1, pairs["LSD-AMP"].first, VOLTAGE_EPS);
             //运放板电流
-            ui->tableWidget_status->item(24, moduleNo+1)->setText(QString::number(pairs["PSD1-AMP"].second, 'f', 2));
-            ui->tableWidget_status->item(25, moduleNo+1)->setText(QString::number(pairs["PSD2-AMP"].second, 'f', 2));
-            ui->tableWidget_status->item(26, moduleNo+1)->setText(QString::number(pairs["LBD-AMP"].second, 'f', 2));
-            ui->tableWidget_status->item(27, moduleNo+1)->setText(QString::number(pairs["LSD-AMP"].second, 'f', 2));
+            updateTableItemIfNeed(ui->tableWidget_status, 24, moduleNo+1, pairs["PSD1-AMP"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 25, moduleNo+1, pairs["PSD2-AMP"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 26, moduleNo+1, pairs["LBD-AMP"].first, VOLTAGE_EPS);
+            updateTableItemIfNeed(ui->tableWidget_status, 27, moduleNo+1, pairs["LSD-AMP"].first, VOLTAGE_EPS);
 
             //温度设成10~50℃
             auto checkValueValid = [=](quint8 row, float v, float v1, float v2, QString errMsg){
+                if (qFuzzyCompare(v, (float)-0.06))//-0.06是个特殊数字，排除掉
+                    return ;
+
                 quint8 column = moduleNo + 1;
                 if (v > v2 || v < v1){
-                    ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
-                    qCritical().noquote() << "模组#" << moduleNo << errMsg << QString::number(v, 'f', 2);
+                    int errCount = ui->tableWidget_status->item(row, column)->data(Qt::UserRole+1).value<int>();
+                    if (errCount > 10){ // 数据连续出现异常超过10次，才会认为是出现了异常
+                        if (ui->tableWidget_status->item(row, column)->textColor() != Qt::red){
+                            ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+                            qCritical().noquote().nospace() << "模组#" << moduleNo << " " << errMsg << QString::number(v, 'f', 2);
 
-                    mCommHelper->switchPower(moduleNo, false);
-                    mCommHelper->switchVoltage(moduleNo, false);
-                    mCommHelper->switchBackupPower(moduleNo, true);
-                    mCommHelper->switchBackupVoltage(moduleNo, true);
-                    mCommHelper->switchBackupChannel(moduleNo, true);
+                            //mCommHelper->switchPower(moduleNo, false);
+                            //mCommHelper->switchVoltage(moduleNo, false);
+                            //mCommHelper->switchBackupPower(moduleNo, true);
+                            //mCommHelper->switchBackupVoltage(moduleNo, true);
+                            //mCommHelper->switchBackupChannel(moduleNo, true);
+                            mIsAlarm.store(true);
+                        }
+                    }
                 }
                 else{
+                    ui->tableWidget_status->item(row, column)->setData(Qt::UserRole+1, QVariant::fromValue<int>(0));
                     ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
                 }
             };
@@ -838,7 +909,7 @@ void MainWindow::initUi()
                 checkValueValid(25, pairs["PSD2-AMP"].second, 0, 20, tr("PSD2运放板电流异常，值："));
             }
 
-            if (ui->action_typeLBD->isChecked()){
+            else if (ui->action_typeLBD->isChecked()){
                 checkValueValid(2, pairs["LBD"].first, 10, 50, tr("LBD温度异常，值："));
                 checkValueValid(6, pairs["LBD_29V"].first, 28, 30, tr("LBD_29V电压异常，值："));
                 checkValueValid(10, pairs["LBD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
@@ -848,7 +919,7 @@ void MainWindow::initUi()
                 checkValueValid(26, pairs["LBD-AMP"].second, 0, 20, tr("LBD运放板电流异常，值："));
             }
 
-            if (ui->action_typeLSD->isChecked()){
+            else if (ui->action_typeLSD->isChecked()){
                 checkValueValid(3, pairs["LSD"].first, 10, 50, tr("LSD温度异常，值："));
                 checkValueValid(7, pairs["LSD_29V"].first, 28, 30, tr("LSD_29V电压异常，值："));
                 checkValueValid(11, pairs["LSD_29V"].second, 0, 20, tr("LBD_29V电流异常，值："));
@@ -1263,12 +1334,19 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event){
                     foreach (QAction* action, list) delete action;
                 }                                
             }
+            else if (watched->inherits("QLabel")){
+                QLabel* label = qobject_cast<QLabel*>(watched);
+                if (label->objectName() == "label_alarm"){
+                    mIsAlarm = false;
+                }
+            }
         }
 
         else if (event->type() == QEvent::MouseButtonDblClick){
 
         }
     }
+
     if(event->type() == QEvent::StatusTip) {
         QStatusTipEvent* statusTipEvent = static_cast<QStatusTipEvent *>(event);
         if (!statusTipEvent->tip().isEmpty()) {
@@ -1385,7 +1463,7 @@ void MainWindow::on_action_startMeasure_triggered()
         mExternalSignalTriggered = false;
         ui->lineEdit_triggerflag->setText(QStringLiteral("等待触发"));
         ui->action_startMeasure->setEnabled(false);
-        ui->action_stopMeasure->setEnabled(false);
+        ui->action_stopMeasure->setEnabled(true);
         ui->lineEdit_savePath->setEnabled(false);
         ui->spinBox_timeLength->setEnabled(false);
     }
@@ -1408,6 +1486,8 @@ void MainWindow::on_action_startMeasure_triggered()
 
         onStartMeasure();
     }
+
+    ui->spinBox_timeStop->setMaximum(ui->spinBox_timeLength->value());
 }
 
 
@@ -1421,9 +1501,8 @@ void MainWindow::on_action_stopMeasure_triggered()
     if (mIsMeasuring){
         mIsMeasuring = false;
         mPCIeCommSdk.stopAllCapture();
+        qInfo().noquote().nospace() << "手动停止测量";
     }
-
-    //mCommHelper->disconnectServer();
 
     ui->action_startMeasure->setEnabled(true);
     ui->action_stopMeasure->setEnabled(false);
@@ -1949,8 +2028,11 @@ void MainWindow::on_pushButton_preview_clicked()
                 QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
                 QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
         {
-            emit showNeutronSpectrum(horCameraIndex, pairSpectrumNeutron);
-            emit showGammaSpectrum(horCameraIndex, pairSpectrumGamma);
+            if (ui->action_typeLSD->isChecked() || ui->action_typePSD->isChecked())
+                emit showNeutronSpectrum(horCameraIndex, pairSpectrumNeutron);
+
+            if (ui->action_typeLSD->isChecked() || ui->action_typeLBD->isChecked())
+                emit showGammaSpectrum(horCameraIndex, pairSpectrumGamma);
             //onWaveformPlot(horCameraIndex, mapPair);
             // QMetaObject::invokeMethod(this, [=](){
             //      mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
@@ -1968,9 +2050,11 @@ void MainWindow::on_pushButton_preview_clicked()
                 QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
                 QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
         {
+            if (ui->action_typeLSD->isChecked() || ui->action_typePSD->isChecked())
+                emit showNeutronSpectrum(verCameraIndex, pairSpectrumNeutron);
 
-            emit showNeutronSpectrum(verCameraIndex, pairSpectrumNeutron);
-            emit showGammaSpectrum(verCameraIndex, pairSpectrumGamma);
+            if (ui->action_typeLSD->isChecked() || ui->action_typeLBD->isChecked())
+                emit showGammaSpectrum(verCameraIndex, pairSpectrumGamma);
             // QMetaObject::invokeMethod(this, [=](){
             //     mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
             //     mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);

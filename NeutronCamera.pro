@@ -165,6 +165,27 @@ unix:!macx:{
 
 
 ################################################################################################
+# 1. 启用Qt的OpenGL模块
+QT += opengl
+
+# 2. 定义QCustomPlot的OpenGL编译宏（核心开关）
+DEFINES += QCUSTOMPLOT_USE_OPENGL
+
+# 3. 链接系统OpenGL库（按平台适配）
+win32 {
+    LIBS += -lOpengl32  # Windows平台链接OpenGL32库
+}
+unix {
+    LIBS += -lGL        # Linux/macOS平台链接GL库
+}
+macx {
+    LIBS += -framework OpenGL  # macOS框架链接
+}
+
+# （仅Qt6需额外添加，非必须但推荐）
+greaterThan(QT_MAJOR_VERSION, 5): QT += openglwidgets
+
+################################################################################################
 # 引用第三方库文件
 include($$PWD/../3rdParty/log4qt/Include/log4qt.pri)
 include($$PWD/../3rdParty/resource/resource.pri)
