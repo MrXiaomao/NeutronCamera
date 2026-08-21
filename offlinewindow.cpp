@@ -953,10 +953,107 @@ void OfflineWindow::initWaveformPage()
     mGraphisColor.push_back(QColor::fromRgb(62,108,179));
     mGraphisColor.push_back(QColor::fromRgb(232,88,39));
 
+    if (1){
+        QCustomPlot *customPlot = new QCustomPlot(this);
+        customPlot->setNotAntialiasedElements(QCP::aeAll); // 全关抗锯齿
+        customPlot->setNoAntialiasingOnDrag(true);// 开启拖拽自动关抗锯齿
+        //customPlot->setOpenGl(true);
+        customPlot->setPlottingHints(QCP::phFastPolylines | QCP::phImmediateRefresh | QCP::phCacheLabels);// 组合三个高性能标记，最大化缩放流畅度
+        QCustomPlotHelper* customPlotHelperHor = new QCustomPlotHelper(customPlot, this);
+
+        QCPAxisRect *horCameraAxisRect = new QCPAxisRect(customPlot);
+        horCameraAxisRect->setObjectName("horCameraAxisRect");
+        {
+            horCameraAxisRect->setupFullAxesBox();
+            horCameraAxisRect->setMinimumMargins(QMargins(0,0,0,0));
+            horCameraAxisRect->setMargins(QMargins(0,0,0,0));
+            horCameraAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
+            horCameraAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 1000000);
+            horCameraAxisRect->axis(QCPAxis::AxisType::atBottom)->setTickLabelRotation(-45);
+            horCameraAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 16000);
+
+            // 右上角添加图例
+            QCPLegend *legend = new QCPLegend();
+            horCameraAxisRect->insetLayout()->addElement(legend, Qt::AlignRight|Qt::AlignTop);
+            horCameraAxisRect->insetLayout()->setMargins(QMargins(12, 12, 12, 12));
+            horCameraAxisRect->setLayer(QLatin1String("background"));
+
+            QCPAxis *keyAxis = horCameraAxisRect->axis(QCPAxis::AxisType::atBottom);
+            QCPAxis *valueAxis = horCameraAxisRect->axis(QCPAxis::AxisType::atLeft);
+            keyAxis->setLayer(QLatin1String("axes"));
+            valueAxis->setLayer(QLatin1String("axes"));
+            keyAxis->grid()->setLayer(QLatin1String("grid"));
+            valueAxis->grid()->setLayer(QLatin1String("grid"));
+            legend->setLayer(QLatin1String("legend"));
+
+            QCPGraph *graph = customPlot->addGraph(keyAxis, valueAxis);
+            graph->addToLegend(legend);
+            graph->setAdaptiveSampling(true);
+            graph->setLineStyle(QCPGraph::lsLine);
+            graph->setName(QStringLiteral("水平相机"));
+            graph->setPen(QPen(mGraphisColor[0], 2, Qt::PenStyle::SolidLine));
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[0], 10));//显示散点图
+        }
+
+        QCPAxisRect *verCameraAxisRect = new QCPAxisRect(customPlot);
+        verCameraAxisRect->setObjectName("verCameraAxisRect");
+        {
+            verCameraAxisRect->setupFullAxesBox();
+            verCameraAxisRect->setMinimumMargins(QMargins(0,0,0,0));
+            verCameraAxisRect->setMargins(QMargins(0,0,0,0));
+            verCameraAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
+            verCameraAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 1000000);
+            verCameraAxisRect->axis(QCPAxis::AxisType::atBottom)->setTickLabelRotation(-45);
+            verCameraAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 16000);
+
+            // 右上角添加图例
+            QCPLegend *legend = new QCPLegend();
+            verCameraAxisRect->insetLayout()->addElement(legend, Qt::AlignRight|Qt::AlignTop);
+            verCameraAxisRect->insetLayout()->setMargins(QMargins(12, 12, 12, 12));
+            verCameraAxisRect->setLayer(QLatin1String("background"));
+
+            QCPAxis *keyAxis = verCameraAxisRect->axis(QCPAxis::AxisType::atBottom);
+            QCPAxis *valueAxis = verCameraAxisRect->axis(QCPAxis::AxisType::atLeft);
+            keyAxis->setLayer(QLatin1String("axes"));
+            valueAxis->setLayer(QLatin1String("axes"));
+            keyAxis->grid()->setLayer(QLatin1String("grid"));
+            valueAxis->grid()->setLayer(QLatin1String("grid"));
+            legend->setLayer(QLatin1String("legend"));
+
+            QCPGraph *graph = customPlot->addGraph(keyAxis, valueAxis);
+            graph->addToLegend(legend);
+            graph->setAdaptiveSampling(true);
+            graph->setLineStyle(QCPGraph::lsLine);
+            graph->setName(QStringLiteral("垂直相机"));
+            graph->setPen(QPen(mGraphisColor[11], 2, Qt::PenStyle::SolidLine/*DashLine*/));// DashLine绘制效率比SolidLine低很多
+            graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[11], 10));//显示散点图
+        }
+
+        QCPLayoutGrid *layout = new QCPLayoutGrid;
+        {
+            layout->addElement(0, 0, horCameraAxisRect);//上面
+            layout->addElement(1, 0, verCameraAxisRect);//下面
+        }
+
+        customPlot->plotLayout()->clear();
+        customPlot->plotLayout()->addElement(0, 0, layout);
+
+        customPlot->replot(QCustomPlot::rpQueuedReplot);
+
+        QVBoxLayout* vLayout = new QVBoxLayout(ui->pageInfoWidget_waveform);
+        vLayout->setMargin(0);
+        vLayout->setSpacing(1);
+        vLayout->addWidget(customPlot);
+        ui->pageInfoWidget_waveform->setLayout(vLayout);
+
+        mWaveformPlot = customPlot;
+        return;
+    }
+
     QCustomPlot *customPlotHor = new QCustomPlot(this);
     customPlotHor->setNotAntialiasedElements(QCP::aeAll); // 全关抗锯齿
     customPlotHor->setNoAntialiasingOnDrag(true);// 开启拖拽自动关抗锯齿
-    customPlotHor->setOpenGl(true);
+    //customPlotHor->setOpenGl(true);
     customPlotHor->setPlottingHints(QCP::phFastPolylines | QCP::phImmediateRefresh | QCP::phCacheLabels);// 组合三个高性能标记，最大化缩放流畅度
     //customPlotHor->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
     QCustomPlotHelper* customPlotHelperHor = new QCustomPlotHelper(customPlotHor, this);
@@ -977,7 +1074,7 @@ void OfflineWindow::initWaveformPage()
     QCustomPlot *customPlotVer = new QCustomPlot(this);
     customPlotVer->setNotAntialiasedElements(QCP::aeAll); // 全关抗锯齿
     customPlotVer->setNoAntialiasingOnDrag(true);
-    customPlotVer->setOpenGl(true);
+    //customPlotVer->setOpenGl(true);
     customPlotVer->setPlottingHints(QCP::phFastPolylines | QCP::phImmediateRefresh | QCP::phCacheLabels);// 组合三个高性能标记，最大化缩放流畅度
     //customPlotVer->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignLeft|Qt::AlignTop);
     QCustomPlotHelper* customPlotHelperVer = new QCustomPlotHelper(customPlotVer, this);
@@ -990,7 +1087,7 @@ void OfflineWindow::initWaveformPage()
         graph->setAdaptiveSampling(true);
         graph->setLineStyle(QCPGraph::lsLine);
         graph->setName(QStringLiteral("垂直相机"));
-        graph->setPen(QPen(mGraphisColor[11], 2, Qt::PenStyle::DashLine));
+        graph->setPen(QPen(mGraphisColor[11], 2, Qt::PenStyle::SolidLine/*DashLine*/));
         graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[11], 10));//显示散点图
         customPlotVer->replot(QCustomPlot::rpQueuedReplot);
     }
@@ -1603,20 +1700,36 @@ void OfflineWindow::onWaveformPlot(quint8/*通道号*/ channel, const QMap<quint
     }
 
     // 时间+计数率曲线
-    QCustomPlot* customPlot = nullptr;
-    if (channel <= 11){
-        customPlot = mWaveformHorPlot;
+    QCustomPlot* customPlot = mWaveformPlot;
+    QCPAxisRect *axisRect = nullptr;
+    if (customPlot){
+        axisRect = customPlot->axisRect();
+        if (channel <= 11){
+            axisRect = customPlot->findChild<QCPAxisRect*>("horCameraAxisRect");
+        }
+        else {
+            axisRect = customPlot->findChild<QCPAxisRect*>("verCameraAxisRect");
+        }
     }
     else{
-        customPlot = mWaveformVerPlot;
+        if (channel <= 11){
+            customPlot = mWaveformHorPlot;
+        }
+        else{
+            customPlot = mWaveformVerPlot;
+        }
+
+        axisRect = customPlot->axisRect();
     }
 
-    customPlot->graph(0)->setData(xData, yData);
+    customPlot->graph(axisRect, 0)->setData(xData, yData);
 
     // 队列刷新
-    customPlot->xAxis->rescale(true);
-    customPlot->yAxis->rescale(false);
-    customPlot->yAxis->setRange(QCPRange(0,  yMax * 1.1));
+    QCPAxis* xAxis = axisRect->axis(QCPAxis::AxisType::atBottom);
+    QCPAxis* yAxis = axisRect->axis(QCPAxis::AxisType::atLeft);
+    xAxis->rescale(true);
+    yAxis->rescale(false);
+    yAxis->setRange(QCPRange(0,  yMax * 1.1));
 }
 
 void OfflineWindow::onPSDPlot(quint8 cameraIndex, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density)
@@ -1951,10 +2064,19 @@ void OfflineWindow::onWaveform()
         return;
     }
 
-    mWaveformHorPlot->graph(0)->data()->clear();
-    mWaveformVerPlot->graph(0)->data()->clear();
-    mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
-    mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
+    if (mWaveformPlot){
+        QCPAxisRect* horCameraAxisRect = mWaveformPlot->findChild<QCPAxisRect*>("horCameraAxisRect");
+        QCPAxisRect* verCameraAxisRect = mWaveformPlot->findChild<QCPAxisRect*>("verCameraAxisRect");
+        mWaveformPlot->graph(horCameraAxisRect, 0)->data()->clear();
+        mWaveformPlot->graph(verCameraAxisRect, 0)->data()->clear();
+        mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
+    }
+    else{
+        mWaveformHorPlot->graph(0)->data()->clear();
+        mWaveformVerPlot->graph(0)->data()->clear();
+        mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+        mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
+    }
 
     quint8 horCameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
     quint8 verCameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
@@ -1970,7 +2092,10 @@ void OfflineWindow::onWaveform()
                 onWaveformPlot(horCameraIndex, mapPair);
                 if (!ui->checkBox_ver->isChecked()){
                     QMetaObject::invokeMethod(this, [=](){
-                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+                        if (mWaveformPlot)
+                            mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
+                        else
+                            mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
                         mWaitingSpinnerWidget->stop();
                     }, Qt::QueuedConnection);
                 }
@@ -1986,9 +2111,14 @@ void OfflineWindow::onWaveform()
 
                 onWaveformPlot(verCameraIndex, mapPair);
                 QMetaObject::invokeMethod(this, [=](){
-                    mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
-                    if (ui->checkBox_hor->isChecked())
-                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+                    if (mWaveformPlot){
+                        mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
+                    }
+                    else{
+                        mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
+                        if (ui->checkBox_hor->isChecked())
+                            mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+                    }
                     mWaitingSpinnerWidget->stop();
                 }, Qt::QueuedConnection);
 

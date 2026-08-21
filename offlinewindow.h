@@ -290,8 +290,9 @@ private:
     void applyColorTheme();
 
     // 波形显示
-    QCustomPlot* mWaveformHorPlot; //水平相机
-    QCustomPlot* mWaveformVerPlot; //垂直相机
+    QCustomPlot* mWaveformHorPlot = nullptr; //水平相机
+    QCustomPlot* mWaveformVerPlot = nullptr; //垂直相机
+    QCustomPlot* mWaveformPlot = nullptr; //波形图像显示
 
     // 数据处理线程
     QThread* mAnalysisThread;
