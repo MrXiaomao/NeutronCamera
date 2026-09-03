@@ -9,11 +9,11 @@
 #include <QFile>
 // #include <numeric>
 
-#include "alglibinternal.h"
+//#include "alglibinternal.h"
 // #include "ap.h"
 #include "interpolation.h"
-#include "linalg.h"
-#include "optimization.h"
+//#include "linalg.h"
+//#include "optimization.h"
 #include <math.h>
 // using namespace alglib;
 
@@ -89,7 +89,7 @@ QVector<std::array<qint16, H5_DATA_COLS>> n_gamma::readWave(const std::string &f
  * @param wave_CH1 输入的波形, 这个波形是经过过阈触发筛选后的波形，wave_CH1[pulseIndex][sampleIndex]：numPulses x 512
  * @return data[i] = (标定后能量, PSD 值)，每个元素是一个 QPair<float, float>，first 是能量，second 是 PSD 值
  */
-QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16, H5_DATA_COLS>> &wave_CH1)
+QVector<QPair<float, quint16>> n_gamma::computePSD(const QVector<std::array<qint16, H5_DATA_COLS>> &wave_CH1)
 {
     if (wave_CH1.isEmpty())
         return {};
@@ -103,9 +103,9 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
     // ---------- 参数 ----------
     const int Peak_position_low  = 20;   // 1-based
     const int Peak_position_up   = 50;   // 1-based
-    const int PSD_N_PAR          = 15;
+    const int PSD_N_PAR          = 16;
     const int PSD_L1_PAR         = 30;
-    const int PSD_L2_PAR         = 100;
+    const int PSD_L2_PAR         = 101;
     const float ratio            = 0.3f; // 恒比定时比值 k
     const int peakIndex          = H5_DATA_EXTEND;/*前面的扩展数据是给触发时刻+峰值预留的，真实数据从第H5_DATA_EXTEND个开始*/
     // ---------- 剔除不满足峰位要求的波形 ----------
@@ -202,7 +202,7 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
 
     // ---------- 波形处理与 PSD 计算 ----------
     const int L = pulses.size();                       // 剩余有效脉冲数
-    QVector<QPair<float, float>> results1;
+    QVector<QPair<float, quint16>> results1;
     results1.reserve(L);  // 预分配空间
     int validPulseNum = 0;
 
@@ -216,6 +216,7 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
             if (pulse[s] > peak) {
                 peak = pulse[s];
                 peakIndex0 = s;
+                break;
             }
         }
 
@@ -265,7 +266,7 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
         if (Energy > 0.0f && psdRatio < 1.0f && psdRatio > 0.0f) {
             // 这里的位置用"在原 pulses 里的序号"，你也可以额外保留原始 index
             // 直接添加 QPair<float, float>，first 是能量（未标定），second 是 PSD
-            results1.append(qMakePair(Energy, psdRatio));
+            results1.append(qMakePair(Energy, psdRatio*256));
             ++validPulseNum;
         }
     }
@@ -290,11 +291,11 @@ QVector<QPair<float, float>> n_gamma::computePSD(const QVector<std::array<qint16
 
 /**
  * @brief n_gamma::computeDensity
- * @param psdData PSD数据，每个元素是一个 QPair<float, float>，first 是 Energy，second 是 PSD
+ * @param psdData PSD数据，每个元素是一个 QPair<float, quint16>，first 是 Energy，second 是 PSD
  * @param NLevel:NLevel:密度网格的绘制，网格边长个数
  * @return 各个psd对应的密度值
  */
-QVector<float> n_gamma::computeDensity(QVector<QPair<float, float>> &psdData, int NLevel /*=200*/)
+QVector<float> n_gamma::computeDensity(QVector<QPair<float, quint16>> &psdData, int NLevel /*=200*/)
 {
     // DensityResult res;
     QVector<float> den;
@@ -365,7 +366,7 @@ QVector<float> n_gamma::computeDensity(QVector<QPair<float, float>> &psdData, in
     return den;
 }
 
-n_gamma::HistResult n_gamma::selectAndHist(const QVector<QPair<float, float>> &data)
+n_gamma::HistResult n_gamma::selectAndHist(const QVector<QPair<float, quint16>> &data)
 {
     // QVector<float> out;
     QVector<float> psd_Na;
@@ -704,12 +705,12 @@ bool n_gamma::lsqcurvefit1(QVector<double> fit_x, QVector<double> fit_y, double*
 }
 
 // 分类+分道+归一化处理函数
-void n_gamma::processEnergyData(const QVector<QPair<float, float>>& rawData,
+void n_gamma::processEnergyData(const QVector<QPair<float, quint16>>& psdData,
                        QVector<double>& gammaX,
                        QVector<double>& gammaY,
                        QVector<double>& neutronX,
                        QVector<double>& neutronY,
-                       const float threshold,
+                       const quint16 threshold,
                        const int channels,
                        const float minEnergy,
                        const float maxEnergy)
@@ -722,9 +723,9 @@ void n_gamma::processEnergyData(const QVector<QPair<float, float>>& rawData,
     float binWidth = (maxEnergy - minEnergy) / channels;
 
     // 2. 遍历原始数据，分类+分道计数
-    for (const auto& point : rawData) {
+    for (const auto& point : psdData) {
         float energy = point.first;   // first：能量值
-        float thresholdVal = point.second; // second：用于分类的阈值
+        quint16 psdVal = point.second; // second：用于分类的阈值
 
         // 计算能量对应到1024道的索引
         int binIndex = static_cast<int>((energy - minEnergy) / binWidth);
@@ -732,7 +733,7 @@ void n_gamma::processEnergyData(const QVector<QPair<float, float>>& rawData,
         binIndex = std::clamp(binIndex, 0, channels - 1);
 
         // 按阈值分类计数
-        if (thresholdVal > threshold) {
+        if (psdVal >= threshold) {
             neutronBins[binIndex]++;
         } else {
             gammaBins[binIndex]++;

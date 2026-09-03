@@ -25,7 +25,8 @@ public:
 
 signals:
     // 处理完成后发回主线程的轻量化结果，仅用于UI更新
-    Q_SIGNAL void backupChannelStatusChanged(quint32, bool);
+    Q_SIGNAL void moduleExceptionOccurred(quint8, bool);
+    Q_SIGNAL void backupChannelStatusChanged(quint8, bool);
     Q_SIGNAL void temperatureAndVoltageChanged(quint8, const QMap<QString, QPair<double, double>>&);
 
 public slots:
@@ -61,24 +62,24 @@ public:
     */
     void disconnectServer();
 
-    bool switchPower(quint32, bool);
-    bool switchVoltage(quint32, bool);
+    bool switchPower(quint8, bool);
+    bool switchVoltage(quint8, bool);
     bool openAllPower();
     bool closeAllPower();
-    bool switchBackupPower(quint32, bool);
-    bool switchBackupVoltage(quint32, bool);
-    bool switchBackupChannel(quint32, bool);
+    bool switchBackupPower(quint8, bool);
+    bool switchBackupVoltage(quint8, bool);
+    bool switchBackupChannel(quint8, bool);
     bool switchAllBackupChannel(bool);
 
-    Q_SIGNAL void powerStatusChanged(quint32, bool);
-    Q_SIGNAL void voltageStatusChanged(quint32, bool);
-    Q_SIGNAL void backupPowerStatusChanged(quint32, bool);
-    Q_SIGNAL void backupVoltageStatusChanged(quint32, bool);
-    Q_SIGNAL void backupChannelStatusChanged(quint32, bool);
+    Q_SIGNAL void powerStatusChanged(quint8, bool);
+    Q_SIGNAL void voltageStatusChanged(quint8, bool);
+    Q_SIGNAL void backupPowerStatusChanged(quint8, bool);
+    Q_SIGNAL void backupVoltageStatusChanged(quint8, bool);
 
-    Q_SIGNAL void temperatureChanged(quint8, QVector<float>&);
-    Q_SIGNAL void voltageAndCurrentChanged(quint8, QVector<QPair<float,float>>&);
+    Q_SIGNAL void moduleExceptionOccurred(quint8, bool);
+    Q_SIGNAL void backupChannelStatusChanged(quint8, bool);
     Q_SIGNAL void temperatureAndVoltageChanged(quint8, const QMap<QString, QPair<double, double>>&);
+
     Q_SIGNAL void shotnumValueChanged(const QString&);
     Q_SIGNAL void systemTimeValueChanged(const QDateTime&);
     Q_SIGNAL void energenceStopSignalTriggered();
@@ -101,11 +102,11 @@ private:
     QThread *m_workThread;
     UdpDataProcessor* mUdpPerformanceDataProcessor;
 
-    QMap<quint32, bool> mMapPower;//探测器的1#电源开关
-    QMap<quint32, bool> mMapVoltage;//探测器的1#电压开关
-    QMap<quint32, bool> mMapBackupPower;//探测器的2#电源开关
-    QMap<quint32, bool> mMapBackupVoltage;//探测器的2#电压开关
-    QMap<quint32, bool> mMapChannel;//选通开关,false-1#,true-2#
+    QMap<quint8, bool> mMapPower;//探测器的1#电源开关
+    QMap<quint8, bool> mMapVoltage;//探测器的1#电压开关
+    QMap<quint8, bool> mMapBackupPower;//探测器的2#电源开关
+    QMap<quint8, bool> mMapBackupVoltage;//探测器的2#电压开关
+    QMap<quint8, bool> mMapChannel;//选通开关,false-1#,true-2#
 
     /*
      初始化网络

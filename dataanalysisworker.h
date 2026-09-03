@@ -96,6 +96,7 @@ public:
     // 波形文件头部信息(开始时刻、结束时刻、阈值)
     static bool writeWaveformHeadToHDF5(const QString& filePath, quint32 packerStartTime, quint32 packerEndTime, quint32 threshold);
     static bool readWaveformHeadFromHDF5(const QString& filePath, quint32& packerStartTime, quint32& packerEndTime, quint32& threshold);
+    static bool checkHDF5VersionValid(const QString& filePath);
 
 public slots:
     void startAnalysis();
@@ -209,19 +210,19 @@ public:
          quint32 packerCurrentTime = mJob.packerStartTime;
 
         // 3) 基线 + 调整 + 过阈提取（每个通道独立）
-        if (cameraNo == 0 || mCameraIndex == 0) {
+        if ((cameraNo == 0 || mCameraIndex == 0) && ch[0].size() > 0) {
             qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0]);
             QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, deviceIndex, 1);
             auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 1, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 1, wave);
         }
-        if (cameraNo == 1 || mCameraIndex == 0) {
+        if ((cameraNo == 1 || mCameraIndex == 0) && ch[1].size() > 0) {
             qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[1]);
             QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[1], baseline_ch, deviceIndex, 2);
             auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 2, mThreshold, mPre, mPost);
             mCallback(packerCurrentTime, 2, wave);
         }
-        if (cameraNo == 2 || mCameraIndex == 0) {
+        if ((cameraNo == 2 || mCameraIndex == 0) && ch[2].size() > 0) {
             qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[2]);
             QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[2], baseline_ch, deviceIndex, 3);
             auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 3, mThreshold, mPre, mPost);

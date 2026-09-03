@@ -653,8 +653,10 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
     ui->comboBox_h5Files->clear();
     ui->comboBox_h5Files_2->clear();
     for (auto item : fileinfoList){
-        ui->comboBox_h5Files->addItem(item.baseName());
-        ui->comboBox_h5Files_2->addItem(item.baseName());
+        if (DataAnalysisWorker::checkHDF5VersionValid(item.filePath())){
+            ui->comboBox_h5Files->addItem(item.baseName());
+            ui->comboBox_h5Files_2->addItem(item.baseName());
+        }
     }
 
     if (ui->comboBox_h5Files->count() > 0){
@@ -665,7 +667,7 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
     if (fileinfoList.size() == 0)
         emit writeLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
     else
-        emit writeLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(fileinfoList.size()));
+        emit writeLog(QStringLiteral("目录下共找到%1个经过压缩处理的H5格式波形文件").arg(ui->comboBox_h5Files->count()));
 }
 
 QPixmap OfflineWindow::maskPixmap(QPixmap pixmap, QSize sz, QColor clrMask)
@@ -1127,7 +1129,7 @@ void OfflineWindow::initNGammaPage()
             colorMap->setName("colorMap");
 
             colorMap->data()->setSize(100, 100);// 设置网格维度
-            colorMap->data()->setRange(QCPRange(0, 10000), QCPRange(0, 1.0));// 设置网格数据范围
+            colorMap->data()->setRange(QCPRange(0, 10000), QCPRange(0, 256));// 设置网格数据范围
             colorMap->data()->fillAlpha(0);
 
             QCPColorScale *colorScale = new QCPColorScale(customPlot);
@@ -2349,7 +2351,7 @@ void OfflineWindow::onAnalysisFinished(bool success, const QString& message)
 
     ui->comboBox_h5Files->clear();
     ui->comboBox_h5Files_2->clear();
-    for (auto item : fileinfoList){
+    for (auto item : fileinfoList){        
         ui->comboBox_h5Files->addItem(item.baseName());
         ui->comboBox_h5Files_2->addItem(item.baseName());
     }
@@ -2370,12 +2372,14 @@ void OfflineWindow::onNGammaFilter()
     listPlots << ui->spectroMeter_horCamera_PSD;
     listPlots << ui->spectroMeter_verCamera_PSD;
     listPlots << ui->spectroMeter_horCamera_FOM;
-    listPlots << ui->spectroMeter_horCamera_FOM;
+    listPlots << ui->spectroMeter_verCamera_FOM;
+    listPlots << ui->spectroMeter_neutronSpectrum;
+    listPlots << ui->spectroMeter_gammaSpectrum;
     for (auto& customPlot : listPlots){
         for (int i = 0; i < customPlot->graphCount(); ++i){
-            customPlot->graph(i)->data().clear();
-            customPlot->replot(QCustomPlot::rpQueuedReplot);
+            customPlot->graph(i)->data()->clear();
         }
+        customPlot->replot(QCustomPlot::rpQueuedReplot);
     }
 
     QElapsedTimer totalTimer;
@@ -2385,7 +2389,7 @@ void OfflineWindow::onNGammaFilter()
     int threshold = ui->spinBox_threshold_4->value();
     int pre_points = RISING_WIDTH;
     int post_points = WAVEFORM_LENGTH - pre_points - 1;
-    float thresholdFilter = ui->doubleSpinBox_threshold_4->value();//nγ甄别阈值
+    quint16 psdThresholdFilter = ui->spinBox_psdThreshold->value();//nγ甄别阈值
 
     int startT = ui->spinBox_startT_4->value();
     int endT = ui->spinBox_endT_4->value();
@@ -2592,22 +2596,28 @@ void OfflineWindow::onNGammaFilter()
                         QtInfoMsg
                         );
 
-        emit writeLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
+        emit writeLog(QString("合并后有效波形总数：%1").arg(ch_all_valid_wave.size()),QtInfoMsg);
 
         n_gamma neutron;
         //计算PSD
         QElapsedTimer psdTimer;
         psdTimer.start();
-        emit writeLog(QString("开始计算PSD，有效波形数量：%1").arg(ch_all_valid_wave.size()-2),QtInfoMsg);
-        QVector<QPair<float, float>> data = neutron.computePSD(ch_all_valid_wave);
+        emit writeLog(QString("开始计算PSD，有效波形数量：%1").arg(ch_all_valid_wave.size()),QtInfoMsg);
+        QVector<QPair<float, quint16>> data = neutron.computePSD(ch_all_valid_wave);
         qint64 psdTime = psdTimer.elapsed();
         emit writeLog(QString("PSD计算耗时：%1 ms (%2 秒)，得到 %2 个数据点").arg(psdTime).arg(psdTime / 1000.0, 0, 'f', 2).arg(data.size()),QtInfoMsg);
 
+        if (data.size() <= 0)
+            continue;
+
         //判断中子和伽马能谱（默认道数1024）
         QVector<double> gammaX, gammaY, neutronX, neutronY;
-        neutron.processEnergyData(data, gammaX, gammaY, neutronX, neutronY, thresholdFilter);
+        neutron.processEnergyData(data, gammaX, gammaY, neutronX, neutronY, psdThresholdFilter);
         emit showNeutronSpectrum(cameraIndex, neutronX, neutronY);
         emit showGammaSpectrum(cameraIndex, gammaX, gammaY);
+
+        if (data.size() <= 1)// 只有一个点是没法计算密度
+            continue;
 
         // 计算密度
         QElapsedTimer densityTimer;
@@ -2681,7 +2691,7 @@ void OfflineWindow::onNGammaFilter()
 
         // 绘制FoM图表
         emit showFoMPlot(cameraIndex, xLim, curveData, FOM_data.fom);
-        qApp->restoreOverrideCursor();
+
         qint64 fomPlotTime = fomPlotTimer.elapsed();
         emit writeLog(QString("FoM图表绘制耗时：%1 ms").arg(fomPlotTime),QtInfoMsg);
 
@@ -2718,6 +2728,7 @@ void OfflineWindow::onNGammaFilter()
                         );
     }
 
+    qApp->restoreOverrideCursor();
     mWaitingSpinnerWidget->stop();
 }
 
@@ -2978,6 +2989,17 @@ void OfflineWindow::on_action_dataUpload_triggered()
         return;
     }
 
+    QVector<std::array<qint16, H5_DATA_COLS>> ch_all_valid_wave;
+
+    // 直接从H5文件种获取波形数据
+    // QString h5FilePath = mFileDir + "/" + ui->comboBox_h5Files_2->currentText() + ".h5";// "/waveform_data.h5";
+    // if (QFile::exists(h5FilePath))
+    // {
+    //     for (int cameraIndex=1; cameraIndex<=18; ++cameraIndex){
+    //         mPCIeCommSdk.takeWaveformData(cameraIndex, h5FilePath, ch_all_valid_wave);
+    //     }
+    // }
+
     // int recordCount = 0;
     // std::string shotTime = commandHelper->mShotTimestamp.toStdString();
     // for (int channelIdx=0; channelIdx<kSpectrumChannelCount; ++channelIdx){
@@ -2998,3 +3020,4 @@ void OfflineWindow::on_action_dataUpload_triggered()
     hdaClient.disconnect();
     // QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("数据上传完毕，本次上传记录数共%1条！").arg(recordCount));
 }
+

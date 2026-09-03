@@ -849,7 +849,7 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
 
         for (int deviceIndex=1; deviceIndex<=6; ++deviceIndex){
             // 创建或打开采集卡组
-            QString boardGroupName = QString("Board%1").arg(deviceIndex);
+            QString boardGroupName = "Waveform";//QString("Board%1").arg(deviceIndex);
 
             H5::Group boardGroup;
             htri_t existsGroup = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
@@ -899,9 +899,9 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
 
                 // 写入3个通道的数据
                 QVector<qint16> timeTrigger_ch[3], timePeak_ch[3];
-                readChannel("wave_ch0",  timeTrigger_ch[0], timePeak_ch[0]);
-                readChannel("wave_ch1", timeTrigger_ch[1], timePeak_ch[1]);
-                readChannel("wave_ch2", timeTrigger_ch[2], timePeak_ch[2]);
+                readChannel(QString("data_ch%1").arg(deviceIndex*3-2),  timeTrigger_ch[0], timePeak_ch[0]);
+                readChannel(QString("data_ch%1").arg(deviceIndex*3-1), timeTrigger_ch[1], timePeak_ch[1]);
+                readChannel(QString("data_ch%1").arg(deviceIndex*3), timeTrigger_ch[2], timePeak_ch[2]);
 
                 //根据时间段统计计数率
                 QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair;
@@ -1006,7 +1006,7 @@ bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
         H5::H5File file(filePathBytes.toStdString(), H5F_ACC_RDONLY);
 
         // 创建或打开采集卡组
-        QString boardGroupName = QString("Board%1").arg(deviceIndex);
+        QString boardGroupName = "Waveform";//QString("Board%1").arg(deviceIndex);
 
         H5::Group boardGroup;
         htri_t existsGroup = H5Lexists(file.getId(), boardGroupName.toStdString().c_str(), H5P_DEFAULT);
@@ -1026,7 +1026,7 @@ bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
                     hsize_t dims[2];
                     fileSpace.getSimpleExtentDims(dims, nullptr);
                     if (dims[1] != H5_DATA_COLS) {
-                        qWarning() << QString("Dataset columns is %1, required 514").arg(dims[1]);
+                        qWarning() << QString("Dataset columns is %1, required %2").arg(dims[1]).arg(H5_DATA_COLS);
                         return;
                     }
                     const hsize_t totalRows = dims[0];
@@ -1043,7 +1043,7 @@ bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
             };
 
             // 读通道的数据
-            readChannel(QStringLiteral("wave_ch%1").arg(cameraNo));
+            readChannel(QStringLiteral("data_ch%1").arg(cameraIndex/*cameraNo*/));
             boardGroup.close();
         }
 

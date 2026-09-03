@@ -13,11 +13,14 @@ public:
 
     bool connect();
     bool startUpload();
+
+    /*数据上传-能谱计数率*/
     bool startUploadSpectrumCpsData(quint32 shot/*炮号*/,
                                  const std::string& shotTime/*打靶时刻*/,
                                  quint8 channel/*通道号*/,
                                  const std::vector<double>& time/*时间ms*/,
                                  const std::vector<double>& values/*能谱计数率*/);
+
     void disconnect();
 
 signals:

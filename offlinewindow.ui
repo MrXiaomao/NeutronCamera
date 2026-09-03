@@ -289,7 +289,7 @@
     <item>
      <widget class="QStackedWidget" name="centralStackedWidget">
       <property name="currentIndex">
-       <number>3</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="pageInfoWidget_cps"/>
       <widget class="QWidget" name="pageInfoWidget_waveform"/>
@@ -1316,9 +1316,12 @@
                </widget>
               </item>
               <item row="3" column="1">
-               <widget class="QDoubleSpinBox" name="doubleSpinBox_threshold_4">
+               <widget class="QSpinBox" name="spinBox_psdThreshold">
+                <property name="maximum">
+                 <number>256</number>
+                </property>
                 <property name="value">
-                 <double>0.520000000000000</double>
+                 <number>130</number>
                 </property>
                </widget>
               </item>
@@ -1616,6 +1619,20 @@
                 </property>
                 <property name="checkable">
                  <bool>false</bool>
+                </property>
+                <property name="toolButtonStyle">
+                 <enum>Qt::ToolButtonTextBesideIcon</enum>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QToolButton" name="toolButton_dataUpload">
+                <property name="text">
+                 <string>数据上传</string>
+                </property>
+                <property name="icon">
+                 <iconset resource="lresource.qrc">
+                  <normaloff>:/resource/image/data-upload.png</normaloff>:/resource/image/data-upload.png</iconset>
                 </property>
                 <property name="toolButtonStyle">
                  <enum>Qt::ToolButtonTextBesideIcon</enum>
@@ -2392,5 +2409,22 @@
   <include location="../3rdParty/resource/resource.qrc"/>
   <include location="../3rdParty/resource/resource.qrc"/>
  </resources>
- <connections/>
+ <connections>
+  <connection>
+   <sender>toolButton_dataUpload</sender>
+   <signal>clicked()</signal>
+   <receiver>action_dataUpload</receiver>
+   <slot>trigger()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>1359</x>
+     <y>494</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>

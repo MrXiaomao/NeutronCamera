@@ -1038,7 +1038,7 @@
                    </sizepolicy>
                   </property>
                   <property name="toolTip">
-                   <string>  </string>
+                   <string/>
                   </property>
                   <property name="minimum">
                    <number>40</number>

@@ -143,6 +143,9 @@ private:
     DetectorType mCurrentDetectorType = dtLSD; // 当前探测器类型：1-LSD 2-PSD 3-LBD
     QString mCurrentSavePath;// 本次实验数据存储路径
 
+    std::atomic<bool> mModuleOccurred[20];// 模组通讯异常
+    QElapsedTimer mLastCommunicationTime;// 模组最后一次通讯时间
+
     bool mIsDarkTheme = false;
     bool mThemeColorEnable = true;
     QColor mThemeColor = QColor(255,255,255);

@@ -41,7 +41,7 @@ public:
     QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
     QtnPropertyInt* deathTime; // 死时间
     QtnPropertyInt* triggerThreshold;// 触发阈值
-    QtnPropertyInt* spectrumRefreshTimelength;// 能谱刷新时间
+    QtnPropertyInt* spectrumRefreshTimelength;// 能谱刷新时长
     QtnPropertyQString* triggerMode;// 触发模式
     QtnPropertyQString* waveformLength;// 波形长度
 
@@ -523,7 +523,11 @@ bool AppConfig::enableBoard(quint8 physicalIndex, bool isEnable)
             d->propBoard3EnableDDR1->switchState(QtnPropertyStateImmutable, !isEnable);
             d->propBoard3EnableDDR2->switchState(QtnPropertyStateImmutable, !isEnable);
         }
+
+        return true;
     }
+
+    return false;
 }
 
 bool AppConfig::isEnableCapture(quint8 physicalIndex, bool isDDR1)

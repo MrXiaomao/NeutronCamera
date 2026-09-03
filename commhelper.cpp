@@ -98,84 +98,73 @@ void UdpDataProcessor::processLoop()
             // 被唤醒后确认队列非空且线程仍在运行，取出队首报文
             if (!m_pendingQueue.isEmpty() && m_isRunning) {
                 currentGram.append(m_pendingQueue);
+                m_pendingQueue.clear();
             }
         }
 
         // 完全释放锁之后再执行耗时操作，避免阻塞主线程入队
         if (!currentGram.isEmpty()) {
-            while (currentGram.contains('@') && currentGram.contains('#')){
-                quint32 start = currentGram.indexOf('@');
-                quint32 end = currentGram.indexOf('#', start);
-                quint32 start2 = currentGram.indexOf('@', start + 1);
-                if (start2 < end)
-                    start = start2;
-                QByteArray rawData = currentGram.mid(start, end - start + 1);
-                currentGram.remove(0, end + 1);
-                quint8 moduleNo = rawData.mid(1, 2).toInt();
-                /*
-                    @01*999*GETR*01*
-                    PSD1_48V=46.60V,2.41mA
-                    PSD1_29V=29.29V,0.03mA
-                    PSD1-AMP=46.56V,12.04mA
-                    PSD2_48V=46.61V,2.68mA
-                    PSD2_29V=29.39V,0.03mA
-                    PSD2-AMP=46.55V,11.74mA
-                    LSD_48V=46.59V,2.36mA
-                    LSD_29V=29.17V,0.03mA
-                    LSD-AMP=46.56V,11.95mA
-                    LBD_48V=46.60V,3.46mA
-                    LBD_29V=29.41V,0.03mA
-                    LBD-AMP=46.56V,11.75mA
-                    PSD1=16.81
-                    LBD=16.63
-                    PSD2=16.63
-                    LSD=16.63
-                    #
+            // 1. 先把所有收到的新数据追加到全局累积缓冲区
+            // 这里你可以把队列取出的新报文append到currentGram里
+            QList<QByteArray> allGramList;
+            QList<QByteArray> timeoutErrList; // 专门存异常超时报文
 
-                    @01*999*GETR*01*
-                    -----Voltage &Current Data-----
-                    IHA238_01 = 0.00V, 0.00mA
-                    IHA238_02 = 0.00V, 0.00mA
-                    IHA238_03 = 0.00V, 0.00mA
-                    IHA238_04 = 0.00V, 0.00mA
-                    IHA238_05 = 0.00V. 0.00mA
-                    IHA238_06 = 0.00V, 0.00mA
-                    IHA238_07 = 0.00V, 0.00mA
-                    IHA238_08 = 0.00V, 0.00mA
-                    IHA238_09 = 0.00V, 0.00mA
-                    IHA238_10 = 0.00V, 0.00mA
-                    IHA238_11 = 0.00V, 0.00mA
-                    IHA238_12 = 0.00V, 0.00mA
+            int pos = 0;
+            // 遍历缓冲区里所有的起始符@
+            while ((pos = currentGram.indexOf('@', pos)) != -1)
+            {
+                int nextAt = currentGram.indexOf('@', pos + 1);
+                int endSharp = currentGram.indexOf('#', pos);
 
-                    -----Temperature ata-----
-                    DS18B20_01 = 0.00°C
-                    DS18B20_02 = 0.00°C
-                    DS18B20_03 = 0.00°C
-                    DS18B20_04 = 0.00°C
+                // 情况1：当前@后面能找到#，说明是完整正常报文
+                if (endSharp != -1 && (nextAt == -1 || endSharp < nextAt))
+                {
+                    QByteArray fullGram = currentGram.mid(pos, endSharp - pos + 1);
+                    allGramList.append(fullGram);
+                    pos = endSharp + 1; // 跳过当前#，继续往后解析
+                    continue;
+                }
 
-                    -----Device Info-----
-                    UTD = 0x3938353834315100002F0017
-                    FeSoftV=Unknown
-                    FeHardy=Unknown
-                    FeAddr =
+                // 情况2：前后@见没有#出现，说明这是一条异常超时报文
+                if (endSharp > nextAt)
+                {
+                    QByteArray errGram = currentGram.mid(pos, nextAt - pos);
+                    timeoutErrList.append(errGram);
+                    pos = nextAt; // 跳到下一个@继续处理
+                    continue;
+                }
 
-                    @01*TIMEOUT@02*TIMEOUT@03*TIMEOUT@04*TIMEOUT@05*TIMEOUT@06*TIMEOUT@07*TIMEOUT@08*TIMEOUT@09*TIMEOUT@10*TIMEOUT@11*TIMEOUT@12*TIMEOUT@13*TIMEOUT@14*TIMEOUT@15*TIMEOUT@16*TIMEOUT@17*TIMEOUT@18*TIMEOUT@19*999*GETR*01*
-                    INA226_01 (0x40) = 12.71V, 399.76mA
-                    INA226_02 (0x45) = 5.09V, 213.17mA
-                    IO_BIN = 5A 00 00 01
-                    #
-                    @22*999*GETR*01*
-                    01 = 0.11V, 0.00A
-                    02 = 0.05V, 0.00A
-                    #
-                    @22*999*GETR*01*
-                    01 = 48.08V, 0.00A
-                    02 = 48.05V, 1.05A
-                    #
-                */
+                // 情况3：最后一段数据，只有@没有后续#也没有下一个@，是不完整的半报文，直接退出留到下次处理
+                break;
+            }
 
-                rawData.replace('\n', ',');
-                QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(rawData);
+            // 处理完所有已解析的内容，把剩余未完成的半报文保留在缓冲区
+            if (pos > 0)
+            {
+                currentGram = currentGram.mid(pos);
+            }
+            else{
+                currentGram.clear();
+            }
+            // -------- 分别处理两类报文 --------
+            // 1. 处理异常超时报文，提取模块编号
+            for(const auto& errItem : timeoutErrList)
+            {
+                // 格式是@XX*TIMEOUT，直接提取@后面两位编号
+                quint8 moduleNo = errItem.mid(1,2).toInt();
+                //qDebug() << "检测到超时异常模块：" << moduleNo;
+                emit moduleExceptionOccurred(moduleNo, true);
+            }
+
+            // 2. 处理正常闭合的带#报文
+            for(auto& normalItem : allGramList)
+            {
+                //qDebug() << "收到完整正常报文：" << normalItem;
+                // 你之前的电压电流解析逻辑直接复用在这里即可
+                quint8 moduleNo = normalItem.mid(1, 2).toInt();
+                emit moduleExceptionOccurred(moduleNo, false);
+
+                QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(normalItem.replace('\n', ','));
                 emit temperatureAndVoltageChanged(moduleNo, std::move(result));
 
                 if (result.contains("IO_BIN")){ // 对应的moduleNo==19
@@ -189,6 +178,99 @@ void UdpDataProcessor::processLoop()
                     }
                 }
             }
+
+            // while (currentGram.contains('@') && currentGram.contains('#')){
+            //     quint32 start = currentGram.indexOf('@');
+            //     quint32 end = currentGram.indexOf('#', start);
+            //     quint32 start2 = currentGram.lastIndexOf('@', end);
+            //     if (start2 != start){
+            //         // 模块故障，判断是否出现超时
+            //         // 先处理超时
+            //         QByteArray errData = currentGram.mid(start, start2 - start);
+
+            //         // 再处理正常值
+            //         start = start2;
+            //     }
+            //     QByteArray rawData = currentGram.mid(start, end - start + 1);
+            //     currentGram.remove(0, end + 1);
+            //     quint8 moduleNo = rawData.mid(1, 2).toInt();
+            //     /*
+            //         @01*999*GETR*01*
+            //         PSD1_48V=46.60V,2.41mA
+            //         PSD1_29V=29.29V,0.03mA
+            //         PSD1-AMP=46.56V,12.04mA
+            //         PSD2_48V=46.61V,2.68mA
+            //         PSD2_29V=29.39V,0.03mA
+            //         PSD2-AMP=46.55V,11.74mA
+            //         LSD_48V=46.59V,2.36mA
+            //         LSD_29V=29.17V,0.03mA
+            //         LSD-AMP=46.56V,11.95mA
+            //         LBD_48V=46.60V,3.46mA
+            //         LBD_29V=29.41V,0.03mA
+            //         LBD-AMP=46.56V,11.75mA
+            //         PSD1=16.81
+            //         LBD=16.63
+            //         PSD2=16.63
+            //         LSD=16.63
+            //         #
+
+            //         @01*999*GETR*01*
+            //         -----Voltage &Current Data-----
+            //         IHA238_01 = 0.00V, 0.00mA
+            //         IHA238_02 = 0.00V, 0.00mA
+            //         IHA238_03 = 0.00V, 0.00mA
+            //         IHA238_04 = 0.00V, 0.00mA
+            //         IHA238_05 = 0.00V. 0.00mA
+            //         IHA238_06 = 0.00V, 0.00mA
+            //         IHA238_07 = 0.00V, 0.00mA
+            //         IHA238_08 = 0.00V, 0.00mA
+            //         IHA238_09 = 0.00V, 0.00mA
+            //         IHA238_10 = 0.00V, 0.00mA
+            //         IHA238_11 = 0.00V, 0.00mA
+            //         IHA238_12 = 0.00V, 0.00mA
+
+            //         -----Temperature ata-----
+            //         DS18B20_01 = 0.00°C
+            //         DS18B20_02 = 0.00°C
+            //         DS18B20_03 = 0.00°C
+            //         DS18B20_04 = 0.00°C
+
+            //         -----Device Info-----
+            //         UTD = 0x3938353834315100002F0017
+            //         FeSoftV=Unknown
+            //         FeHardy=Unknown
+            //         FeAddr =
+
+            //         @01*TIMEOUT@02*TIMEOUT@03*TIMEOUT@04*TIMEOUT@05*TIMEOUT@06*TIMEOUT@07*TIMEOUT@08*TIMEOUT@09*TIMEOUT@10*TIMEOUT@11*TIMEOUT@12*TIMEOUT@13*TIMEOUT@14*TIMEOUT@15*TIMEOUT@16*TIMEOUT@17*TIMEOUT@18*TIMEOUT@19*999*GETR*01*
+            //         INA226_01 (0x40) = 12.71V, 399.76mA
+            //         INA226_02 (0x45) = 5.09V, 213.17mA
+            //         IO_BIN = 5A 00 00 01
+            //         #
+            //         @22*999*GETR*01*
+            //         01 = 0.11V, 0.00A
+            //         02 = 0.05V, 0.00A
+            //         #
+            //         @22*999*GETR*01*
+            //         01 = 48.08V, 0.00A
+            //         02 = 48.05V, 1.05A
+            //         #
+            //     */
+
+            //     rawData.replace('\n', ',');
+            //     QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(rawData);
+            //     emit temperatureAndVoltageChanged(moduleNo, std::move(result));
+
+            //     if (result.contains("IO_BIN")){ // 对应的moduleNo==19
+            //         std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
+            //         for (int i=0; i<18; ++i){
+            //             if (mMapChannel[i+1] != bits.test(i))
+            //             {
+            //                 mMapChannel[i+1] = bits.test(i);
+            //                 emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+            //             }
+            //         }
+            //     }
+            // }
         }
     }
 }
@@ -234,11 +316,23 @@ CommHelper::CommHelper(QObject *parent)
     // 绑定线程启动信号到处理循环槽
     connect(m_workThread, &QThread::started, mUdpPerformanceDataProcessor, &UdpDataProcessor::processLoop);
     // 处理完成结果回调主线程更新UI
-    connect(mUdpPerformanceDataProcessor, &UdpDataProcessor::backupChannelStatusChanged, this, &CommHelper::backupChannelStatusChanged);
-    connect(mUdpPerformanceDataProcessor, &UdpDataProcessor::temperatureAndVoltageChanged, this, &CommHelper::temperatureAndVoltageChanged);
+
+    connect(mUdpPerformanceDataProcessor, &UdpDataProcessor::moduleExceptionOccurred, this, [=](quint8 v1, bool v2){
+        emit moduleExceptionOccurred(v1, v2);
+    }, Qt::DirectConnection);// &CommHelper::moduleExceptionOccurred);
+    connect(mUdpPerformanceDataProcessor, &UdpDataProcessor::backupChannelStatusChanged, this, [=](quint8 v1, bool v2){
+        if (mMapChannel[v1] != v2){
+            mMapChannel[v1] = v2;
+            emit backupChannelStatusChanged(v1, v2);
+        }
+    }, Qt::DirectConnection);// &CommHelper::backupChannelStatusChanged);
+    connect(mUdpPerformanceDataProcessor, &UdpDataProcessor::temperatureAndVoltageChanged, this, [=](quint8 v1, const QMap<QString, QPair<double, double>>& v2){
+        emit temperatureAndVoltageChanged(v1, v2);
+    }, Qt::DirectConnection);//&CommHelper::temperatureAndVoltageChanged);
     // 窗口关闭时安全退出线程
     connect(this, &CommHelper::destroyed, mUdpPerformanceDataProcessor, &UdpDataProcessor::stop);
     connect(m_workThread, &QThread::finished, m_workThread, &QThread::deleteLater);
+    connect(m_workThread, &QThread::finished, mUdpPerformanceDataProcessor, &UdpDataProcessor::deleteLater);
 
     m_workThread->start();
 
@@ -256,10 +350,18 @@ CommHelper::~CommHelper()
     // mRequestCmdThread->wait();
     // mRequestCmdThread->deleteLater();
 
-    this->disconnectServer();
+    // 断开性能监测
+    //this->disconnectServer();
+    // 通知后台处理器停止运行，唤醒等待中的线程
     mUdpPerformanceDataProcessor->stop();
+    // 告诉线程终止事件循环，退出线程主函数
     m_workThread->quit();
-    m_workThread->wait();
+    // 阻塞等待线程真正执行完毕，最多等3秒避免死锁卡住
+    if(!m_workThread->wait(3000)) {
+        // 3秒还没退出，强制终止极端阻塞场景
+        m_workThread->terminate();
+        m_workThread->wait();
+    }
 }
 
 void CommHelper::initSocket()
@@ -466,80 +568,18 @@ void CommHelper::onReadyRead(QByteArray& tempData)
             02 = 48.05V, 1.05A
             #
         */
-        if (1)
-        {
-            rawData.replace('\n', ',');
-            QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(rawData);
-            emit temperatureAndVoltageChanged(moduleNo, std::move(result));
+        rawData.replace('\n', ',');
+        QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(rawData);
+        emit temperatureAndVoltageChanged(moduleNo, std::move(result));
 
-            if (result.contains("IO_BIN")){ // 对应的moduleNo==19
-                std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
-                for (int i=0; i<18; ++i){
-                    if (mMapChannel[i+1] != bits.test(i))
-                    {
-                         mMapChannel[i+1] = bits.test(i);
-                        emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
-                    }
+        if (result.contains("IO_BIN")){ // 对应的moduleNo==19
+            std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
+            for (int i=0; i<18; ++i){
+                if (mMapChannel[i+1] != bits.test(i))
+                {
+                    mMapChannel[i+1] = bits.test(i);
+                    emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
                 }
-            }
-        }
-        else
-        {
-            QList<QByteArray> lines = rawData.split('\n');
-            QVector<float> temperature;
-            QVector<QPair<float,float>> voltage_current;
-            //IHA238_01 = 0.00V, 0.00mA
-            for (int i=0; i<lines.size(); ++i){
-                QString input = lines.at(i);
-                if (input.contains("INA238")){
-                    // 电压
-                    QRegularExpression regex("(\\d+\\.\\d+)(V|mA)");
-                    QRegularExpressionMatchIterator iterator = regex.globalMatch(input);
-
-                    float voltage = 0.0;
-                    float current = 0.0;
-                    int j = 0;
-                    while (iterator.hasNext()) {
-                        QRegularExpressionMatch match = iterator.next();
-                        QString valueStr = match.captured(1);
-                        bool ok;
-                        double value = valueStr.toFloat(&ok);
-                        if (ok) {
-                            if (j++ == 0)
-                                voltage = value;
-                            else
-                                current = value;
-                        }
-                    }
-
-                    voltage_current.push_back(qMakePair(voltage, current));
-                }
-                else if (input.contains("DS18B20")){
-                    // 电流
-                    QRegularExpression regex(R"(=\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*[a-zA-Z]*)");
-                    QRegularExpressionMatchIterator iterator = regex.globalMatch(input);
-
-                    while (iterator.hasNext()) {
-                        QRegularExpressionMatch match = iterator.next();
-                        QString valueStr = match.captured(1);
-                        bool ok;
-                        double value = valueStr.toFloat(&ok);
-                        if (ok) {
-                            temperature.push_back(value);
-                        }
-                    }
-                }
-            }
-
-            if (voltage_current.size() != 12)
-            {
-                qDebug() << QString(rawData);
-                qDebug() << "exception";
-            }
-            else{
-
-                emit temperatureChanged(moduleNo, temperature);
-                emit voltageAndCurrentChanged(moduleNo, voltage_current);
             }
         }
     }
@@ -583,7 +623,7 @@ void CommHelper::disconnectServer()
     }
 }
 
-bool CommHelper::switchPower(quint32 channel, bool on)
+bool CommHelper::switchPower(quint8 channel, bool on)
 {
     mMapPower[channel] = on;
 
@@ -591,7 +631,7 @@ bool CommHelper::switchPower(quint32 channel, bool on)
     return true;
 }
 
-bool CommHelper::switchVoltage(quint32 channel, bool on)
+bool CommHelper::switchVoltage(quint8 channel, bool on)
 {
     mMapVoltage[channel] = on;
 
@@ -619,7 +659,7 @@ bool CommHelper::closeAllPower()
     return mUdpPerformanceMonitorReceiver->writeDatagram(datagram, QHostAddress(ip), port) > 0;
 }
 
-bool CommHelper::switchBackupPower(quint32 channel, bool on)
+bool CommHelper::switchBackupPower(quint8 channel, bool on)
 {
     mMapBackupPower[channel] = on;
 
@@ -627,7 +667,7 @@ bool CommHelper::switchBackupPower(quint32 channel, bool on)
     return true;
 }
 
-bool CommHelper::switchBackupVoltage(quint32 channel, bool on)
+bool CommHelper::switchBackupVoltage(quint8 channel, bool on)
 {
     mMapBackupVoltage[channel] = on;
 
@@ -635,7 +675,7 @@ bool CommHelper::switchBackupVoltage(quint32 channel, bool on)
     return true;
 }
 
-bool CommHelper::switchBackupChannel(quint32 channel, bool on)
+bool CommHelper::switchBackupChannel(quint8 channel, bool on)
 {
     std::bitset<32> bits;
     //0000 0000 0000 0000 0000 0000 0000 0000

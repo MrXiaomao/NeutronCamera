@@ -55,11 +55,11 @@ public:
     // 另外可选输出 colorMap（NLevel+1 x NLevel+1 格子计数）
     QVector<std::array<qint16, H5_DATA_COLS>> readWave(const std::string &fileName, const std::string &dsetName);
 
-    QVector<QPair<float, float>> computePSD(const QVector<std::array<qint16, H5_DATA_COLS>> &wave_CH1);
+    QVector<QPair<float, quint16>> computePSD(const QVector<std::array<qint16, H5_DATA_COLS>> &wave_CH1);
 
-    QVector<float> computeDensity(QVector<QPair<float, float>> &psdData, int NLevel = 200);
+    QVector<float> computeDensity(QVector<QPair<float, quint16>> &psdData, int NLevel = 200);
 
-    HistResult selectAndHist(const QVector<QPair<float, float>> &data);
+    HistResult selectAndHist(const QVector<QPair<float, quint16>> &data);
     FOM GetFOM(const QVector<double> &psd_x,
                                        const QVector<int> &count_y,
                                        double minPeakHeight = 5.0f,
@@ -71,12 +71,12 @@ public:
     bool lsqcurvefit1(QVector<double> fit_x, QVector<double> fit_y, double* fit_c, double* r_square);
 
     // 对能量进行处理，区分中子或伽马能谱
-    void processEnergyData(const QVector<QPair<float, float>>& rawData,
+    void processEnergyData(const QVector<QPair<float, quint16>>& psdData,
                                     QVector<double>& gammaX,
                                     QVector<double>& gammaY,
                                     QVector<double>& neutronX,
                                     QVector<double>& neutronY,
-                                    const float threshold = 0.52f,
+                                    const quint16 threshold = 130,
                                     const int channels = 1024/*道址*/,
                                     const float minEnergy = 0.0f/*能量范围*/,
                                     const float maxEnergy = 16384.0f);

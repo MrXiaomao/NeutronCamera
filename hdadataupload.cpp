@@ -108,6 +108,7 @@ bool HDADataUpload::startUpload()
     }
 }
 
+/**/
 bool HDADataUpload::startUploadSpectrumCpsData(quint32 shot/*炮号*/,
                                             const std::string& shotTime/*打靶时刻*/,
                                             quint8 channel/*通道号*/,
