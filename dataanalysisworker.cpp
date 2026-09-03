@@ -256,6 +256,8 @@ QVector<qint16> DataAnalysisWorker::adjustDataWithBaseline(QVector<quint16>& dat
             result[i] = baseline_ch - data_ch[i];
         }
     }
+
+    return result;
 }
 
 // 提取超过阈值的有效波形数据
@@ -490,35 +492,10 @@ void DataAnalysisWorker::getValidWave()
                 if (fileID < startFile || fileID > endFile)
                     continue;
 
-                // QFile f(filePath);
-                // if (!f.open(QIODevice::ReadOnly)) {
-                //     emit logMessage(QString("采集卡%1 文件%2: 打开失败").arg(cardName).arg(fileName), QtWarningMsg);
-                //     continue;
-                // }
-                // // 大文件：增大缓冲，减少 read 系统调用次数
-                // // f.setReadBufferSize(16 * 1024 * 1024);
-
-                // const qint64 size = f.size();
-                // if (size <= 0) {
-                //     f.close();
-                //     emit logMessage(QString("采集卡%1 文件%2: 文件大小异常").arg(cardName).arg(fileName), QtWarningMsg);
-                //     continue;
-                // }
-
-                // QByteArray buf = f.readAll();
-                // if (buf.isEmpty()) {
-                //     f.close();
-                //     emit logMessage(QString("采集卡%1 文件%2: 读取不完整 (%3/%4)")
-                //                     .arg(cardName).arg(fileName), QtWarningMsg);
-                //     continue;
-                // }
-                // f.close();
-
                 FileJob job;
                 job.filePath = filePath;
                 job.deviceIndex = static_cast<quint8>(deviceIndex);
                 job.packerStartTime = static_cast<quint32>((fileID-1) * timePerFile);
-                //job.data = std::move(buf);
                 queue.push(std::move(job));
             }
 
@@ -558,7 +535,7 @@ void DataAnalysisWorker::getValidWave()
                     qWarning() << "提取有效波形异常:" << e.what();
                 }
             };
-
+            qInfo() << "[DEBUG]" << __FUNCTION__ << __LINE__;
             // 注意：这里 cameraIndex=0 表示 3个通道都处理一次（对应本采集卡）
             auto *task = new ExtractValidWaveformFromBufferTask(
                 std::move(job),
@@ -580,6 +557,7 @@ void DataAnalysisWorker::getValidWave()
 
             pool->start(task);
         }
+        qInfo() << "[DEBUG]" << __FUNCTION__ << __LINE__;
 
         if (producer.joinable()) producer.join();
 
