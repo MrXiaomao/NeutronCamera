@@ -833,7 +833,7 @@ void MainWindow::initUi()
 
                     if (errCount > 10){ // 数据连续出现异常超过10次，才会认为是出现了异常
                         if (ui->tableWidget_status->item(row, column)->textColor() != Qt::red){
-                            ui->tableWidget_status->item(row, column)->setTextColor(Qt::red);
+                            ui->tableWidget_status->item(row, column)->setForeground(Qt::red);
                             qCritical().noquote().nospace() << "模组#" << moduleNo << " " << errMsg << QString::number(v, 'f', 2);
 
                             //mCommHelper->switchPower(moduleNo, false);
@@ -847,7 +847,7 @@ void MainWindow::initUi()
                 }
                 else{
                     ui->tableWidget_status->item(row, column)->setData(Qt::UserRole+1, QVariant::fromValue<int>(0));
-                    ui->tableWidget_status->item(row, column)->setTextColor(mIsDarkTheme ? Qt::white : Qt::black);
+                    ui->tableWidget_status->item(row, column)->setForeground(mIsDarkTheme ? Qt::white : Qt::black);
                 }
             };
 
@@ -862,7 +862,7 @@ void MainWindow::initUi()
                 if (!item) return;
 
                 int errCount = table->item(row, col)->data(Qt::UserRole+1).value<int>();
-                if (errCount >=1 && errCount <= 10) // 当数据异常次数超过10次，触发报警，低于10次处于预警中，数据不更新显示
+                if (errCount >=1 && errCount <= 5) // 当数据异常次数超过10次，触发报警，低于10次处于预警中，数据不更新显示
                     return;
 
                 // 只有新旧值的绝对差超过容差时才执行更新
@@ -963,7 +963,9 @@ void MainWindow::initUi()
     for (int i=0; i<20; ++i)
         mModuleOccurred[i] = false;
     connect(mCommHelper, &CommHelper::moduleExceptionOccurred, this, [=](quint8 moduleNo, bool alarm){
+        mLastCommunicationTime.restart();
         if (moduleNo>20) return;
+        if (alarm == mModuleOccurred[moduleNo-1]) return;
 
         if (alarm && !mModuleOccurred[moduleNo-1])
             qWarning().noquote().nospace() << "模组" << moduleNo << "通讯异常！！！";
@@ -975,7 +977,12 @@ void MainWindow::initUi()
             mIsAlarm.store(true);
         }
 
-        mLastCommunicationTime.restart();
+        // 模块列值全部标红
+        ui->tableWidget_status->blockSignals(true);
+        for (int row=0; row<ui->tableWidget_status->rowCount(); ++row)
+            ui->tableWidget_status->item(row, moduleNo+1)->setForeground(alarm ? Qt::red : (mIsDarkTheme ? Qt::white : Qt::black));
+        ui->tableWidget_status->blockSignals(false);
+
     }, Qt::QueuedConnection);
 
     connect(mCommHelper, &CommHelper::connected, this, [=](){

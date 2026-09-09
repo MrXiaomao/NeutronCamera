@@ -856,9 +856,8 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
 
             if (existsGroup > 0) {
                 boardGroup = file.openGroup(boardGroupName.toStdString());
-
                 // 辅助函数：写入单个通道的数据集
-                auto readChannel = [&](const QString& datasetName, QVector<qint16>& timeTrigger, QVector<qint16>& timePeak) {
+                auto readChannel = [=](const QString& datasetName, QVector<qint16>& timeTrigger, QVector<qint16>& timePeak) {
                     htri_t existsDataset = H5Lexists(boardGroup.getId(), datasetName.toStdString().c_str(), H5P_DEFAULT);
                     if (existsDataset){
                         std::string ds = datasetName.toUtf8().constData();
@@ -893,8 +892,12 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
                             timePeak.push_back(static_cast<qint16>(outData[1][rowIdx]));
                         }
 
+                        fileSpace.close();
                         dataset.close();
+                        return true;
                     }
+
+                    return false;
                 };
 
                 // 写入3个通道的数据

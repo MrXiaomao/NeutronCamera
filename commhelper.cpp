@@ -63,9 +63,9 @@ QMap<QString, QPair<double, double>> parseKeyValuePairsWithDefault(const QString
 UdpDataProcessor::UdpDataProcessor(QObject *parent)
     : QObject(parent)
 {
-    for (int cardIndex = 1; cardIndex <= 18; ++cardIndex){
-        mMapChannel[cardIndex] = false;
-    }
+    // for (int cardIndex = 1; cardIndex <= 18; ++cardIndex){
+    //     mMapChannel[cardIndex] = false;
+    // }
 }
 
 void UdpDataProcessor::enqueueDatagram(const QByteArray &gram)
@@ -170,7 +170,7 @@ void UdpDataProcessor::processLoop()
                 if (result.contains("IO_BIN")){ // 对应的moduleNo==19
                     std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
                     for (int i=0; i<18; ++i){
-                        if (mMapChannel[i+1] != bits.test(i))
+                        if (!mMapChannel.contains(i+1) || mMapChannel[i+1] != bits.test(i))
                         {
                             mMapChannel[i+1] = bits.test(i);
                             emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
@@ -458,9 +458,9 @@ void CommHelper::readyRead()
 
 void CommHelper::onReadyRead(QByteArray& tempData)
 {
-    qDebug() << "================================================================";
-    qDebug() << tempData;
-    qDebug() << "================================================================\n";
+    // qDebug() << "================================================================";
+    // qDebug() << tempData;
+    // qDebug() << "================================================================\n";
 
     if (tempData == "start"){
         if (mTimerout->isActive())
@@ -575,10 +575,10 @@ void CommHelper::onReadyRead(QByteArray& tempData)
         if (result.contains("IO_BIN")){ // 对应的moduleNo==19
             std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
             for (int i=0; i<18; ++i){
-                if (mMapChannel[i+1] != bits.test(i))
+                if (!mMapChannel.contains(i+1) || mMapChannel[i+1] != bits.test(i))
                 {
                     mMapChannel[i+1] = bits.test(i);
-                    emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+                    emit backupChannelStatusChanged(i+1, !mMapChannel[i+1]);
                 }
             }
         }
@@ -686,9 +686,9 @@ bool CommHelper::switchBackupChannel(quint8 channel, bool on)
     bits.set(31);
     for (int i=0; i<18; ++i){
         if (i+1 == channel)
-            bits[i] = on;
+            bits[i] = !on;
         else
-            bits[i] = mMapChannel[i+1];
+            bits[i] = !mMapChannel[i+1];
     }
 
     quint32 v = bits.to_ulong();
@@ -716,7 +716,7 @@ bool CommHelper::switchAllBackupChannel(bool on)
     bits.set(31);
 
     for (int i=0; i<18; ++i){
-        bits[i] = on;
+        bits[i] = !on;
     }
 
     quint32 v = bits.to_ulong();

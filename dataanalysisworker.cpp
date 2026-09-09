@@ -535,7 +535,7 @@ void DataAnalysisWorker::getValidWave()
                     qWarning() << "提取有效波形异常:" << e.what();
                 }
             };
-            qInfo() << "[DEBUG]" << __FUNCTION__ << __LINE__;
+
             // 注意：这里 cameraIndex=0 表示 3个通道都处理一次（对应本采集卡）
             auto *task = new ExtractValidWaveformFromBufferTask(
                 std::move(job),
@@ -557,7 +557,6 @@ void DataAnalysisWorker::getValidWave()
 
             pool->start(task);
         }
-        qInfo() << "[DEBUG]" << __FUNCTION__ << __LINE__;
 
         if (producer.joinable()) producer.join();
 

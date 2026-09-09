@@ -26,7 +26,7 @@ public:
 signals:
     // 处理完成后发回主线程的轻量化结果，仅用于UI更新
     Q_SIGNAL void moduleExceptionOccurred(quint8, bool);
-    Q_SIGNAL void backupChannelStatusChanged(quint8, bool);
+    Q_SIGNAL void backupChannelStatusChanged(quint8, bool/*false-单通 true-选通*/);
     Q_SIGNAL void temperatureAndVoltageChanged(quint8, const QMap<QString, QPair<double, double>>&);
 
 public slots:
@@ -68,8 +68,8 @@ public:
     bool closeAllPower();
     bool switchBackupPower(quint8, bool);
     bool switchBackupVoltage(quint8, bool);
-    bool switchBackupChannel(quint8, bool);
-    bool switchAllBackupChannel(bool);
+    bool switchBackupChannel(quint8, bool/*true-单通 false-选通*/);
+    bool switchAllBackupChannel(bool/*true-单通 false-选通*/);
 
     Q_SIGNAL void powerStatusChanged(quint8, bool);
     Q_SIGNAL void voltageStatusChanged(quint8, bool);
@@ -77,7 +77,7 @@ public:
     Q_SIGNAL void backupVoltageStatusChanged(quint8, bool);
 
     Q_SIGNAL void moduleExceptionOccurred(quint8, bool);
-    Q_SIGNAL void backupChannelStatusChanged(quint8, bool);
+    Q_SIGNAL void backupChannelStatusChanged(quint8, bool/*false-单通 true-选通*/);
     Q_SIGNAL void temperatureAndVoltageChanged(quint8, const QMap<QString, QPair<double, double>>&);
 
     Q_SIGNAL void shotnumValueChanged(const QString&);
