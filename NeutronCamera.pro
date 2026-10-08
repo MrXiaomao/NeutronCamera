@@ -9,9 +9,13 @@ CONFIG += c++17
 # In order to do so, uncomment the following line.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 DEFINES += ENABLE_IOCP=0   #启用IO完成端口
+# Release 也带上日志上下文，便于业务 qWarning（如丢包汇总）不被 AppMessageHandler 误过滤
+DEFINES += QT_MESSAGELOGCONTEXT
 
 SOURCES += \
     AppConfig.cpp \
+    QSnmpClient.cpp \
+    ToastNotification.cpp \
     commhelper.cpp \
     dataanalysisworker.cpp \
     datacompresswindow.cpp \
@@ -24,6 +28,7 @@ SOURCES += \
     offlinewindow.cpp \
     pciecommsdk.cpp \
     pcieiocpreader.cpp \
+    pducontrolwidget.cpp \
     qgaugepanel.cpp \
     settingwindow.cpp \
     switchbutton.cpp \
@@ -31,6 +36,8 @@ SOURCES += \
 
 HEADERS += \
     AppConfig.h \
+    QSnmpClient.h \
+    ToastNotification.h \
     commhelper.h \
     dataanalysisworker.h \
     datacompresswindow.h \
@@ -40,6 +47,7 @@ HEADERS += \
     offlinewindow.h \
     pciecommsdk.h \
     pcieiocpreader.h \
+    pducontrolwidget.h \
     qgaugepanel.h \
     qlitethread.h \
     globalsettings.h \
@@ -53,6 +61,7 @@ FORMS += \
     devicemanagerwindow.ui \
     mainwindow.ui \
     offlinewindow.ui \
+    pducontrolwidget.ui \
     settingwindow.ui
 
 # Default rules for deployment.
@@ -126,7 +135,7 @@ DEFINES += GIT_BRANCH=\"\\\"$$GIT_BRANCH\\\"\"
 DEFINES += GIT_DATE=\"\\\"$$GIT_DATE\\\"\"
 DEFINES += GIT_HASH=\"\\\"$$GIT_HASH\\\"\"
 DEFINES += GIT_VERSION=\"\\\"$$GIT_VERSION\\\"\"
-DEFINES += APP_VERSION="\\\"V3.1.2\\\""
+DEFINES += APP_VERSION="\\\"V3.3.0911\\\""
 
 DEFINES +=_WIN32_WINNT=0x0601
 

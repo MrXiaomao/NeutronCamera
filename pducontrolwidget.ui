@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PDUControlWidget</class>
+ <widget class="QWidget" name="PDUControlWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>421</width>
+    <height>280</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>PDU程控电源</string>
+  </property>
+  <widget class="QPushButton" name="pushButton_refresh">
+   <property name="geometry">
+    <rect>
+     <x>110</x>
+     <y>230</y>
+     <width>56</width>
+     <height>25</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>刷新</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pushButton_open">
+   <property name="geometry">
+    <rect>
+     <x>180</x>
+     <y>230</y>
+     <width>56</width>
+     <height>25</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>闭合</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pushButton_close">
+   <property name="geometry">
+    <rect>
+     <x>250</x>
+     <y>230</y>
+     <width>56</width>
+     <height>25</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>断开</string>
+   </property>
+  </widget>
+  <widget class="QWidget" name="layoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>50</x>
+     <y>20</y>
+     <width>321</width>
+     <height>191</height>
+    </rect>
+   </property>
+   <layout class="QGridLayout" name="gridLayout">
+    <property name="spacing">
+     <number>16</number>
+    </property>
+    <item row="0" column="0">
+     <widget class="SwitchButton" name="relay1" native="true"/>
+    </item>
+    <item row="0" column="1">
+     <widget class="SwitchButton" name="relay2" native="true"/>
+    </item>
+    <item row="1" column="0">
+     <widget class="SwitchButton" name="relay3" native="true"/>
+    </item>
+    <item row="1" column="1">
+     <widget class="SwitchButton" name="relay4" native="true"/>
+    </item>
+    <item row="2" column="0">
+     <widget class="SwitchButton" name="relay5" native="true"/>
+    </item>
+    <item row="2" column="1">
+     <widget class="SwitchButton" name="relay6" native="true"/>
+    </item>
+    <item row="3" column="0">
+     <widget class="SwitchButton" name="relay7" native="true"/>
+    </item>
+    <item row="3" column="1">
+     <widget class="SwitchButton" name="relay8" native="true"/>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SwitchButton</class>
+   <extends>QWidget</extends>
+   <header>switchbutton.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

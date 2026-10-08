@@ -36,6 +36,10 @@ public:
     QtnPropertyBool* propBoard3EnableDDR1;
     QtnPropertyBool* propBoard3EnableDDR2;
 
+    //PDU程控电源
+    QtnPropertySet* propSetPDU;
+    QtnPropertyQString* PDUIpAddress;// 设备地址
+
     //探测器参数设置
     QtnPropertySet* propSetDetector;
     QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
@@ -116,6 +120,25 @@ AppConfig::AppConfig(QObject* parent)
         // d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
 
         propSet->collapse();
+    }
+
+    //PDU程控电源
+    baseId = ID_PDU_SET;
+    {
+        QtnPropertySet* propSet = new QtnPropertySet(d->propSetRoot);
+        d->propSetPDU = propSet;
+        d->propSetRoot->addChildProperty(propSet);
+        propSet->setName("PDU程控电源");
+        propSet->setId(ID_PDU_SET);
+
+        // 设备地址
+        d->PDUIpAddress = new QtnPropertyQString(propSet);
+        d->PDUIpAddress->setId(++baseId);
+        d->PDUIpAddress->setName("设备地址");
+        d->PDUIpAddress->setDescription("如：192.168.0.168");
+        d->PDUIpAddress->setValue("192.168.0.168");
+
+        propSet->addChildProperty(d->PDUIpAddress);
     }
 
     // 探测器参数设置
@@ -429,6 +452,8 @@ QtnPropertySet* AppConfig::propertySet(int id)
         return d->propSetRoot;
 }
 
+// 程控电源
+QString AppConfig::PDUipAddress() const { return d->PDUIpAddress->value(); }
 
 // 采集卡通道管理
 void AppConfig::enableBoardCapture(quint8 physicalIndex)

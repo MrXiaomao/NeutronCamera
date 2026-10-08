@@ -39,6 +39,7 @@ private:
     QWaitCondition m_waitCondition;
     bool m_isRunning = false;
     QMap<quint32, bool> mMapChannel;//选通开关,false-1#,true-2#
+    std::atomic<quint32> mModuleOccurredCount[20];// 模组通讯连续出现异常次数
 };
 
 class CommHelper : public QObject
@@ -88,6 +89,8 @@ public:
 
     Q_SLOT void error(QAbstractSocket::SocketError);
     Q_SLOT void readyRead();
+    Q_SLOT void startReconnect();
+    Q_SLOT void stopReconnect();
 
     Q_SLOT void onReadyRead(QByteArray&);
 
@@ -95,6 +98,7 @@ private:
     QUdpSocket *mUdpShotReceiver = nullptr;// 炮号接收器
     QUdpSocket *mUdpPerformanceMonitorReceiver = nullptr;// 设备电压/电流/温度等性能监测，所有发送端口都是8000，接收端口ip100:1000,ip101:8080,ip102:8081
     QTimer* mTimerout;// 网络连接超时
+    QTimer* mReconnectTimer; // 自动重连
     QLiteThread* mRequestCmdThread = nullptr;
     QByteArray mRawData;
 

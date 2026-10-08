@@ -4,6 +4,9 @@
 #include "qcustomplothelper.h"
 #include "globalsettings.h"
 #include "switchbutton.h"
+#include "pducontrolwidget.h"
+#include "ToastNotification.h"
+#include <QShortcut>
 
 // 对尾缀_1等数字进行加1操作。一定要有下划线
 QString increaseShotNumSuffix(QString shotNumStr)
@@ -187,7 +190,7 @@ void MainWindow::initUi()
         ui->tableWidget_status->setItem(0, 0, new QTableWidgetItem("温度\n℃"));
         ui->tableWidget_status->item(0, 0)->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget_status->item(0, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
-        QStringList headers = QStringList() << "PSD1" << "PSD2" << "LBD" <<  "LSD";
+        QStringList headers = QStringList() << "单通"/*PSD1*/ << "加和"/*PSD2*/ << "LBD" <<  "LSD";
         for (int i=0; i<=3; ++i){
             ui->tableWidget_status->setItem(i, 1, new QTableWidgetItem(headers[i]));
             ui->tableWidget_status->item(i, 1)->setTextAlignment(Qt::AlignCenter);
@@ -248,6 +251,7 @@ void MainWindow::initUi()
             for (int j=0; j<28; ++j){
                 ui->tableWidget_status->setItem(j, i, new QTableWidgetItem("0.0"));
                 ui->tableWidget_status->item(j, i)->setTextAlignment(Qt::AlignCenter);
+                ui->tableWidget_status->item(j, i)->setData(Qt::UserRole+1, QVariant::fromValue<int>(0));
             }
         }
     }
@@ -465,6 +469,31 @@ void MainWindow::initUi()
         QString dayOfWeekString = dayNames.at(dayOfWeekNumber);
         this->findChild<QLabel*>("label_systemtime")->setText(QString(QObject::tr("系统时间：")) + currentDateTime.toString("yyyy/MM/dd hh:mm:ss ") + dayOfWeekString);
 
+        // 检查模组通讯是否正常
+        {
+            if (mLastCommunicationTime.isValid() && mLastCommunicationTime.elapsed() >= 10000){
+                // 超过10s没通讯，网络出现故障
+                qWarning().noquote().nospace() << "性能检测设备网络发生故障，尝试重连...";
+                mLastCommunicationTime.invalidate();
+                if (!mIsAlarm){
+                    mIsAlarm.store(true);
+                }
+
+                mLastAlarmTime.restart();
+                // 启动自动重连
+                mReconnecting = true;
+                ui->action_init->setText(QStringLiteral("正在重连"));
+                mCommHelper->startReconnect();
+            }
+        }
+
+        // 判断报警时长
+        if (mIsAlarm && mLastAlarmTime.isValid() && mLastAlarmTime.elapsed() >= 10000)
+        {
+            mIsAlarm.store(false);
+            mLastAlarmTime.invalidate();
+        }
+
         {
             //监测温度和电压报警状态
             static quint32 ref = 0;
@@ -497,17 +526,6 @@ void MainWindow::initUi()
             }
         }
 
-        // 检查模组通讯是否正常
-        {
-            if (mLastCommunicationTime.isValid() && mLastCommunicationTime.elapsed() >= 10000){
-                // 超过10s没通讯，网络出现故障
-                qWarning().noquote().nospace() << "性能检测设备网络故障！！！";
-                mLastCommunicationTime.invalidate();
-                if (!mIsAlarm){
-                    mIsAlarm.store(true);
-                }
-            }
-        }
 
     });
     systemClockTimer->start(900);
@@ -763,7 +781,7 @@ void MainWindow::initUi()
         //     mCommHelper->switchPower(row + 1, false);
         //     mCommHelper->switchVoltage(row + 1, false);
         // }
-        if (mCommHelper->closeAllPower()){
+        if (mVoltageSwitcherOpened && mCommHelper->closeAllPower()){
             ui->detectorControlWidget->setEnabled(false);
             mVoltageSwitcherOpened = false;
             ui->statusbar->showMessage(tr("48V电压开关处于关闭状态"));
@@ -819,6 +837,7 @@ void MainWindow::initUi()
             ui->tableWidget_status->setSortingEnabled(false); // 临时关闭排序，避免每次插入都重排
             ui->tableWidget_status->blockSignals(true); // 暂停itemChanged等信号发射
 
+            const int check_except_maxcount = 5;
             // 校验数据有效性
             auto checkValueValid = [=](quint8 row, float v, float v1, float v2, QString errMsg){
                 // if (qFuzzyCompare(v, (float)-0.06))//-0.06是个特殊数字，排除掉
@@ -831,18 +850,23 @@ void MainWindow::initUi()
                     int errCount = ui->tableWidget_status->item(row, column)->data(Qt::UserRole+1).value<int>();
                     ui->tableWidget_status->item(row, column)->setData(Qt::UserRole+1, QVariant::fromValue<int>(errCount+1));
 
-                    if (errCount > 10){ // 数据连续出现异常超过10次，才会认为是出现了异常
+                    if ((errCount+1) > check_except_maxcount){ // 数据连续出现异常超过10次，才会认为是出现了异常
                         if (ui->tableWidget_status->item(row, column)->textColor() != Qt::red){
                             ui->tableWidget_status->item(row, column)->setForeground(Qt::red);
-                            qCritical().noquote().nospace() << "模组#" << moduleNo << " " << errMsg << QString::number(v, 'f', 2);
+                            const QString msg = QString("模组#%1 %2%3").arg(moduleNo).arg(errMsg, QString::number(v, 'f', 2));
+                            qCritical().noquote().nospace() << msg;
+                            mToastManager->warning(QStringLiteral("提示"), msg);
 
-                            //mCommHelper->switchPower(moduleNo, false);
-                            //mCommHelper->switchVoltage(moduleNo, false);
-                            //mCommHelper->switchBackupPower(moduleNo, true);
-                            //mCommHelper->switchBackupVoltage(moduleNo, true);
-                            //mCommHelper->switchBackupChannel(moduleNo, true);
-                            mIsAlarm.store(true);
+                            if (mVoltageSwitcherOpened && mCommHelper->closeAllPower()){
+                                ui->detectorControlWidget->setEnabled(false);
+                                mVoltageSwitcherOpened = false;
+                                ui->statusbar->showMessage(tr("48V电压开关处于关闭状态"));
+                                qInfo().noquote().nospace() << tr("48V电压已关闭");
+                            }
+                            mIsAlarm.store(true);                            
                         }
+
+                        mLastAlarmTime.restart();
                     }
                 }
                 else{
@@ -862,7 +886,7 @@ void MainWindow::initUi()
                 if (!item) return;
 
                 int errCount = table->item(row, col)->data(Qt::UserRole+1).value<int>();
-                if (errCount >=1 && errCount <= 5) // 当数据异常次数超过10次，触发报警，低于10次处于预警中，数据不更新显示
+                if (errCount >=1 && errCount <= check_except_maxcount) // 当数据异常次数超过10次，触发报警，低于10次处于预警中，数据不更新显示
                     return;
 
                 // 只有新旧值的绝对差超过容差时才执行更新
@@ -960,32 +984,87 @@ void MainWindow::initUi()
         }
     }, Qt::QueuedConnection);
 
-    for (int i=0; i<20; ++i)
+    for (int i=0; i<20; ++i){
         mModuleOccurred[i] = false;
+        mModuleOccurredCount[i] = 0;
+    }
     connect(mCommHelper, &CommHelper::moduleExceptionOccurred, this, [=](quint8 moduleNo, bool alarm){
         mLastCommunicationTime.restart();
-        if (moduleNo>20) return;
-        if (alarm == mModuleOccurred[moduleNo-1]) return;
 
-        if (alarm && !mModuleOccurred[moduleNo-1])
-            qWarning().noquote().nospace() << "模组" << moduleNo << "通讯异常！！！";
-        else if (!alarm && mModuleOccurred[moduleNo-1])
-            qInfo().noquote().nospace() << "模组" << moduleNo << "通讯已恢复！！！";
+        // 全边界校验：1~18号模组允许完整走全量逻辑，19~20号模组只维护后台状态、完全跳过UI操作
+        if (moduleNo < 1 || moduleNo > 20) return;
+        const int idx = moduleNo - 1;
 
-        mModuleOccurred[moduleNo-1] = alarm;
-        if (alarm && !mIsAlarm){
-            mIsAlarm.store(true);
+        // 原子读取旧状态，避免竞态干扰判断
+        bool oldState = mModuleOccurred[idx].load(std::memory_order_acquire);
+        if (alarm == oldState) return;
+
+        // if (alarm){
+        //     quint8 currentCount = mModuleOccurredCount[idx].fetch_add(1, std::memory_order_relaxed);
+        //     // 阈值溢出防护，避免quint8溢出绕0触发异常逻辑
+        //     if (Q_UNLIKELY(currentCount >= 250)) {
+        //         mModuleOccurredCount[idx].store(6, std::memory_order_relaxed);
+        //         currentCount = 6;
+        //     }
+        //     // 保持原有"低于6次不触发告警"的业务逻辑
+        //     if (currentCount < 6) return;
+        // } else {
+        //     mModuleOccurredCount[idx].store(0, std::memory_order_relaxed);
+        // }
+
+        // 所有20个模组的告警/恢复日志都会正常打印，不受UI显示过滤影响
+        if (alarm && !oldState){
+            const QString msg = QString("模组#%1 通讯异常！！！").arg(moduleNo);
+            qWarning().noquote().nospace() << msg;
+            mToastManager->warning(QStringLiteral("提示"), msg);
+        }
+        else if (!alarm && oldState){
+            const QString msg = QString("模组#%1 通讯已恢复！！！").arg(moduleNo);
+            qInfo().noquote().nospace() << msg;
+            mToastManager->info(QStringLiteral("提示"), msg);
         }
 
-        // 模块列值全部标红
-        ui->tableWidget_status->blockSignals(true);
-        for (int row=0; row<ui->tableWidget_status->rowCount(); ++row)
-            ui->tableWidget_status->item(row, moduleNo+1)->setForeground(alarm ? Qt::red : (mIsDarkTheme ? Qt::white : Qt::black));
-        ui->tableWidget_status->blockSignals(false);
+        mModuleOccurred[idx].store(alarm, std::memory_order_release);
+        if (alarm && !mIsAlarm)
+            mIsAlarm.store(true);
+        if (alarm)
+            mLastAlarmTime.restart();
+
+        // 只给前18个模组更新表格UI，19、20号模组直接跳过不操作表格
+        if (moduleNo > 18) return;
+
+        // UI操作加双重边界兜底，避免空指针和越界崩溃
+        const int targetCol = moduleNo + 1;
+        auto* table = ui->tableWidget_status;
+        if (targetCol >= table->columnCount()) return;
+
+        table->setUpdatesEnabled(false);
+        table->blockSignals(true);
+        table->setSortingEnabled(false);
+
+        QBrush textBrush = alarm ? QBrush(Qt::red) : (mIsDarkTheme ? QBrush(Qt::white) : QBrush(Qt::black));
+        for (int row = 0; row < table->rowCount(); ++row) {
+            auto* item = table->item(row, targetCol);
+            if (item) {
+                item->setForeground(textBrush);
+            }
+        }
+
+        table->setSortingEnabled(true);
+        table->blockSignals(false);
+        table->setUpdatesEnabled(true);
 
     }, Qt::QueuedConnection);
 
     connect(mCommHelper, &CommHelper::connected, this, [=](){
+        if (mReconnecting){
+            qInfo().noquote().nospace() << "性能检测设备网络故障已恢复！";
+            mReconnecting = false;
+            mCommHelper->stopReconnect();
+            ui->action_init->setText(QStringLiteral("断开设备"));
+            return;
+        }
+
         ui->action_init->setText(QStringLiteral("断开设备"));
         qInfo().noquote() << tr("设备已连接");
 
@@ -1128,6 +1207,18 @@ void MainWindow::initUi()
             customPlot->replot();
         }
     });
+
+    // 注册Ctrl+Shift+F12这类组合快捷键
+    QShortcut *customShortcut = new QShortcut(QKeySequence("Ctrl+Shift+F12"), this);
+    connect(customShortcut, &QShortcut::activated, this, [this](){
+        mPDUControlWidget->show();
+    });
+    mPDUControlWidget = new PDUControlWidget();
+    mPDUControlWidget->setWindowFlags(flags);
+    mPDUControlWidget->hide();
+
+    mToastManager = new ToastManager(this);
+    mToastManager->setMaxQueued(10);
 }
 
 
@@ -1183,6 +1274,7 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
     mSettingWindow->deleteLater();
     mDeviceManagerWindow->deleteLater();
+    mPDUControlWidget->deleteLater();
     event->accept();
 }
 
@@ -1968,6 +2060,8 @@ void MainWindow::on_pushButton_preview_clicked()
 
 void MainWindow::on_action_init_triggered()
 {
+    mReconnecting = false;
+    mCommHelper->stopReconnect();
     if (ui->action_init->text() == QStringLiteral("连接设备")){
         if (mCommHelper->connectServer()){
 

@@ -22,6 +22,8 @@ class QCPGraph;
 class QCPAbstractPlottable;
 class QCPItemCurve;
 class OfflineDataAnalysisWindow;
+class PDUControlWidget;
+class ToastManager;
 
 class MainWindow : public QMainWindow
 {
@@ -139,11 +141,15 @@ private:
     DeviceManagerWindow* mDeviceManagerWindow = nullptr; // 设备管理器界面
 
     std::atomic<bool> mIsAlarm = false;// 性能监测是否出现异常
+    QElapsedTimer mLastAlarmTime;// 模组最后一次报警时间
     bool mIsMeasuring = false;// 测量是否正在进行
     DetectorType mCurrentDetectorType = dtLSD; // 当前探测器类型：1-LSD 2-PSD 3-LBD
     QString mCurrentSavePath;// 本次实验数据存储路径
 
+    bool mReconnecting = false; // 自动重连标识
+
     std::atomic<bool> mModuleOccurred[20];// 模组通讯异常
+    std::atomic<quint8> mModuleOccurredCount[20];// 模组通讯连续出现异常次数
     QElapsedTimer mLastCommunicationTime;// 模组最后一次通讯时间
 
     bool mIsDarkTheme = false;
@@ -158,6 +164,9 @@ private:
     int mContinueMeasuerCount = 0;
     int mContinueMeasuerFailCount = 0;
     bool mVoltageSwitcherOpened = false;// 48V电压开关是否打开
+
+    PDUControlWidget *mPDUControlWidget = nullptr;
+    ToastManager* mToastManager = nullptr;
 
 private:
     struct LogItem {

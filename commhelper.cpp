@@ -66,6 +66,10 @@ UdpDataProcessor::UdpDataProcessor(QObject *parent)
     // for (int cardIndex = 1; cardIndex <= 18; ++cardIndex){
     //     mMapChannel[cardIndex] = false;
     // }
+
+    for (int idx=0; idx<20; ++idx){
+        mModuleOccurredCount[idx] = 0;
+    }
 }
 
 void UdpDataProcessor::enqueueDatagram(const QByteArray &gram)
@@ -153,7 +157,13 @@ void UdpDataProcessor::processLoop()
                 // 格式是@XX*TIMEOUT，直接提取@后面两位编号
                 quint8 moduleNo = errItem.mid(1,2).toInt();
                 //qDebug() << "检测到超时异常模块：" << moduleNo;
-                emit moduleExceptionOccurred(moduleNo, true);
+                if (moduleNo>=1 && moduleNo<=20){
+                    mModuleOccurredCount[moduleNo-1].fetch_add(1, std::memory_order_relaxed);
+                    quint32 currentRef = mModuleOccurredCount[moduleNo-1].load(std::memory_order_acquire);
+                    qDebug() << "模块异常：" << moduleNo << "次数：" << currentRef;
+                    if (currentRef > 5)
+                        emit moduleExceptionOccurred(moduleNo, true);
+                }
             }
 
             // 2. 处理正常闭合的带#报文
@@ -162,18 +172,24 @@ void UdpDataProcessor::processLoop()
                 //qDebug() << "收到完整正常报文：" << normalItem;
                 // 你之前的电压电流解析逻辑直接复用在这里即可
                 quint8 moduleNo = normalItem.mid(1, 2).toInt();
+                if (moduleNo < 1 || moduleNo > 20) continue;
+                quint32 currentRef = mModuleOccurredCount[moduleNo-1].load(std::memory_order_acquire);
+                if (currentRef > 5)
+                    qDebug() << "模块异常已恢复：" << moduleNo;
+
+                mModuleOccurredCount[moduleNo-1].store(0, std::memory_order_relaxed);
                 emit moduleExceptionOccurred(moduleNo, false);
 
                 QMap<QString, QPair<double, double>> result = parseKeyValuePairsWithDefault(normalItem.replace('\n', ','));
                 emit temperatureAndVoltageChanged(moduleNo, std::move(result));
 
-                if (result.contains("IO_BIN")){ // 对应的moduleNo==19
+                if (moduleNo==19 && result.contains("IO_BIN")){ // 对应的moduleNo==19
                     std::bitset<32> bits(static_cast<uint32_t>(result["IO_BIN"].first));
                     for (int i=0; i<18; ++i){
                         if (!mMapChannel.contains(i+1) || mMapChannel[i+1] != bits.test(i))
                         {
                             mMapChannel[i+1] = bits.test(i);
-                            emit backupChannelStatusChanged(i+1, mMapChannel[i+1]);
+                            emit backupChannelStatusChanged(i+1, !mMapChannel[i+1]);
                         }
                     }
                 }
@@ -372,7 +388,13 @@ void CommHelper::initSocket()
     mTimerout = new QTimer(this);
     mTimerout->setSingleShot(true);
     connect(mTimerout, &QTimer::timeout, this, [=](){
-        qCritical() << "设备连接失败";
+        if (!mReconnectTimer->isActive())
+            qCritical() << "设备连接失败";
+    });
+
+    mReconnectTimer = new QTimer(this);
+    connect(mReconnectTimer, &QTimer::timeout, this, [=](){
+        this->connectServer();
     });
 
     //炮号接收器
@@ -493,6 +515,57 @@ void CommHelper::onReadyRead(QByteArray& tempData)
         return;
     }
 
+    // 记录所有的性能监测原始数据
+    const qint64 MAX_LOG_FILE_SIZE = 100 * 1024 * 1024; // 自定义阈值，这里设为100MB，你可以按需调整大小
+    const QDateTime now = QDateTime::currentDateTime();
+    const QString dateTag = now.toString(QStringLiteral("yyyy-MM-dd"));
+    const QString baseFilePath = QStringLiteral("./logs/PerformanceMonitor_%1.log").arg(dateTag);
+
+    QFile currentFile(baseFilePath);
+    // 当当前基准文件超过阈值时，执行滚动归档
+    if (currentFile.exists() && currentFile.size() >= MAX_LOG_FILE_SIZE) {
+        // 读取当前文件里第一行记录的日志启动时间，作为归档文件的起始时间
+        QDateTime fileStartTime = now;
+        if (currentFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream readStream(&currentFile);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+            readStream.setCodec("UTF-8");
+#endif
+            QString firstLine = readStream.readLine();
+            // 匹配你原有日志开头的时间格式 yyyy-MM-dd HH:mm:ss.zzz
+            if (firstLine.contains(">>")) {
+                QString timeStr = firstLine.leftRef(23).toString();
+                fileStartTime = QDateTime::fromString(timeStr, QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"));
+                if (!fileStartTime.isValid()) {
+                    fileStartTime = now;
+                }
+            }
+            currentFile.close();
+        }
+
+        // 生成带起止时间的归档文件名
+        QString archiveStartTimeStr = fileStartTime.toString(QStringLiteral("yyyyMMdd-HHmmss"));
+        QString archiveEndTimeStr = now.toString(QStringLiteral("yyyyMMdd-HHmmss"));
+        QString archiveFilePath = QStringLiteral("./logs/PerformanceMonitor_%1_%2_%3.log")
+                                      .arg(dateTag, archiveStartTimeStr, archiveEndTimeStr);
+
+        // 重命名旧文件，生成归档文件
+        QFile::remove(archiveFilePath); // 避免重名冲突直接覆盖
+        currentFile.rename(archiveFilePath);
+    }
+
+    // 打开新的基准日志文件，写入当前日志内容
+    if (currentFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&currentFile);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+        out.setCodec("UTF-8");
+#endif
+        if (tempData.startsWith("@01"))
+            out << now.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz >> \n"));
+        out << tempData << '\n';
+        currentFile.close();
+    }
+
     // 直接把原始报文送入后台处理队列，主线程无任何阻塞
     mUdpPerformanceDataProcessor->enqueueDatagram(tempData);
     return;
@@ -590,6 +663,37 @@ void CommHelper::onReadyRead(QByteArray& tempData)
 */
 bool CommHelper::connectServer()
 {
+//     QFile currentFile("D:\\PerformanceMonitor_2026-09-15.log");
+//     // 当当前基准文件超过阈值时，执行滚动归档
+//     if (currentFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+//         QTextStream readStream(&currentFile);
+// #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+//         readStream.setCodec("UTF-8");
+// #endif
+//         QByteArray gram;
+//         while (!readStream.atEnd()){
+//             QString lineText = readStream.readLine();
+//             // 匹配你原有日志开头的时间格式 yyyy-MM-dd HH:mm:ss.zzz
+//             if (lineText.contains(">>")) {
+//                 qDebug() << lineText;
+//                 lineText = readStream.readLine();
+//             }
+
+//             if (lineText.contains(("========"))){
+//                 mUdpPerformanceDataProcessor->enqueueDatagram(gram);
+//                 gram.clear();
+//                 QThread::msleep(50);
+//             }
+//             else{
+//                 lineText += "\r\n";
+//                 gram.append(lineText.toLatin1());
+//             }
+//         }
+//         currentFile.close();
+//     }
+    return true;
+
+
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();
     quint32 portLocal = AppConfig::instance().localPort();
@@ -728,4 +832,14 @@ bool CommHelper::switchAllBackupChannel(bool on)
     //mTcpClient->write((const char*)&v, sizeof(quint32));
 
     return true;
+}
+
+void CommHelper::startReconnect()
+{
+    mReconnectTimer->start(3000);
+}
+
+void CommHelper::stopReconnect()
+{
+    mReconnectTimer->stop();
 }

@@ -144,6 +144,17 @@ int main(int argc, char *argv[])
         logger->addAppender(dailiAppender);
     }
 
+    const QList<Log4Qt::AppenderSharedPtr> appenders = Log4Qt::Logger::rootLogger()->appenders();
+    for (const Log4Qt::AppenderSharedPtr &appenderPtr : appenders) {
+        if (Log4Qt::WriterAppender * appender = qobject_cast<Log4Qt::WriterAppender *>(appenderPtr.data())){
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+        appender->setEncoding(QTextCodec::codecForName("UTF-8"));
+#else
+        appender->setEncoding(QStringConverter::Encoding::Utf8);
+#endif
+        }
+    }
+
     // 确保logs目录存在
     QDir dir(QDir::currentPath() + "/logs");
     if (!dir.exists()) {

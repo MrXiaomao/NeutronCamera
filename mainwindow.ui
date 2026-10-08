@@ -1924,6 +1924,18 @@
     <enum>QAction::NoRole</enum>
    </property>
   </action>
+  <action name="action_power">
+   <property name="icon">
+    <iconset resource="lresource.qrc">
+     <normaloff>:/resource/image/power-off.png</normaloff>:/resource/image/power-off.png</iconset>
+   </property>
+   <property name="text">
+    <string>开启电源</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>

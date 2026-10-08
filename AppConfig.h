@@ -11,6 +11,9 @@ class AppConfig : public QObject
 public:
     // 建议用枚举统一管理ID，避免重复
     enum ConfigPropertySetID {
+        // 程控电源
+        ID_PDU_SET = 500,
+
         // 采集卡通道管理
         ID_BOARD_SET = 1000,
 
@@ -25,6 +28,9 @@ public:
     };
 
     static AppConfig& instance();
+
+    // 程控电源
+    QString PDUipAddress() const;
 
     // 板卡通道管理
     void enableBoardCapture(quint8 physicalIndex);

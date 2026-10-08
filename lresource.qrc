@@ -14,5 +14,8 @@
         <file>resource/image/3Dsurface.png</file>
         <file>resource/image/devicemanager.png</file>
         <file>resource/image/data-upload.png</file>
+        <file>resource/image/power-fault.png</file>
+        <file>resource/image/power-off.png</file>
+        <file>resource/image/power-on.png</file>
     </qresource>
 </RCC>
