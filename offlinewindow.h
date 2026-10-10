@@ -5,7 +5,7 @@
 
 #include "QGoodWindowHelper"
 #include "pciecommsdk.h"
-#include "datacompresswindow.h"
+#include "dataanalysisworker.h"
 
 // 3D平面图头文件添加
 //#include <QtDataVisualization>
@@ -272,6 +272,8 @@ private slots:
     void on_action_cfgParam_triggered();
 
     void on_action_dataUpload_triggered();
+
+    void on_checkBox_threshold_clicked(bool checked);
 
 private:
     Ui::OfflineWindow *ui;

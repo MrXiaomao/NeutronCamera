@@ -6,7 +6,7 @@
 
 DataAnalysisWorker::DataAnalysisWorker(QObject *parent)
     : QObject(parent)
-    , mThreshold(200)
+    //, mThreshold(200)
     , mTimePerFile(40)
     , mStartTime(0)
     , mEndTime(0)
@@ -21,7 +21,7 @@ DataAnalysisWorker::~DataAnalysisWorker()
 void DataAnalysisWorker::setParameters(const QString& dataDir,
                                       const QStringList& fileList,
                                       const QString& outfileName,
-                                      int threshold,
+                                      QVector<quint32> thresholds,
                                       int timePerFile,
                                       int startTime,
                                       int endTime)
@@ -30,7 +30,7 @@ void DataAnalysisWorker::setParameters(const QString& dataDir,
     mDataDir = dataDir;
     mFileList = fileList;
     mOutfileName = outfileName;
-    mThreshold = threshold;
+    mThresholds = thresholds;
     mTimePerFile = timePerFile;
     mStartTime = startTime;
     mEndTime = endTime;
@@ -365,20 +365,21 @@ void DataAnalysisWorker::getValidWave()
 {
     QString dataDir, outfileName;
     QStringList fileList;
-    int threshold, timePerFile, startTime, endTime;
+    int timePerFile, startTime, endTime;
+    QVector<quint32> thresholds;
 
     {
         QMutexLocker locker(&mMutex);
         dataDir = mDataDir;
         fileList = mFileList;
         outfileName = mOutfileName;
-        threshold = mThreshold;
+        thresholds = mThresholds;
         timePerFile = mTimePerFile;
         startTime = mStartTime;
         endTime = mEndTime;
     }
 
-    emit logMessage(QString("开始处理波形数据，阈值: %1").arg(threshold), QtInfoMsg);
+    emit logMessage(QStringLiteral("开始处理波形数据"), QtInfoMsg);
 
     // 设置触发阈值前后波形点数
     int pre_points = RISING_WIDTH;
@@ -422,7 +423,7 @@ void DataAnalysisWorker::getValidWave()
             tempFileList[5].append(file);
     }
 
-    writeWaveformHeadToHDF5(hdf5FilePath, startTime, endTime, mThreshold);
+    writeWaveformHeadToHDF5(hdf5FilePath, startTime, endTime, mThresholds);
     for(int deviceIndex=1; deviceIndex<=6; ++deviceIndex) {
         {
             QMutexLocker locker(&mMutex);
@@ -540,7 +541,7 @@ void DataAnalysisWorker::getValidWave()
             auto *task = new ExtractValidWaveformFromBufferTask(
                 std::move(job),
                 0,
-                threshold,
+                thresholds,
                 pre_points,
                 post_points,
                 cb,
@@ -711,7 +712,7 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
     }
 }
 
-bool DataAnalysisWorker::writeWaveformHeadToHDF5(const QString& filePath, quint32 packerStartTime, quint32 packerEndTime, quint32 threshold)
+bool DataAnalysisWorker::writeWaveformHeadToHDF5(const QString& filePath, quint32 packerStartTime, quint32 packerEndTime, QVector<quint32> thresholds)
 {
     try {
         // 检查文件是否存在，决定打开方式
@@ -734,15 +735,17 @@ bool DataAnalysisWorker::writeWaveformHeadToHDF5(const QString& filePath, quint3
 
 
         // 准备数据：将 QVector<std::array<qint16, 512>> 转换为连续内存
-        hsize_t dims[2] = {1, 4}; // 第4列是版本号
-        H5::DataSpace dataspace(2, dims);
-        QVector<quint32> data = {packerStartTime, packerEndTime, threshold, 260825};
+        QVector<quint32> data;
+        data << HDF5_DATAFORMAT_VERSION << packerStartTime << packerEndTime;
+        data.append(thresholds);
 
         // 存在才删（不 open，不抛异常）
         if (H5Lexists(configGroup.getId(), "configuration", H5P_DEFAULT) > 0) {
             configGroup.unlink("configuration");
         }
 
+        hsize_t dims[2] = {1, (hsize_t)data.size()}; // 第4列是版本号
+        H5::DataSpace dataspace(2, dims);
         H5::DataSet dataset = configGroup.createDataSet(
             "configuration", H5::PredType::NATIVE_UINT32, dataspace);
 
@@ -779,7 +782,7 @@ bool DataAnalysisWorker::writeWaveformHeadToHDF5(const QString& filePath, quint3
     }
 }
 
-bool DataAnalysisWorker::readWaveformHeadFromHDF5(const QString& filePath, quint32& packerStartTime, quint32& packerEndTime, quint32& threshold)
+bool DataAnalysisWorker::readWaveformHeadFromHDF5(const QString& filePath, quint32& packerStartTime, quint32& packerEndTime, QVector<quint32>& thresholds)
 {
     try {
         // 检查文件是否存在，决定打开方式
@@ -822,9 +825,11 @@ bool DataAnalysisWorker::readWaveformHeadFromHDF5(const QString& filePath, quint
                       memSpace,
                       fileSpace);
 
-        packerStartTime = data[0];
-        packerEndTime = data[1];
-        threshold = data[2];
+        packerStartTime = data[1];
+        packerEndTime = data[2];
+        thresholds.clear();
+        for (int i=0; i<18 && (i+3)<dims[1]; ++i)
+            thresholds << data[3+i];
 
         fileSpace.close();
         dataset.close();
@@ -895,12 +900,12 @@ bool DataAnalysisWorker::checkHDF5VersionValid(const QString& filePath)
 
         hsize_t dims[2];
         dataspace.getSimpleExtentDims(dims, nullptr);
-        if (dims[1] != 4){
-            dataspace.close();
-            configGroup.close();
-            file.close();
-            return false;
-        }
+        // if (dims[1] != 4){
+        //     dataspace.close();
+        //     configGroup.close();
+        //     file.close();
+        //     return false;
+        // }
 
         H5::DataSpace fileSpace = dataset.getSpace();
         H5::DataSpace memSpace(2, dims);
@@ -917,7 +922,7 @@ bool DataAnalysisWorker::checkHDF5VersionValid(const QString& filePath)
         dataset.close();
         file.close();
 
-        return data[3] == 260825;
+        return data[0] == HDF5_DATAFORMAT_VERSION;
     } catch (H5::FileIException& error) {
         // 注意：这是静态函数，不能直接访问 ui，异常信息通过返回值或参数传递
         qDebug() << "HDF5 File Exception:" << error.getDetailMsg().c_str();

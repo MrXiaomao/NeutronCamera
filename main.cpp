@@ -192,7 +192,7 @@ int main(int argc, char *argv[])
     // 第一步：尝试创建本地服务器
     QLocalServer server;
     QString SERVER_KEY;
-    if (args.contains("-m") && args.contains("cps")){
+    if (args.contains("-offline")){
         SERVER_KEY = "neutroncamera.offline.singleInstance";
     }
     else {
@@ -219,11 +219,7 @@ int main(int argc, char *argv[])
 
     QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
     QGoodWindowHelper w;
-    if (args.contains("-m") && args.contains("compress")){
-        QApplication::setApplicationName(QObject::tr("中子伽马相机数据压缩与上传软件"));
-        mMainWindow = new DataCompressWindow(isDarkTheme, &w);
-    }
-    else if (args.contains("-m") && args.contains("cps")){
+    if (args.contains("-offline")){
         QApplication::setApplicationName(QObject::tr("中子伽马相机离线数据综合分析软件"));
         mMainWindow = new OfflineWindow(isDarkTheme, &w);
     }

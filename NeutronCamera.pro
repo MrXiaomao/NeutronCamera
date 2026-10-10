@@ -57,7 +57,6 @@ HEADERS += \
     waitingspinnerwidget.h
 
 FORMS += \
-    datacompresswindow.ui \
     devicemanagerwindow.ui \
     mainwindow.ui \
     offlinewindow.ui \
@@ -135,9 +134,10 @@ DEFINES += GIT_BRANCH=\"\\\"$$GIT_BRANCH\\\"\"
 DEFINES += GIT_DATE=\"\\\"$$GIT_DATE\\\"\"
 DEFINES += GIT_HASH=\"\\\"$$GIT_HASH\\\"\"
 DEFINES += GIT_VERSION=\"\\\"$$GIT_VERSION\\\"\"
-DEFINES += APP_VERSION="\\\"V3.3.0911\\\""
+DEFINES += APP_VERSION="\\\"V3.3.1009\\\""
 
 DEFINES +=_WIN32_WINNT=0x0601
+DEFINES += "HDF5_DATAFORMAT_VERSION=(quint32)261009" #如果HDF5数据存储格式发生改变，这里就需要把版本号改一下，否则会导致解析HDF5文件内容失败
 
 ################################################################################################
 windows {

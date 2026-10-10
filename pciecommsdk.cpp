@@ -3,7 +3,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QDebug>
-#include "datacompresswindow.h"
+#include "dataanalysisworker.h"
 #include "AppConfig.h"
 
 #ifdef _WIN32
@@ -521,9 +521,9 @@ void PCIeCommSdk::setPSDThreshold()
         qInfo().nospace() << "通道" << channelIndex << "设置PSD阈值：" << threshold;
         CloseHandle(fUserHandle);
     }
-
 }
 
+#include <QScopeGuard>
 void PCIeCommSdk::setTriggerThreshold()
 {
     /* 设置触发阈值 */
@@ -830,6 +830,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
     return true;
 }
 
+#include <QTextCodec>
 bool PCIeCommSdk::analyzeHistoryCpsData(
                                         const quint32 channels/*多道道数*/,
                                         const quint32 timeWidth/*时间宽度ms*/,

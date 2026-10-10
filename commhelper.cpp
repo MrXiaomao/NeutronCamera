@@ -663,37 +663,6 @@ void CommHelper::onReadyRead(QByteArray& tempData)
 */
 bool CommHelper::connectServer()
 {
-//     QFile currentFile("D:\\PerformanceMonitor_2026-09-15.log");
-//     // 当当前基准文件超过阈值时，执行滚动归档
-//     if (currentFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-//         QTextStream readStream(&currentFile);
-// #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-//         readStream.setCodec("UTF-8");
-// #endif
-//         QByteArray gram;
-//         while (!readStream.atEnd()){
-//             QString lineText = readStream.readLine();
-//             // 匹配你原有日志开头的时间格式 yyyy-MM-dd HH:mm:ss.zzz
-//             if (lineText.contains(">>")) {
-//                 qDebug() << lineText;
-//                 lineText = readStream.readLine();
-//             }
-
-//             if (lineText.contains(("========"))){
-//                 mUdpPerformanceDataProcessor->enqueueDatagram(gram);
-//                 gram.clear();
-//                 QThread::msleep(50);
-//             }
-//             else{
-//                 lineText += "\r\n";
-//                 gram.append(lineText.toLatin1());
-//             }
-//         }
-//         currentFile.close();
-//     }
-    return true;
-
-
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();
     quint32 portLocal = AppConfig::instance().localPort();

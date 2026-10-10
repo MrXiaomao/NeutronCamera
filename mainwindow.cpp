@@ -288,9 +288,12 @@ void MainWindow::initUi()
         ui->tableWidget_camera->setItem(11, 0, new QTableWidgetItem("垂\n直\n相\n机"));
         ui->tableWidget_camera->item(0, 0)->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget_camera->item(11, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_camera->item(0, 0)->setFlags(ui->tableWidget_camera->item(0, 0)->flags() & ~Qt::ItemIsEditable);
+        ui->tableWidget_camera->item(11, 0)->setFlags(ui->tableWidget_camera->item(11, 0)->flags() & ~Qt::ItemIsEditable);
         for (int i=1; i<=DETNUMBER_MAX; ++i){
             ui->tableWidget_camera->setItem(i-1, 1, new QTableWidgetItem(QString("#%1").arg(i)));
             ui->tableWidget_camera->item(i-1, 1)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget_camera->item(i-1, 1)->setFlags(ui->tableWidget_camera->item(i-1, 1)->flags() & ~Qt::ItemIsEditable);
         }
 
         for (int row=0; row<ui->tableWidget_camera->rowCount(); ++row){
@@ -850,14 +853,14 @@ void MainWindow::initUi()
                     int errCount = ui->tableWidget_status->item(row, column)->data(Qt::UserRole+1).value<int>();
                     ui->tableWidget_status->item(row, column)->setData(Qt::UserRole+1, QVariant::fromValue<int>(errCount+1));
 
-                    if ((errCount+1) > check_except_maxcount){ // 数据连续出现异常超过10次，才会认为是出现了异常
+                    if ((errCount+1) > check_except_maxcount){ // 数据连续出现异常超过一定次数，才会认为是出现了异常
                         if (ui->tableWidget_status->item(row, column)->textColor() != Qt::red){
                             ui->tableWidget_status->item(row, column)->setForeground(Qt::red);
                             const QString msg = QString("模组#%1 %2%3").arg(moduleNo).arg(errMsg, QString::number(v, 'f', 2));
                             qCritical().noquote().nospace() << msg;
                             mToastManager->warning(QStringLiteral("提示"), msg);
 
-                            if (mVoltageSwitcherOpened && mCommHelper->closeAllPower()){
+                            if ((v > v2)/*这里只取高于报警阈值才会断电处理，低值不做处理*/ && mVoltageSwitcherOpened && mCommHelper->closeAllPower()){
                                 ui->detectorControlWidget->setEnabled(false);
                                 mVoltageSwitcherOpened = false;
                                 ui->statusbar->showMessage(tr("48V电压开关处于关闭状态"));
@@ -2134,8 +2137,7 @@ void MainWindow::on_action_cps_statistics_triggered()
         QTimer::singleShot(0, [&]{
             QString program = QCoreApplication::applicationFilePath();
             QStringList arguments;
-            arguments.append("-m");
-            arguments.append("cps");
+            arguments.append("-offline");
 
             static int num = 0;
             arguments.append("-num");

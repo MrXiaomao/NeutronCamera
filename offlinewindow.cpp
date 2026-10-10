@@ -87,6 +87,44 @@ void OfflineWindow::initUi()
     ui->tableWidget_file->horizontalHeader()->setStretchLastSection(true);
 
     //////////////////////////////////////////////////////////////////////
+    {
+        ui->tableWidget_threshold->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Fixed);//方向
+        ui->tableWidget_threshold->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);//编号
+        ui->tableWidget_threshold->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);//阈值
+        ui->tableWidget_threshold->horizontalHeader()->setFixedHeight(30);
+        ui->tableWidget_threshold->setColumnWidth(0, 50);
+        ui->tableWidget_threshold->setColumnWidth(1, 50);
+        for (int i=0; i<DETNUMBER_MAX; ++i)
+            ui->tableWidget_threshold->setRowHeight(i, 30);
+        quint16 maxWidth = 0;
+        for (int i=0; i<ui->tableWidget_threshold->columnCount(); ++i)
+            maxWidth += ui->tableWidget_threshold->columnWidth(i);
+        ui->tableWidget_threshold->setMinimumWidth(maxWidth);
+        //ui->tableWidget_threshold->setFixedHeight(19*30+2);
+
+        ui->tableWidget_threshold->setSpan(0,0,11,1);
+        ui->tableWidget_threshold->setSpan(11,0,7,1);
+
+        ui->tableWidget_threshold->setItem(0, 0, new QTableWidgetItem("水\n平\n相\n机"));
+        ui->tableWidget_threshold->setItem(11, 0, new QTableWidgetItem("垂\n直\n相\n机"));
+        ui->tableWidget_threshold->item(0, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_threshold->item(11, 0)->setTextAlignment(Qt::AlignCenter);
+        ui->tableWidget_threshold->item(0, 0)->setFlags(ui->tableWidget_threshold->item(0, 0)->flags() & ~Qt::ItemIsEditable);
+        ui->tableWidget_threshold->item(11, 0)->setFlags(ui->tableWidget_threshold->item(11, 0)->flags() & ~Qt::ItemIsEditable);
+        for (int i=1; i<=DETNUMBER_MAX; ++i){
+            ui->tableWidget_threshold->setItem(i-1, 1, new QTableWidgetItem(QString("#%1").arg(i)));
+            ui->tableWidget_threshold->item(i-1, 1)->setTextAlignment(Qt::AlignCenter);
+            ui->tableWidget_threshold->item(i-1, 1)->setFlags(ui->tableWidget_threshold->item(i-1, 1)->flags() & ~Qt::ItemIsEditable);
+        }
+
+        for (int row=0; row<ui->tableWidget_threshold->rowCount(); ++row){
+            QSpinBox* spinBox = new QSpinBox(this);
+            spinBox->setRange(0, 65535);
+            spinBox->setValue(200);
+            ui->tableWidget_threshold->setCellWidget(row, 2, spinBox);
+        }
+    }
+    //////////////////////////////////////////////////////////////////////
     //布局
     {
         //大布局
@@ -656,13 +694,23 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
         if (DataAnalysisWorker::checkHDF5VersionValid(item.filePath())){
             ui->comboBox_h5Files->addItem(item.baseName());
             ui->comboBox_h5Files_2->addItem(item.baseName());
+
+            quint32 packerStartTime, packerEndTime;
+            QVector<quint32> thresholds;
+            if (DataAnalysisWorker::readWaveformHeadFromHDF5(item.filePath(), packerStartTime, packerEndTime, thresholds)){
+                QStringList msg;
+                msg << QStringLiteral("文件%1 对应波形阈值：%2").arg(item.baseName()).arg(thresholds.at(0));
+                for (int i=1; i<18 && i<thresholds.size(); ++i)
+                    msg<< QString::number(thresholds.at(i));
+                emit writeLog(msg.join(","));
+            }
         }
     }
 
-    if (ui->comboBox_h5Files->count() > 0){
-        emit ui->comboBox_h5Files->currentIndexChanged(0);
-        emit ui->comboBox_h5Files_2->currentIndexChanged(0);
-    }
+    // if (ui->comboBox_h5Files->count() > 0){
+    //     emit ui->comboBox_h5Files->currentIndexChanged(0);
+    //     emit ui->comboBox_h5Files_2->currentIndexChanged(0);
+    // }
 
     if (fileinfoList.size() == 0)
         emit writeLog(QStringLiteral("未找到压缩后的H5文件，请先对数据做压缩处理"));
@@ -1981,12 +2029,13 @@ void OfflineWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,q
 void OfflineWindow::on_comboBox_h5Files_currentTextChanged(const QString &arg1)
 {
     QString filePath = mFileDir + "/" + arg1 + ".h5";
-    quint32 packerStartTime, packerEndTime, threshold;
-    if (QFileInfo(filePath).exists() && DataAnalysisWorker::readWaveformHeadFromHDF5(filePath, packerStartTime, packerEndTime, threshold))
+    quint32 packerStartTime, packerEndTime;
+    QVector<quint32> thresholds;
+    if (QFileInfo(filePath).exists() && DataAnalysisWorker::readWaveformHeadFromHDF5(filePath, packerStartTime, packerEndTime, thresholds))
     {
         ui->line_measure_startT_3->setText(QString::number(packerStartTime));
         ui->line_measure_endT_3->setText(QString::number(packerEndTime));
-        ui->spinBox_threshold_3->setValue(threshold);
+        //ui->spinBox_threshold_3->setValue(thresholds[0]);
 
         ui->spinBox_startT_3->setValue(packerStartTime);
         ui->spinBox_endT_3->setValue(packerEndTime);
@@ -1996,15 +2045,22 @@ void OfflineWindow::on_comboBox_h5Files_currentTextChanged(const QString &arg1)
 void OfflineWindow::on_comboBox_h5Files_2_currentTextChanged(const QString &arg1)
 {
     QString filePath = mFileDir + "/" + arg1 + ".h5";
-    quint32 packerStartTime, packerEndTime, threshold;
-    if (QFileInfo(filePath).exists() && DataAnalysisWorker::readWaveformHeadFromHDF5(filePath, packerStartTime, packerEndTime, threshold))
+    quint32 packerStartTime, packerEndTime;
+    QVector<quint32> thresholds;
+    if (QFileInfo(filePath).exists() && DataAnalysisWorker::readWaveformHeadFromHDF5(filePath, packerStartTime, packerEndTime, thresholds))
     {
         ui->line_measure_startT_4->setText(QString::number(packerStartTime));
         ui->line_measure_endT_4->setText(QString::number(packerEndTime));
-        ui->spinBox_threshold_5->setValue(threshold);
+        //ui->spinBox_threshold_5->setValue(threshold);
 
         ui->spinBox_startT_4->setValue(packerStartTime);
         ui->spinBox_endT_4->setValue(packerEndTime);
+
+        // QStringList msg;
+        // msg << QStringLiteral("文件%1 对应波形阈值：").arg(arg1);
+        // for (int i=0; i<18 && i<thresholds.size(); ++i)
+        //     msg<< QString::number(thresholds[i]);
+        // emit writeLog(msg.join(","));
     }
 }
 
@@ -2234,9 +2290,20 @@ void OfflineWindow::onDataProcess()
         mAnalysisThread = nullptr;
     }
 
+    QVector<quint32> thresholds;
+    if (ui->checkBox_threshold->isChecked()){
+        for (int i=1; i<=18; ++i)
+            thresholds << threshold;
+    }
+    else{
+        for (int i=0; i<18; ++i){
+            QSpinBox* spinBox = (QSpinBox*)ui->tableWidget_threshold->cellWidget(i, 2);
+            thresholds << spinBox->value();
+        }
+    }
     mAnalysisThread = new QThread(this);
     mAnalysisWorker = new DataAnalysisWorker();
-    mAnalysisWorker->setParameters(dataDir, mfileList, outfileName, threshold,
+    mAnalysisWorker->setParameters(dataDir, mfileList, outfileName, thresholds,
                                    timePerFile, startTime, endTime);
 
     // 将worker移动到工作线程
@@ -2355,8 +2422,8 @@ void OfflineWindow::onAnalysisFinished(bool success, const QString& message)
         ui->comboBox_h5Files->addItem(item.baseName());
         ui->comboBox_h5Files_2->addItem(item.baseName());
     }
-    emit ui->comboBox_h5Files->currentIndexChanged(0);
-    emit ui->comboBox_h5Files_2->currentIndexChanged(0);
+    //emit ui->comboBox_h5Files->currentIndexChanged(0);
+    //emit ui->comboBox_h5Files_2->currentIndexChanged(0);
 }
 
 void OfflineWindow::onAnalysisError(const QString& error)
@@ -2386,7 +2453,7 @@ void OfflineWindow::onNGammaFilter()
     totalTimer.start();
 
     //提取有效波形参数
-    int threshold = ui->spinBox_threshold_4->value();
+    //int threshold = ui->spinBox_threshold_4->value();
     int pre_points = RISING_WIDTH;
     int post_points = WAVEFORM_LENGTH - pre_points - 1;
     quint16 psdThresholdFilter = ui->spinBox_psdThreshold->value();//nγ甄别阈值
@@ -2450,7 +2517,11 @@ void OfflineWindow::onNGammaFilter()
         }
         else
         {
-        // === 读盘-计算流水线：尽量让磁盘持续顺序读 ===
+            QVector<quint32> thresholds;
+            for (int i=1; i<=18; ++i)
+                thresholds << 200;
+
+            // === 读盘-计算流水线：尽量让磁盘持续顺序读 ===
             QThreadPool* pool = QThreadPool::globalInstance();
             // 计算线程池：建议 2~4 起步（单盘更稳；NVMe 可再加）
             int maxTh = int(QThread::idealThreadCount() * 0.5*0.8); //使用80%物理核CPU资源，因为一般计算机都是超线程，所以乘以0.5
@@ -2554,7 +2625,7 @@ void OfflineWindow::onNGammaFilter()
                 auto* task = new ExtractValidWaveformFromBufferTask(
                     std::move(job),
                     static_cast<quint8>(cameraIndex), // ✅ 单相机（单通道）
-                    threshold,
+                    thresholds,
                     pre_points,
                     post_points,
                     cb,
@@ -3019,5 +3090,17 @@ void OfflineWindow::on_action_dataUpload_triggered()
 
     hdaClient.disconnect();
     // QMessageBox::information(this, QStringLiteral("提示"), QStringLiteral("数据上传完毕，本次上传记录数共%1条！").arg(recordCount));
+}
+
+void OfflineWindow::on_checkBox_threshold_clicked(bool checked)
+{
+    if (checked){
+        ui->tableWidget_threshold->hide();
+        ui->spinBox_threshold_2->setEnabled(true);
+    }
+    else{
+        ui->tableWidget_threshold->show();
+        ui->spinBox_threshold_2->setEnabled(false);
+    }
 }
 
