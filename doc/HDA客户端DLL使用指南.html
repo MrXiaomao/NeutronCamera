@@ -1,0 +1,2585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HDA 客户端 DLL 使用指南</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 40px;
+            border-bottom: 3px solid #3498db;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        header p {
+            font-size: 0.95em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .download-btn {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1em;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+            border: 2px solid #3498db;
+        }
+
+        .download-btn:hover {
+            background: white;
+            color: #3498db;
+        }
+
+        .main-wrapper {
+            display: flex;
+            flex: 1;
+            min-height: calc(100vh - 200px);
+        }
+
+        .sidebar {
+            width: 280px;
+            background: #f8f9fa;
+            border-right: 1px solid #e0e0e0;
+            padding: 30px 20px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            font-weight: 600;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar ul li {
+            margin: 8px 0;
+        }
+
+        .sidebar a {
+            color: #34495e;
+            text-decoration: none;
+            display: block;
+            padding: 10px 15px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            font-size: 0.95em;
+        }
+
+        .sidebar a:hover {
+            background: #3498db;
+            color: white;
+            padding-left: 20px;
+        }
+
+        .sidebar .toc-number {
+            color: #3498db;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .sidebar a:hover .toc-number {
+            color: white;
+        }
+
+        .content {
+            flex: 1;
+            padding: 40px 50px;
+            overflow-y: auto;
+        }
+
+        .section {
+            margin-bottom: 50px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 30px;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section h2 {
+            color: #2c3e50;
+            font-size: 1.6em;
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+            font-weight: 600;
+        }
+
+        .section h3 {
+            color: #34495e;
+            font-size: 1.3em;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .section h4 {
+            color: #546e7a;
+            font-size: 1.1em;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        .data-structure {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .data-structure h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .struct-name {
+            margin: 15px 0 10px 0;
+        }
+
+        .struct-name .field-name {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            font-size: 1.1em;
+            color: #2c3e50;
+            display: block;
+        }
+
+        .struct-name .field-desc {
+            color: #546e7a;
+            margin-left: 0;
+            margin-top: 5px;
+            font-size: 0.95em;
+            display: block;
+        }
+
+        .data-structure .field {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .data-structure .field-name {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #e74c3c;
+        }
+
+        .data-structure .field-desc {
+            color: #546e7a;
+            margin-left: 10px;
+        }
+
+        .data-structure .field-type {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            font-style: italic;
+            margin-left: 10px;
+        }
+
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.9em;
+            border-left: 4px solid #3498db;
+        }
+
+        .code-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .code-block code {
+            color: #a8b6c7;
+        }
+
+        .code-block .comment {
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .code-block .keyword {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .code-block .string {
+            color: #27ae60;
+        }
+
+        .code-block .number {
+            color: #f39c12;
+        }
+
+        .api-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border: 1px solid #dee2e6;
+        }
+
+        .api-table th {
+            background: #34495e;
+            color: white;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #2c3e50;
+        }
+
+        .api-table td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .api-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .api-function {
+            margin: 20px 0;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .api-function-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.2s ease;
+        }
+
+        .api-function-header:hover {
+            background: #e9ecef;
+        }
+
+        .api-function-name {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            font-size: 1.1em;
+            color: #2c3e50;
+        }
+
+        .api-function-toggle {
+            font-size: 1.5em;
+            color: #3498db;
+            transition: transform 0.3s ease;
+        }
+
+        .api-function.open .api-function-toggle {
+            transform: rotate(180deg);
+        }
+
+        .api-function-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .api-function.open .api-function-body {
+            max-height: 2000px;
+        }
+
+        .api-function-content {
+            padding: 20px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .api-function-signature {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            overflow-x: auto;
+        }
+
+        .api-function-description {
+            margin: 15px 0;
+            color: #34495e;
+            line-height: 1.8;
+        }
+
+        .api-function-params {
+            margin: 15px 0;
+        }
+
+        .api-function-params h5 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+
+        .api-function-param {
+            margin: 8px 0;
+            padding-left: 15px;
+        }
+
+        .api-function-param-name {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #e74c3c;
+        }
+
+        .api-function-returns {
+            margin: 15px 0;
+            padding: 10px 15px;
+            background: #fff3cd;
+            border-left: 4px solid #f39c12;
+            border-radius: 4px;
+        }
+
+        .api-function-returns h5 {
+            color: #856404;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        .download-section {
+            background: #3498db;
+            color: white;
+            padding: 30px;
+            border-radius: 4px;
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .download-section h3 {
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            font-weight: 600;
+        }
+
+        .download-link {
+            display: inline-block;
+            background: white;
+            color: #3498db;
+            padding: 12px 30px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1em;
+            margin: 10px;
+            transition: all 0.2s ease;
+            border: 2px solid #3498db;
+        }
+
+        .download-link:hover {
+            background: #2c3e50;
+            color: white;
+        }
+
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #f39c12;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .note h4 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .note p {
+            color: #856404;
+            margin: 5px 0;
+        }
+
+        .note ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .note li {
+            color: #856404;
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        .overview-container {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin: 25px 0;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .overview-container p {
+            color: white;
+            margin: 15px 0;
+            line-height: 1.8;
+        }
+
+        .overview-container strong {
+            color: #ffd700;
+            font-weight: 600;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 25px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .feature-card h4 {
+            color: #ffd700;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .feature-card p {
+            color: white;
+            margin: 0;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        .warning {
+            background: #f8d7da;
+            border-left: 4px solid #e74c3c;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .warning h4 {
+            color: #7f8c8d;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 30px;
+            margin-top: 40px;
+            font-size: 0.9em;
+            flex-shrink: 0;
+        }
+
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #856404;
+            font-family: 'Courier New', monospace;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #95a5a6;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 10px;
+            font-weight: 600;
+        }
+
+        .badge.pending {
+            background: #f39c12;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            header, .content {
+                padding: 20px;
+            }
+
+            .data-structure {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>HDA 客户端 DLL 使用指南</h1>
+            <p style="font-size: 1.2em; font-weight: 600; color: #3498db; margin-top: 10px;">HL-3 HDF5实验数据访问接口</p>
+            <p style="margin-top: 15px; font-size: 0.9em;">
+                版本: v1.0 | 更新日期: 2026-03
+            </p>
+            <p style="margin-top: 10px; font-size: 0.85em; opacity: 0.8;">
+                © 2026 聚变科学实验所运行与控制研究室. All Rights Reserved.
+            </p>
+        </header>
+
+        <div class="main-wrapper">
+            <aside class="sidebar">
+                <h3>📚 目录</h3>
+                <ul>
+                    <li><a href="#section-1"><span class="toc-number">1.</span>概述</a></li>
+                    <li><a href="#section-2"><span class="toc-number">2.</span>头文件说明</a></li>
+                    <li><a href="#section-3"><span class="toc-number">3.</span>API 函数说明</a></li>
+                    <li><a href="#section-4"><span class="toc-number">4.</span>C++ 调用方法</a>
+                        <ul style="margin-left: 20px; margin-top: 5px;">
+                            <li><a href="#section-4-1" style="font-size: 0.85em; padding: 8px 15px;">4.1 概述</a></li>
+                            <li><a href="#section-4-2" style="font-size: 0.85em; padding: 8px 15px;">4.2 基本操作流程</a></li>
+                            <li><a href="#section-4-3" style="font-size: 0.85em; padding: 8px 15px;">4.3 数据写入操作</a></li>
+                            <li><a href="#section-4-4" style="font-size: 0.85em; padding: 8px 15px;">4.4 数据读取操作</a></li>
+                            <li><a href="#section-4-5" style="font-size: 0.85em; padding: 8px 15px;">4.5 完整示例程序</a></li>
+                            <li><a href="#section-4-6" style="font-size: 0.85em; padding: 8px 15px;">4.6 编译与部署</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="#section-5"><span class="toc-number">5.</span>MATLAB 调用方法</a></li>
+                    <li><a href="#section-6"><span class="toc-number">6.</span>Python 调用方法</a></li>
+                    <li><a href="#section-7"><span class="toc-number">7.</span>LabVIEW 调用方法</a></li>
+                    <li><a href="#section-8"><span class="toc-number">8.</span>下载 HDA 客户端 DLL</a></li>
+                    <li><a href="#section-9"><span class="toc-number">9.</span>常见问题</a></li>
+                </ul>
+            </aside>
+
+            <div class="content">
+
+            <div class="section" id="section-1">
+                <h2>1. 概述</h2>
+                <p>
+                    <strong>HDA 客户端 DLL</strong>（HL实验数据访问接口）是一个用于连接到 HDA 服务器并读写HDF5实验数据的动态链接库。
+                    该库提供了标准化的 C API 接口，支持多种编程语言调用，包括 C++、MATLAB、Python、LabVIEW 等。
+                    HDA 客户端采用 gRPC 和 Protocol Buffers 实现高性能的数据采集通信。
+                    通过零拷贝传输和批量写入机制，能够高效处理大规模实验数据，满足 HL-3 装置对数据采集的实时性和可靠性要求。
+                </p>
+                <p>
+                    本文档面向HL-3用户，详细说明了 DLL 的使用方法、数据结构定义、API 函数接口以及各语言的调用示例。
+                    通过本指南，用户可以快速集成 HDA 客户端到自己的应用程序中，实现实验数据的采集、存储和查询功能。
+                </p>
+
+                <div class="note">
+                    <h4>主要特性</h4>
+                    <ul>
+                        <li><strong>高性能通信</strong>：基于 gRPC 的流式接口，支持零拷贝传输</li>
+                        <li><strong>批量写入</strong>：支持大批量数据传输，提高数据采集效率</li>
+                        <li><strong>多线程安全</strong>：支持并发读写操作</li>
+                        <li><strong>标准数据格式</strong>：使用 HDF5 格式存储实验数据</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="section" id="section-2">
+                <h2>2. 头文件说明</h2>
+                <p>
+                    使用 DLL 时需要包含头文件 <span class="highlight">hda_client.h</span>，该文件定义了所有数据结构、枚举类型和函数接口。
+                </p>
+
+                <div class="data-structure">
+                    <h4>2.1 核心句柄类型</h4>
+                    <div class="field">
+                        <span class="field-name">hda_client_t</span>
+                        <span class="field-desc">客户端句柄，不透明指针类型，用于标识客户端连接</span>
+                        <span class="field-type">typedef void*</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">hda_writer_t</span>
+                        <span class="field-desc">写入器句柄，不透明指针类型，用于标识写入会话</span>
+                        <span class="field-type">typedef void*</span>
+                    </div>
+                </div>
+
+                <div class="data-structure">
+                    <h4>2.2 数据类型枚举</h4>
+                    <div class="field">
+                        <span class="field-name">HDA_DT_FLOAT32 = 0</span>
+                        <span class="field-desc">32 位浮点数</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DT_STRING = 1</span>
+                        <span class="field-desc">UTF-8 字符串（变长）</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DT_INTEGER32 = 2</span>
+                        <span class="field-desc">32 位有符号整数</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DT_RAW_DIO = 3</span>
+                        <span class="field-desc">8 位数字 IO</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DT_RAW_U16 = 4</span>
+                        <span class="field-desc">16 位无符号整数</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DT_RAW_U32 = 5</span>
+                        <span class="field-desc">32 位无符号整数</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DT_INTEGER16 = 6</span>
+                        <span class="field-desc">16 位有符号整数</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DT_FLOAT64 = 7</span>
+                        <span class="field-desc">64 位浮点数</span>
+                    </div>
+                </div>
+
+                <div class="data-structure">
+                    <h4>2.3 时间模式枚举</h4>
+                    <div class="field">
+                        <span class="field-name">HDA_TIME_MODE_FULL_ARRAY = 0</span>
+                        <span class="field-desc">完整时间数组模式</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_TIME_MODE_START_FREQ = 1</span>
+                        <span class="field-desc">起始时间+频率模式</span>
+                    </div>
+                </div>
+
+                <div class="data-structure">
+                    <h4>2.4 读取模式枚举</h4>
+                    <div class="field">
+                        <span class="field-name">HDA_READ_MODE_CONTINUOUS = 0</span>
+                        <span class="field-desc">连续读取模式，返回指定范围内的所有数据点</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_READ_MODE_UNIFORM_SAMPLING = 1</span>
+                        <span class="field-desc">均匀采样模式，指定返回数量，服务端按间隔均匀抽取数据点</span>
+                    </div>
+                </div>
+
+                <div class="data-structure">
+                    <h4>2.5 数据维度枚举</h4>
+                    <div class="field">
+                        <span class="field-name">HDA_DIM_0D = 1</span>
+                        <span class="field-desc">标量数据</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DIM_1D = 2</span>
+                        <span class="field-desc">一维数组</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_DIM_ND = 3</span>
+                        <span class="field-desc">多维数组 (N>=2)</span>
+                    </div>
+                </div>
+
+                <div class="data-structure">
+                    <h4>2.5 状态码枚举</h4>
+                    <div class="field">
+                        <span class="field-name">HDA_OK = 0</span>
+                        <span class="field-desc">操作成功</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_INVALID_ARG = 1</span>
+                        <span class="field-desc">无效参数</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_NOT_INITIALIZED = 2</span>
+                        <span class="field-desc">未初始化</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_NETWORK = 4</span>
+                        <span class="field-desc">网络错误</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_TIMEOUT = 5</span>
+                        <span class="field-desc">超时</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_BACKPRESSURE = 6</span>
+                        <span class="field-desc">背压（消息过大）</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_NOT_FOUND = 7</span>
+                        <span class="field-desc">未找到数据</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_IO = 8</span>
+                        <span class="field-desc">IO 错误</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_UNAUTHENTICATED = 9</span>
+                        <span class="field-desc">未认证或 Token 无效</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_AUTH_FAILED = 10</span>
+                        <span class="field-desc">认证失败</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">HDA_E_INTERNAL = 100</span>
+                        <span class="field-desc">内部错误</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section" id="section-3">
+                <h2>3. API 函数说明</h2>
+                
+                <div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_client_connect</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_client_connect(const hda_client_config_t* cfg, hda_client_t* out_client)
+                            </div>
+                            <div class="api-function-description">
+                                连接到服务器，创建客户端连接。必须在使用其他API之前调用此函数。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">cfg</span> - 客户端配置结构指针，包含服务器地址等信息
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">out_client</span> - 输出参数，返回客户端句柄
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_client_config_t</span>
+                                        <span class="field-desc">客户端配置结构，用于初始化客户端连接</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">server_address</span>
+                                        <span class="field-desc">必需。服务器地址，格式为 "IP:PORT"，例如 "172.30.20.11:9090"</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">username</span>
+                                        <span class="field-desc">可选。用户名，NULL 表示不认证</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">password</span>
+                                        <span class="field-desc">可选。密码，NULL 表示不认证</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_client_disconnect</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_client_disconnect(hda_client_t client)
+                            </div>
+                            <div class="api-function-description">
+                                断开客户端连接，释放所有资源。在程序退出前应调用此函数。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">client</span> - 客户端句柄
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_open_writer</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_open_writer(hda_client_t client, const hda_write_key_t* key, hda_writer_t* out_writer)
+                            </div>
+                            <div class="api-function-description">
+                                打开写入器，开始写入会话。需要指定写入键来标识实验数据。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">client</span> - 客户端句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">key</span> - 写入键结构指针，包含装置、炮号等信息
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">out_writer</span> - 输出参数，返回写入器句柄
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_write_key_t</span>
+                                        <span class="field-desc">写入键结构，用于标识要写入的数据</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">device</span>
+                                        <span class="field-desc">装置名称，例如 "HL-3"</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">shot</span>
+                                        <span class="field-desc">炮号</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">subsystem</span>
+                                        <span class="field-desc">子系统，标识数据采集子系统</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <!---
+                                    <div class="field">
+                                        <span class="field-name">schema_version</span>
+                                        <span class="field-desc">Schema 版本，例如 "v1"</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>-->
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_write_0d</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_write_0d(hda_writer_t writer, const hda_write_0d_req_t* req)
+                            </div>
+                            <div class="api-function-description">
+                                写入0D参数数据，可以是单个值或小数组。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">writer</span> - 写入器句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 0D数据写入请求结构指针
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_write_0d_req_t</span>
+                                        <span class="field-desc">0D 参数数据写入请求结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">channel</span>
+                                        <span class="field-desc">通道名称</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">dtype</span>
+                                        <span class="field-desc">数据类型枚举值</span>
+                                        <span class="field-type">hda_dtype_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">count</span>
+                                        <span class="field-desc">写入参数的数量</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">data</span>
+                                        <span class="field-desc">参数数据指针</span>
+                                        <span class="field-type">const void*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">attrs</span>
+                                        <span class="field-desc">通道属性指针，可为 NULL</span>
+                                        <span class="field-type">const hda_channel_attr_t*</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_write_1d</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_write_1d(hda_writer_t writer, const hda_write_1d_req_t* req)
+                            </div>
+                            <div class="api-function-description">
+                                写入1D波形数据，包含时间数组和值数组。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">writer</span> - 写入器句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 1D数据写入请求结构指针
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_write_1d_req_t</span>
+                                        <span class="field-desc">1D 波形数据写入请求结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">channel</span>
+                                        <span class="field-desc">通道名称</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">dtype</span>
+                                        <span class="field-desc">数据类型枚举值</span>
+                                        <span class="field-type">hda_dtype_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">count</span>
+                                        <span class="field-desc">写入样本值的数量</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">pTime</span>
+                                        <span class="field-desc">时间数组指针，长度为 count，元素类型为 double</span>
+                                        <span class="field-type">const double*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">pValue</span>
+                                        <span class="field-desc">样本值数组指针（定长类型）。STRING类型请使用ppStrings或配合value_bytes_len</span>
+                                        <span class="field-type">const void*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">value_bytes_len</span>
+                                        <span class="field-desc">定长类型设为0自动计算；STRING类型配合pValue时必须指定总字节数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">ppStrings</span>
+                                        <span class="field-desc">STRING类型专用：字符串指针数组，自动计算总字节数（推荐）</span>
+                                        <span class="field-type">const char* const*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">attrs</span>
+                                        <span class="field-desc">通道属性指针，可为 NULL</span>
+                                        <span class="field-type">const hda_channel_attr_t*</span>
+                                    </div>
+                                </div>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_channel_attr_t</span>
+                                        <span class="field-desc">通道属性结构（用于写入），字符串字段为指针，由用户提供字符串</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DEVICE</span>
+                                        <span class="field-desc">装置</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">SUBSYSTEM</span>
+                                        <span class="field-desc">子系统名称（由服务器在read_attribute时填充）</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">CONTACT_INFO</span>
+                                        <span class="field-desc">联系人信息</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DAQ_DTYPE</span>
+                                        <span class="field-desc">数据采集类型，"PROCD" 表示处理数据，"ACQ" 表示原始数据</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DAQ_RAW_BITS</span>
+                                        <span class="field-desc">采集板卡位数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DAQ_VALIDITY</span>
+                                        <span class="field-desc">数据有效性，-1 表示未设置</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DATA_TYPE</span>
+                                        <span class="field-desc">数据类型枚举值，对应 hda_dtype_t</span>
+                                        <span class="field-type">hda_dtype_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DESCRIPTION</span>
+                                        <span class="field-desc">数据描述</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">EBAR_EXIST</span>
+                                        <span class="field-desc">误差条是否存在，0 或 1</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">ENTRY_TIME</span>
+                                        <span class="field-desc">录入时间，格式为 "YYYY-MM-DD HH:MM:SS"</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">PHI_DIM</span>
+                                        <span class="field-desc">极角维度大小，-1 表示未设置</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">R_DIM</span>
+                                        <span class="field-desc">径向维度大小，-1 表示未设置</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_COORD_FREQ</span>
+                                        <span class="field-desc">采样率</span>
+                                        <span class="field-type">float</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_COORD_START</span>
+                                        <span class="field-desc">时间坐标起始值</span>
+                                        <span class="field-type">float</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_DIM</span>
+                                        <span class="field-desc">数据点个数</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_TYPE</span>
+                                        <span class="field-desc">时间轴是否共享，US--共享时间轴，NUS--独立时间轴</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_UNIT</span>
+                                        <span class="field-desc">时间单位，例如 "s"（秒）、"ms"（毫秒）</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">VERSION</span>
+                                        <span class="field-desc">通道属性版本号</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">V_UNIT</span>
+                                        <span class="field-desc">样本值的单位，例如 "V"（伏特）、"A"（安培）</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">Z_DIM</span>
+                                        <span class="field-desc">Z 维度，-1 表示未设置</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_write_2d</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_write_2d(hda_writer_t writer, const hda_write_2d_req_t* req)
+                            </div>
+                            <div class="api-function-description">
+                                写入2D数组数据，数据按行优先顺序存储。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">writer</span> - 写入器句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 2D数据写入请求结构指针
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_write_2d_req_t</span>
+                                        <span class="field-desc">2D 数组数据写入请求结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">channel</span>
+                                        <span class="field-desc">通道名称</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">dtype</span>
+                                        <span class="field-desc">数据类型枚举值</span>
+                                        <span class="field-type">hda_dtype_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">rows</span>
+                                        <span class="field-desc">行数</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">cols</span>
+                                        <span class="field-desc">列数</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">pValue</span>
+                                        <span class="field-desc">数据指针，按行优先顺序存储（定长类型）。STRING类型请使用ppStrings或配合value_bytes_len</span>
+                                        <span class="field-type">const void*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">value_bytes_len</span>
+                                        <span class="field-desc">定长类型设为0自动计算；STRING类型配合pValue时必须指定总字节数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">ppStrings</span>
+                                        <span class="field-desc">STRING类型专用：字符串指针数组（rows*cols个，行优先），自动计算总字节数（推荐）</span>
+                                        <span class="field-type">const char* const*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">attrs</span>
+                                        <span class="field-desc">通道属性指针，可为 NULL</span>
+                                        <span class="field-type">const hda_channel_attr_t*</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_write_subsystem_time</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_write_subsystem_time(hda_writer_t writer, const hda_write_subsystem_time_req_t* req)
+                            </div>
+                            <div class="api-function-description">
+                                写入子系统时间信息。支持完整时间数组模式和起始时间+频率模式。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">writer</span> - 写入器句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 子系统时间写入请求结构指针
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_write_subsystem_time_req_t</span>
+                                        <span class="field-desc">子系统时间写入请求结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">count</span>
+                                        <span class="field-desc">时间样本数量</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_UNIT</span>
+                                        <span class="field-desc">时间单位，例如 "s"（秒）、"ms"（毫秒）</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">time_mode</span>
+                                        <span class="field-desc">时间写入模式，HDA_TIME_MODE_FULL_ARRAY 或 HDA_TIME_MODE_START_FREQ</span>
+                                        <span class="field-type">time_mode_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">mode.pTime</span>
+                                        <span class="field-desc">时间数组指针（完整时间数组模式），长度为 count</span>
+                                        <span class="field-type">const double*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">mode.time_params.start_time</span>
+                                        <span class="field-desc">起始时间（起始时间+频率模式）</span>
+                                        <span class="field-type">double</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">mode.time_params.frequency</span>
+                                        <span class="field-desc">采样频率 Hz（起始时间+频率模式）</span>
+                                        <span class="field-type">double</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_write_attribute</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_write_attribute(hda_writer_t writer, const hda_write_attribute_req_t* req, hda_write_attribute_resp_t* resp)
+                            </div>
+                            <div class="api-function-description">
+                                直接写入通道属性，无需写入数据。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">writer</span> - 写入器句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 属性写入请求结构指针
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">resp</span> - 属性写入响应结构指针
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_write_attribute_req_t</span>
+                                        <span class="field-desc">属性写入请求结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">channel</span>
+                                        <span class="field-desc">通道名称</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">attrs</span>
+                                        <span class="field-desc">通道属性指针</span>
+                                        <span class="field-type">const hda_channel_attr_t*</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_close_writer</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_close_writer(hda_writer_t writer, int32_t timeout_ms)
+                            </div>
+                            <div class="api-function-description">
+                                关闭写入器，完成写入操作。会等待服务器确认所有数据已写入。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">writer</span> - 写入器句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">timeout_ms</span> - 关闭操作的最大等待时间（毫秒）
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_read_0d</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_read_0d(hda_client_t client, const hda_read_0d_req_t* req, hda_read_0d_resp_t* resp)
+                            </div>
+                            <div class="api-function-description">
+                                读取0D参数数据。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">client</span> - 客户端句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 0D数据读取请求结构指针
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">resp</span> - 0D数据读取响应结构指针，包含输出缓冲区
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_0d_req_t</span>
+                                        <span class="field-desc">0D数据读取请求结构</span>
+                                    </div>
+                                     <div class="field">
+                                        <span class="field-name">shot</span>
+                                        <span class="field-desc">炮号</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">channel</span>
+                                        <span class="field-desc">通道名称</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                </div>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_0d_resp_t</span>
+                                        <span class="field-desc">0D数据读取响应结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">dtype</span>
+                                        <span class="field-desc">数据类型</span>
+                                        <span class="field-type">hda_dtype_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">count</span>
+                                        <span class="field-desc">读取参数的数量</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_buffer</span>
+                                        <span class="field-desc">输出缓冲区指针</span>
+                                        <span class="field-type">void*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_buffer_bytes</span>
+                                        <span class="field-desc">输出缓冲区字节数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_read_1d</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_read_1d(hda_client_t client, const hda_read_req_t* req, hda_read_1d_resp_t* resp)
+                            </div>
+                            <div class="api-function-description">
+                                读取1D数据。支持索引读取、时间范围查询和均匀采样模式。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">client</span> - 客户端句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 读取请求结构指针
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">resp</span> - 1D数据读取响应结构指针，包含输出缓冲区
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_req_t</span>
+                                        <span class="field-desc">统一读取请求结构（用于1D和2D）</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">shot</span>
+                                        <span class="field-desc">炮号</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">channel</span>
+                                        <span class="field-desc">通道名称</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">mode</span>
+                                        <span class="field-desc">读取模式: CONTINUOUS(连续) / UNIFORM_SAMPLING(均匀采样)</span>
+                                        <span class="field-type">hda_read_mode_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">start_index</span>
+                                        <span class="field-desc">读取样本值的起始索引，默认0</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">count</span>
+                                        <span class="field-desc">读取样本值的数量，默认1000</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">start_time</span>
+                                        <span class="field-desc">时间范围查询起始时间（与start_index互斥）</span>
+                                        <span class="field-type">double</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">end_time</span>
+                                        <span class="field-desc">时间范围查询结束时间</span>
+                                        <span class="field-type">double</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_UNIT</span>
+                                        <span class="field-desc">时间单位，"s" 或 "ms"</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">return_timebase</span>
+                                        <span class="field-desc">是否返回时间数据，1返回，0不返回</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                </div>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_1d_resp_t</span>
+                                        <span class="field-desc">1D数据读取响应结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">dtype</span>
+                                        <span class="field-desc">数据类型</span>
+                                        <span class="field-type">hda_dtype_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">start_index</span>
+                                        <span class="field-desc">起始索引</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">sample_count</span>
+                                        <span class="field-desc">读取样本值的数量</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_time</span>
+                                        <span class="field-desc">输出时间数组指针</span>
+                                        <span class="field-type">double*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_time_bytes</span>
+                                        <span class="field-desc">输出时间数组字节数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_value</span>
+                                        <span class="field-desc">输出样本值数组的指针</span>
+                                        <span class="field-type">void*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_value_bytes</span>
+                                        <span class="field-desc">输出样本值数组的字节数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_read_2d</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_read_2d(hda_client_t client, const hda_read_req_t* req, hda_read_2d_resp_t* resp)
+                            </div>
+                            <div class="api-function-description">
+                                读取2D数组数据，支持二维切片读取。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">client</span> - 客户端句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 2D数据读取请求结构指针
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">resp</span> - 2D数据读取响应结构指针，包含输出缓冲区
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <p><em>使用统一的 hda_read_req_t 请求结构体（参见 hda_read_1d）</em></p>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_2d_resp_t</span>
+                                        <span class="field-desc">2D数据读取响应结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">dtype</span>
+                                        <span class="field-desc">数据类型</span>
+                                        <span class="field-type">hda_dtype_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">rows</span>
+                                        <span class="field-desc">实际读取的行数</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">cols</span>
+                                        <span class="field-desc">实际读取的列数</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_value</span>
+                                        <span class="field-desc">输出缓冲区指针（行优先顺序）</span>
+                                        <span class="field-type">void*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_value_bytes</span>
+                                        <span class="field-desc">输出缓冲区字节数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_read_time</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_read_time(hda_client_t client, const hda_read_time_req_t* req, hda_read_time_resp_t* resp)
+                            </div>
+                            <div class="api-function-description">
+                                读取通道的时间信息。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">client</span> - 客户端句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 时间读取请求结构指针
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">resp</span> - 时间读取响应结构指针，包含输出缓冲区
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_time_req_t</span>
+                                        <span class="field-desc">时间读取请求结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">shot</span>
+                                        <span class="field-desc">炮号</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">channel</span>
+                                        <span class="field-desc">通道名称</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                </div>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_time_resp_t</span>
+                                        <span class="field-desc">时间读取响应结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">count</span>
+                                        <span class="field-desc">时间样本数量</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_time</span>
+                                        <span class="field-desc">输出时间数组指针</span>
+                                        <span class="field-type">double*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">out_time_bytes</span>
+                                        <span class="field-desc">输出时间数组字节数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_UNIT</span>
+                                        <span class="field-desc">时间单位</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_read_attribute</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t  hda_read_attribute(hda_client_t client, const hda_read_attribute_req_t* req, hda_read_attribute_resp_t* resp)
+                            </div>
+                            <div class="api-function-description">
+                                直接读取通道属性，无需读取数据。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">client</span> - 客户端句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">req</span> - 属性读取请求结构指针
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">resp</span> - 属性读取响应结构指针
+                                </div>
+                            </div>
+                            <div class="api-function-structures">
+                                <h5>相关结构体：</h5>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_attribute_req_t</span>
+                                        <span class="field-desc">属性读取请求结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">channel</span>
+                                        <span class="field-desc">通道名称</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                </div>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_read_attribute_resp_t</span>
+                                        <span class="field-desc">属性读取响应结构</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">attrs</span>
+                                        <span class="field-desc">输出属性（固定数组，无需释放）</span>
+                                        <span class="field-type">hda_channel_attr_resp_t</span>
+                                    </div>
+                                </div>
+                                <div class="data-structure">
+                                    <div class="struct-name">
+                                        <span class="field-name">hda_channel_attr_resp_t</span>
+                                        <span class="field-desc">通道属性响应结构（用于读取），字符串为固定长度数组，无需释放</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DEVICE</span>
+                                        <span class="field-desc">装置（最大64字符）</span>
+                                        <span class="field-type">char[64]</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">SUBSYSTEM</span>
+                                        <span class="field-desc">子系统名称（最大64字符）</span>
+                                        <span class="field-type">char[64]</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">CONTACT_INFO</span>
+                                        <span class="field-desc">联系人信息（最大128字符）</span>
+                                        <span class="field-type">char[128]</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DAQ_DTYPE</span>
+                                        <span class="field-desc">数据采集类型（最大32字符）</span>
+                                        <span class="field-type">char[32]</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DAQ_RAW_BITS</span>
+                                        <span class="field-desc">采集板卡位数</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DAQ_VALIDITY</span>
+                                        <span class="field-desc">数据有效性，-1 表示未设置</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DATA_TYPE</span>
+                                        <span class="field-desc">数据类型枚举值</span>
+                                        <span class="field-type">hda_dtype_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">DESCRIPTION</span>
+                                        <span class="field-desc">数据描述（最大256字符）</span>
+                                        <span class="field-type">char[256]</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">EBAR_EXIST</span>
+                                        <span class="field-desc">误差条是否存在</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">ENTRY_TIME</span>
+                                        <span class="field-desc">录入时间（最大32字符）</span>
+                                        <span class="field-type">char[32]</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">PHI_DIM</span>
+                                        <span class="field-desc">极角维度大小</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">R_DIM</span>
+                                        <span class="field-desc">径向维度大小</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_COORD_FREQ</span>
+                                        <span class="field-desc">采样率</span>
+                                        <span class="field-type">float</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_COORD_START</span>
+                                        <span class="field-desc">时间坐标起始值</span>
+                                        <span class="field-type">float</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_DIM</span>
+                                        <span class="field-desc">数据点个数</span>
+                                        <span class="field-type">int64_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_TYPE</span>
+                                        <span class="field-desc">时间轴类型（最大8字符）</span>
+                                        <span class="field-type">char[8]</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">T_UNIT</span>
+                                        <span class="field-desc">时间单位静态指针，无需释放</span>
+                                        <span class="field-type">const char*</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">VERSION</span>
+                                        <span class="field-desc">通道属性版本号</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">V_UNIT</span>
+                                        <span class="field-desc">样本值单位（最大32字符）</span>
+                                        <span class="field-type">char[32]</span>
+                                    </div>
+                                    <div class="field">
+                                        <span class="field-name">Z_DIM</span>
+                                        <span class="field-desc">Z 维度</span>
+                                        <span class="field-type">int32_t</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+<div class="api-function" onclick="toggleFunction(this)">
+                    <div class="api-function-header">
+                        <span class="api-function-name">hda_get_last_error</span>
+                        <span class="api-function-toggle">▼</span>
+                    </div>
+                    <div class="api-function-body">
+                        <div class="api-function-content">
+                            <div class="api-function-signature">
+hda_status_t hda_get_last_error(hda_client_t client, char* out_buf, int32_t buf_len)
+                            </div>
+                            <div class="api-function-description">
+                                获取最后的错误信息。当API调用失败时，可以调用此函数获取详细的错误描述。
+                            </div>
+                            <div class="api-function-params">
+                                <h5>参数：</h5>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">client</span> - 客户端句柄
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">out_buf</span> - 输出缓冲区，用于存储错误信息
+                                </div>
+                                <div class="api-function-param">
+                                    <span class="api-function-param-name">buf_len</span> - 输出缓冲区大小
+                                </div>
+                            </div>
+                            <div class="api-function-returns">
+                                <h5>返回值：</h5>
+                                OK 表示成功，其他值表示错误（参见状态码枚举）
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+            <div class="section" id="section-4">
+                <h2>4. C++ 调用方法</h2>
+                
+                <h3 id="section-4-1">4.1 概述</h3>
+                <p>
+                    本章节详细介绍如何在 C++ 程序中使用 HDA 客户端 DLL。HDA 客户端提供了完整的 C API 接口，支持数据的写入和读取操作。
+                    主要包括以下功能模块：
+                </p>
+                <ul>
+                    <li><strong>客户端初始化</strong>：配置服务器地址并建立连接</li>
+                    <li><strong>数据写入</strong>：支持 0D（标量）和 1D（时序）数据的写入</li>
+                    <li><strong>数据读取</strong>：支持按通道读取历史数据</li>
+                    <li><strong>资源管理</strong>：正确释放客户端和写入器资源</li>
+                </ul>
+
+                <h3 id="section-4-2">4.2 基本操作流程</h3>
+                <p>
+                    使用 HDA 客户端的基本流程包括：初始化客户端、打开写入器、执行数据操作、关闭句柄、清理资源。
+                    本节介绍各个基本操作的调用方法。
+                </p>
+
+                <h4>4.2.1 连接服务器</h4>
+                <p>
+                    首先需要包含头文件 <span class="highlight">hda_client.h</span>，然后配置客户端参数并连接到服务器。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 包含头文件</span>
+<span class="keyword">#include</span> <span class="string">"hda_client.h"</span>
+
+<span class="comment">// 初始化客户端配置</span>
+hda_client_t client;
+hda_client_config_t cfg;
+cfg.server_address = <span class="string">"172.30.20.11:9090"</span>;
+
+<span class="comment">// 连接到服务器</span>
+hda_status_t status = hda_client_connect(&cfg, &client);
+<span class="keyword">if</span> (status != OK) {
+    printf(<span class="string">"Failed to connect: %d\n"</span>, status);
+    <span class="keyword">return</span> -1;
+}</code></pre>
+                </div>
+
+                <h4>4.2.2 打开写入器</h4>
+                <p>
+                    写入器用于向 HDA 服务器写入实验数据。打开写入器需要指定装置、炮号、子系统等关键信息。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 设置写入键</span>
+hda_write_key_t key;
+key.device = <span class="string">"HL-3"</span>;
+key.shot = <span class="number">12345</span>;
+key.subsystem = <span class="string">"test_subsystem"</span>;
+<!--
+key.schema_version = <span class="string">"v1"</span>;-->
+
+<span class="comment">// 打开写入器</span>
+hda_writer_t writer;
+status = hda_open_writer(client, &key, &writer);
+<span class="keyword">if</span> (status != OK) {
+    printf(<span class="string">"Failed to open writer: %d\n"</span>, status);
+    <span class="keyword">return</span> -1;
+}</code></pre>
+                </div>
+
+                <h4>4.2.3 断开连接</h4>
+                <p>
+                    使用完客户端后，需要调用 <span class="highlight">hda_client_disconnect</span> 函数断开连接并释放所有相关资源。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 断开连接，释放所有资源</span>
+hda_client_disconnect(client);</code></pre>
+                </div>
+
+                <h3 id="section-4-3">4.3 数据写入操作</h3>
+                <p>
+                    HDA 客户端支持两种数据类型的写入：1D 时序数据和 0D 标量数据。本节详细介绍这两种数据的写入方法。
+                </p>
+
+                <h4>4.3.1 写入 1D 数据</h4>
+                <p>
+                    1D 数据通常用于存储随时间变化的测量信号，如电压、电流、温度等。写入 1D 数据需要提供时间数组和对应的值数组。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 准备时间数组</span>
+std::vector&lt;double&gt; time = {<span class="number">0.0</span>, <span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>, <span class="number">4.0</span>};
+
+<span class="comment">// 准备值数组</span>
+std::vector&lt;float&gt; values = {<span class="number">10.0f</span>, <span class="number">20.0f</span>, <span class="number">30.0f</span>, <span class="number">40.0f</span>, <span class="number">50.0f</span>};
+
+<span class="comment">// 设置通道属性</span>
+hda_channel_attr_t attrs = {0};
+attrs.DEVICE = <span class="string">"HL-3"</span>;
+attrs.CONTACT_INFO = <span class="string">""</span>;
+attrs.DAQ_DTYPE = <span class="string">"PROCD"</span>;
+attrs.DAQ_RAW_BITS = <span class="number">16</span>;
+attrs.DAQ_VALIDITY = <span class="number">1</span>;
+attrs.DATA_TYPE = HDA_DT_FLOAT32;
+attrs.DESCRIPTION = <span class="string">"Voltage measurement channel"</span>;
+attrs.EBAR_EXIST = <span class="number">0</span>;
+attrs.ENTRY_TIME = <span class="string">"2026-01-24 10:00:00"</span>;
+attrs.PHI_DIM = -<span class="number">1</span>;
+attrs.R_DIM = -<span class="number">1</span>;
+attrs.T_COORD_FREQ = <span class="number">1000.0f</span>;
+attrs.T_COORD_START = <span class="number">0.0f</span>;
+attrs.T_DIM = <span class="number">5</span>;
+attrs.T_TYPE = <span class="string">"US"</span>;
+attrs.T_UNIT = <span class="string">"s"</span>;
+attrs.VERSION = <span class="number">1</span>;
+attrs.V_UNIT = <span class="string">"V"</span>;
+attrs.Z_DIM = -<span class="number">1</span>;
+
+<span class="comment">// 准备写入请求</span>
+hda_write_1d_req_t req;
+req.channel = <span class="string">"test_channel_1d"</span>;
+req.dtype = HDA_DT_FLOAT32;
+req.count = <span class="number">5</span>;
+req.pTime = time.data();
+req.pValue = values.data();
+req.attrs = &attrs;  <span class="comment">// 设置通道属性指针</span>
+
+<span class="comment">// 写入数据</span>
+status = hda_write_1d(writer, &req);
+<span class="keyword">if</span> (status != OK) {
+    printf(<span class="string">"Failed to write 1D data: %d\n"</span>, status);
+    <span class="keyword">return</span> -1;
+}</code></pre>
+                </div>
+
+                <h4>4.3.2 写入 0D 数据</h4>
+                <p>
+                    0D 数据用于存储标量参数，如控制参数、状态标志、配置值等。写入 0D 数据只需要提供单个值。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 准备参数值</span>
+int32_t value = <span class="number">42</span>;
+
+<span class="comment">// 设置通道属性</span>
+hda_channel_attr_t attrs = {0};
+attrs.DEVICE = <span class="string">"HL-3"</span>;
+attrs.CONTACT_INFO = <span class="string">""</span>;
+attrs.DAQ_DTYPE = <span class="string">"PROCD"</span>;
+attrs.DAQ_RAW_BITS = <span class="number">16</span>;
+attrs.DAQ_VALIDITY = <span class="number">1</span>;
+attrs.DATA_TYPE = HDA_DT_INTEGER32;
+attrs.DESCRIPTION = <span class="string">"Control parameter"</span>;
+attrs.EBAR_EXIST = <span class="number">0</span>;
+attrs.ENTRY_TIME = <span class="string">"2026-01-24 10:00:00"</span>;
+attrs.PHI_DIM = -<span class="number">1</span>;
+attrs.R_DIM = -<span class="number">1</span>;
+attrs.T_COORD_FREQ = <span class="number">0.0f</span>;
+attrs.T_COORD_START = <span class="number">0.0f</span>;
+attrs.T_DIM = -<span class="number">1</span>;
+attrs.T_TYPE = <span class="string">""</span>;
+attrs.T_UNIT = <span class="string">""</span>;
+attrs.VERSION = <span class="number">1</span>;
+attrs.V_UNIT = <span class="string">""</span>;
+attrs.Z_DIM = -<span class="number">1</span>;
+
+<span class="comment">// 准备写入请求</span>
+hda_write_0d_req_t req;
+req.channel = <span class="string">"test_param_0d"</span>;
+req.dtype = HDA_DT_INTEGER32;
+req.count = <span class="number">1</span>;
+req.data = &value;
+req.attrs = &attrs;  <span class="comment">// 设置通道属性指针</span>
+
+<span class="comment">// 写入数据</span>
+status = hda_write_0d(writer, &req);
+<span class="keyword">if</span> (status != OK) {
+    printf(<span class="string">"Failed to write 0D data: %d\n"</span>, status);
+    <span class="keyword">return</span> -1;
+}</code></pre>
+                </div>
+
+                <h4>4.3.3 关闭写入器</h4>
+                <p>
+                    完成所有数据写入后，需要关闭写入器。关闭操作会等待服务器确认所有数据已成功写入。
+                    建议设置合理的超时时间（单位：毫秒）。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 关闭写入器，等待服务器确认</span>
+status = hda_close_writer(writer, <span class="number">5000</span>);
+<span class="keyword">if</span> (status != OK) {
+    printf(<span class="string">"Failed to close writer: %d\n"</span>, status);
+    <span class="keyword">return</span> -1;
+}</code></pre>
+                </div>
+
+                <h3 id="section-4-4">4.4 数据读取操作</h3>
+                <p>
+                    数据读取操作用于从 HDA 服务器获取历史实验数据。支持索引读取、时间范围查询和最后N点查询三种模式。
+                    读取操作会返回时间数组和对应的值数组。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 设置读取请求</span>
+hda_read_req_t read_req;
+read_req.shot = <span class="number">12345</span>;
+read_req.channel = <span class="string">"test_channel_1d"</span>;
+read_req.mode = HDA_READ_MODE_CONTINUOUS;
+read_req.start_index = <span class="number">0</span>;  <span class="comment">// 起始索引</span>
+read_req.count = <span class="number">100</span>;      <span class="comment">// 读取数量</span>
+read_req.return_timebase = <span class="number">1</span>;  <span class="comment">// 返回时间基线</span>
+
+<span class="comment">// 准备缓冲区</span>
+<span class="keyword">const</span> <span class="keyword">int</span> kMaxBufferSize = <span class="number">1000000</span>;
+std::vector&lt;double&gt; read_time(kMaxBufferSize);
+std::vector&lt;float&gt; read_values(kMaxBufferSize);
+
+hda_read_1d_resp_t read_resp;
+read_resp.out_time = read_time.data();
+read_resp.out_time_bytes = read_time.size() * <span class="keyword">sizeof</span>(double);
+read_resp.out_value = read_values.data();
+read_resp.out_value_bytes = read_values.size() * <span class="keyword">sizeof</span>(float);
+
+<span class="comment">// 读取数据</span>
+status = hda_read_1d(client, &read_req, &read_resp);
+<span class="keyword">if</span> (status != OK) {
+    printf(<span class="string">"Failed to read 1D data: %d\n"</span>, status);
+} <span class="keyword">else</span> {
+    printf(<span class="string">"Read %d samples\n"</span>, read_resp.sample_count);
+    <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i < read_resp.sample_count; i++) {
+        printf(<span class="string">"  Time: %.2f, Value: %.2f\n"</span>, read_time[i], read_values[i]);
+    }
+}</code></pre>
+                </div>
+
+                <h3 id="section-4-5">4.5 完整示例程序</h3>
+                <p>
+                    以下是一个完整的 C++ 示例程序，演示了 HDA 客户端的完整使用流程，包括连接、数据写入、数据读取和断开连接。
+                    该示例可以作为开发 HDA 客户端应用程序的参考模板。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// demo_hda_client.cpp</span>
+<span class="keyword">#include</span> <span class="string">"hda_client.h"</span>
+<span class="keyword">#include</span> <span class="string">&lt;iostream&gt;</span>
+<span class="keyword">#include</span> <span class="string">&lt;vector&gt;</span>
+
+<span class="keyword">using namespace</span> std;
+
+<span class="keyword">int</span> main() {
+    <span class="comment">// 连接到服务器</span>
+    hda_client_t client;
+    hda_client_config_t cfg;
+    cfg.server_address = <span class="string">"172.30.20.11:9090"</span>;
+
+    hda_status_t status = hda_client_connect(&cfg, &client);
+    <span class="keyword">if</span> (status != OK) {
+        cout << <span class="string">"Failed to connect: "</span> << status << endl;
+        <span class="keyword">return</span> -1;
+    }
+    cout << <span class="string">"Connected successfully"</span> << endl;
+
+    <span class="comment">// 写入数据</span>
+    {
+        <span class="comment">// 设置写入键</span>
+        hda_write_key_t key;
+        key.device = <span class="string">"HL-3"</span>;
+        key.shot = <span class="number">12345</span>;
+        key.subsystem = <span class="string">"test_subsystem"</span>;
+     <!--  key.schema_version = <span class="string">"v1"</span>;   -->
+
+        <span class="comment">// 打开写入器</span>
+        hda_writer_t writer;
+        status = hda_open_writer(client, &key, &writer);
+        <span class="keyword">if</span> (status != OK) {
+            cout << <span class="string">"Failed to open writer: "</span> << status << endl;
+            hda_client_disconnect(client);
+            <span class="keyword">return</span> -1;
+        }
+
+        <span class="comment">// 准备1D数据</span>
+        vector&lt;double&gt; time = {<span class="number">0.0</span>, <span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>, <span class="number">4.0</span>};
+        vector&lt;float&gt; values = {<span class="number">10.0f</span>, <span class="number">20.0f</span>, <span class="number">30.0f</span>, <span class="number">40.0f</span>, <span class="number">50.0f</span>};
+
+        <span class="comment">// 设置通道属性</span>
+        hda_channel_attr_t attrs = {0};
+        attrs.DEVICE = <span class="string">"HL-3"</span>;
+        attrs.CONTACT_INFO = <span class="string">""</span>;
+        attrs.DAQ_DTYPE = <span class="string">"PROCD"</span>;
+        attrs.DAQ_RAW_BITS = <span class="number">16</span>;
+        attrs.DAQ_VALIDITY = <span class="number">1</span>;
+        attrs.DATA_TYPE = HDA_DT_FLOAT32;
+        attrs.DESCRIPTION = <span class="string">"Voltage measurement channel"</span>;
+        attrs.EBAR_EXIST = <span class="number">0</span>;
+        attrs.ENTRY_TIME = <span class="string">"2026-01-31 10:00:00"</span>;
+        attrs.PHI_DIM = -<span class="number">1</span>;
+        attrs.R_DIM = -<span class="number">1</span>;
+        attrs.T_COORD_FREQ = <span class="number">1000.0f</span>;
+        attrs.T_COORD_START = <span class="number">0.0f</span>;
+        attrs.T_DIM = <span class="number">5</span>;
+        attrs.T_TYPE = <span class="string">"US"</span>;
+        attrs.T_UNIT = <span class="string">"s"</span>;
+        attrs.VERSION = <span class="number">1</span>;
+        attrs.V_UNIT = <span class="string">"V"</span>;
+        attrs.Z_DIM = -<span class="number">1</span>;
+
+        <span class="comment">// 准备写入请求</span>
+        hda_write_1d_req_t req;
+        req.channel = <span class="string">"test_channel_1d"</span>;
+        req.dtype = HDA_DT_FLOAT32;
+        req.count = <span class="number">5</span>;
+        req.pTime = time.data();
+        req.pValue = values.data();
+        req.attrs = &attrs;
+
+        <span class="comment">// 写入数据</span>
+        status = hda_write_1d(writer, &req);
+        <span class="keyword">if</span> (status != OK) {
+            cout << <span class="string">"Failed to write 1D data: "</span> << status << endl;
+            hda_close_writer(writer, <span class="number">5000</span>);
+            hda_client_disconnect(client);
+            <span class="keyword">return</span> -1;
+        }
+        cout << <span class="string">"1D data written successfully"</span> << endl;
+
+        <span class="comment">// 关闭写入器</span>
+        status = hda_close_writer(writer, <span class="number">5000</span>);
+        <span class="keyword">if</span> (status != OK) {
+            cout << <span class="string">"Failed to close writer: "</span> << status << endl;
+            hda_client_disconnect(client);
+            <span class="keyword">return</span> -1;
+        }
+        cout << <span class="string">"Writer closed successfully"</span> << endl;
+    }
+
+    <span class="comment">// 读取数据</span>
+    {
+        <span class="comment">// 设置读取请求</span>
+        hda_read_req_t read_req;
+        read_req.shot = <span class="number">12345</span>;
+        read_req.channel = <span class="string">"test_channel_1d"</span>;
+        read_req.mode = HDA_READ_MODE_CONTINUOUS;
+        read_req.start_index = <span class="number">0</span>;
+        read_req.count = <span class="number">100</span>;
+        read_req.return_timebase = <span class="number">1</span>;
+
+        <span class="comment">// 准备缓冲区</span>
+        <span class="keyword">const</span> <span class="keyword">int</span> kMaxBufferSize = <span class="number">1000000</span>;
+        vector&lt;double&gt; read_time(kMaxBufferSize);
+        vector&lt;float&gt; read_values(kMaxBufferSize);
+
+        hda_read_1d_resp_t read_resp;
+        read_resp.out_time = read_time.data();
+        read_resp.out_time_bytes = read_time.size() * <span class="keyword">sizeof</span>(double);
+        read_resp.out_value = read_values.data();
+        read_resp.out_value_bytes = read_values.size() * <span class="keyword">sizeof</span>(float);
+
+        <span class="comment">// 读取数据</span>
+        status = hda_read_1d(client, &read_req, &read_resp);
+        <span class="keyword">if</span> (status != OK) {
+            cout << <span class="string">"Failed to read 1D data: "</span> << status << endl;
+        } <span class="keyword">else</span> {
+            cout << <span class="string">"Read "</span> << read_resp.sample_count << <span class="string">" samples"</span> << endl;
+            <span class="keyword">for</span> (<span class="keyword">int</span> i = <span class="number">0</span>; i < read_resp.sample_count; i++) {
+                cout << <span class="string">"  Time: "</span> << read_time[i] << <span class="string">", Value: "</span> << read_values[i] << endl;
+            }
+        }
+    }
+
+    <span class="comment">// 断开连接</span>
+    hda_client_disconnect(client);
+    cout << <span class="string">"Disconnected successfully"</span> << endl;
+
+    <span class="keyword">return</span> 0;
+}</code></pre>
+                </div>
+
+                <h3 id="section-4-6">4.6 编译与部署</h3>
+                <p>
+                    本节详细介绍如何在 Windows 平台上编译和部署使用 HDA 客户端 DLL 的 C++ 应用程序。
+                    我们已提供所有必需的依赖库文件，用户无需单独安装 gRPC、Protobuf 等第三方库。
+                </p>
+
+                <h4>4.6.1 系统要求</h4>
+                <p>
+                    请确保您的开发环境满足以下要求。
+                </p>
+
+                <div class="data-structure">
+                    <h4>Windows 平台</h4>
+                    <div class="field">
+                        <span class="field-name">操作系统</span>
+                        <span class="field-desc">Windows 7 SP1 或更高版本（推荐 Windows 10/11）</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">编译器</span>
+                        <span class="field-desc">Visual Studio 2019 或更高版本</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">运行时库</span>
+                        <span class="field-desc">Microsoft Visual C++ Redistributable 2019 或更高版本</span>
+                    </div>
+                </div>
+
+                <h4>4.6.2 依赖库文件</h4>
+                <p>
+                    我们已提供所有必需的 DLL 文件，用户无需安装 gRPC、Protobuf、nlohmann-json 等依赖库。
+                    只需将以下 DLL 文件与应用程序放在同一目录下即可正常运行。
+                </p>
+                <div class="code-block">
+                    <pre><code>hda_client.dll          <span class="comment">// HDA 客户端主库</span>
+abseil_dll.dll         <span class="comment">// Abseil 基础库</span>
+cares.dll              <span class="comment">// c-ares DNS 解析库</span>
+libcrypto-3-x64.dll    <span class="comment">// OpenSSL 加密库</span>
+libprotobuf.dll        <span class="comment">// Protocol Buffers 库</span>
+libssl-3-x64.dll       <span class="comment">// OpenSSL SSL 库</span>
+re2.dll                <span class="comment">// RE2 正则表达式库</span>
+zlib1.dll              <span class="comment">// zlib 压缩库</span></code></pre>
+                </div>
+                <div class="note">
+                    <h4>注意</h4>
+                    <p>
+                        虽然我们提供了所有依赖 DLL，但用户仍需安装 <strong>Microsoft Visual C++ Redistributable 2019 或更高版本</strong>。
+                        这是 Windows 系统运行时库，是运行 C++ 应用程序的必需组件。
+                        可以从微软官网下载安装：<a href="https://aka.ms/vs/17/release/vc_redist.x64.exe" target="_blank" style="color: #3498db;">vc_redist.x64.exe</a>
+                    </p>
+                </div>
+
+                <h4>4.6.3 编译方法</h4>
+                <p>
+                    根据您的开发环境，选择合适的编译方法。
+                </p>
+
+                <h5>方法一：使用 Visual Studio（推荐）</h5>
+                <p>
+                    适用于 Windows 平台的图形化开发：
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 1. 创建一个新的 C++ 控制台项目（x64 架构）</span>
+<span class="comment">// 2. 将 hda_client.h 复制到项目目录</span>
+<span class="comment">// 3. 将 hda_client.lib 复制到项目目录</span>
+<span class="comment">// 4. 在项目属性中添加包含目录（如果需要）</span>
+<span class="comment">// 5. 在项目属性中添加链接器输入：hda_client.lib</span>
+<span class="comment">// 6. 配置运行时库：使用 /MD（多线程 DLL）</span>
+<span class="comment">// 7. 编译并运行</span></code></pre>
+                </div>
+
+                <h5>方法二：使用命令行编译</h5>
+                <p>
+                    需要打开 Visual Studio 命令提示符（x64）：
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment"># 编译单个源文件</span>
+cl /EHsc /MD /arch:x64 demo_hda_client.cpp /I. /link hda_client.lib
+
+<span class="comment"># 编译多个源文件</span>
+cl /EHsc /MD /arch:x64 main.cpp utils.cpp /I. /link hda_client.lib
+
+<span class="comment"># 指定输出文件名</span>
+cl /EHsc /MD /arch:x64 demo_hda_client.cpp /Fe:my_app.exe /I. /link hda_client.lib</code></pre>
+                </div>
+
+                <h4>4.6.4 部署说明</h4>
+                <p>
+                    将编译好的应用程序部署到目标机器时，按照以下步骤操作。
+                </p>
+                <div class="code-block">
+                    <pre><code><span class="comment">// 1. 确保目标机器安装了 Microsoft Visual C++ Redistributable 2019 或更高版本</span>
+<span class="comment">// 2. 将以下文件复制到应用程序目录：</span>
+<span class="comment">//    - your_app.exe（应用程序可执行文件）</span>
+<span class="comment">//    - hda_client.dll</span>
+<span class="comment">//    - 所有依赖的 DLL 文件（见 4.7.2 节列表）</span>
+<span class="comment">// 3. 测试运行应用程序</span></code></pre>
+                </div>
+
+                <h4>4.6.5 故障排除</h4>
+                <p>
+                    在编译和部署过程中，可能会遇到一些常见问题。以下是常见问题及其解决方案。
+                </p>
+
+                <div class="data-structure">
+                    <div class="field">
+                        <span class="field-name">问题：找不到头文件</span>
+                        <span class="field-desc">确保 hda_client.h 在项目目录中，或在编译选项中指定正确的包含路径（/I）</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">问题：链接错误 - 找不到符号</span>
+                        <span class="field-desc">检查是否正确链接了 hda_client.lib，确保架构匹配（x64 vs x86）</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">问题：找不到 DLL 文件</span>
+                        <span class="field-desc">确保所有依赖的 DLL 文件都在应用程序目录中</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">问题：缺少 MSVCP140.dll 等运行时库</span>
+                        <span class="field-desc">安装 Microsoft Visual C++ Redistributable 2019 或更高版本</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">问题：连接服务器超时</span>
+                        <span class="field-desc">检查网络连接、防火墙设置，验证服务器地址和端口是否正确</span>
+                    </div>
+                    <div class="field">
+                        <span class="field-name">问题：应用程序崩溃</span>
+                        <span class="field-desc">检查运行时库版本是否匹配，使用调试器查看崩溃堆栈</span>
+                    </div>
+                </div>
+
+                <div class="warning">
+                    <h4>重要提示</h4>
+                    <p>
+                        <strong>1. 架构一致性：</strong>确保应用程序和所有依赖库的架构一致（x64 vs x86）。
+                        混合使用不同架构的库会导致运行时错误。
+                    </p>
+                    <p>
+                        <strong>2. 运行时库版本：</strong>确保目标机器安装了正确版本的 Visual C++ Redistributable。
+                        不同版本的运行时库可能不兼容。
+                    </p>
+                    <p>
+                        <strong>3. DLL 文件完整性：</strong>确保所有必需的 DLL 文件都已复制到应用程序目录，
+                        缺少任何一个都会导致程序无法运行。
+                    </p>
+                    <p>
+                        <strong>4. 网络配置：</strong>确保目标机器可以访问 HDA 服务器，检查防火墙规则和网络连接。
+                    </p>
+                </div>
+            </div>
+
+            <div class="section" id="section-5">
+                <h2>5. MATLAB 调用方法 <span class="badge pending">待定</span></h2>
+                <div class="note">
+                    <h4>说明</h4>
+                    <p>
+                        MATLAB 调用需要通过 MEX 文件（MATLAB 扩展）将 C API 封装为 MATLAB 函数。
+                        目前该功能正在开发中...
+                    </p>
+                </div>
+            </div>
+
+            <div class="section" id="section-6">
+                <h2>6. Python 调用方法 <span class="badge pending">待定</span></h2>
+                <div class="note">
+                    <h4>说明</h4>
+                    <p>
+                        Python 调用需要通过 ctypes 或 cffi 库加载 DLL，将 C API 封装为 Python 模块。
+                        目前该功能正在开发中...
+                    </p>
+                </div>
+            </div>
+
+            <div class="section" id="section-7">
+                <h2>7. LabVIEW 调用方法 <span class="badge pending">待定</span></h2>
+                <div class="note">
+                    <h4>说明</h4>
+                    <p>
+                        LabVIEW 调用需要通过 "Call Library Function" 节点直接调用 DLL 导出的 C 函数。
+                        目前该功能正在开发中....
+                    </p>
+                </div>
+            </div>
+
+            <div class="section" id="section-8">
+                <h2>8. 下载 HDA 客户端 DLL</h2>
+                <div class="download-section">
+                    <h3>下载文件</h3>
+                    <div>
+                        <a href="download/hda_client.zip" class="download-link">下载 hda_client.dll（压缩包）</a>
+                        <a href="download/hda_client.h" class="download-link">下载 hda_client.h</a>
+                        <a href="download/index.html" class="download-link" download="HDA客户端DLL使用指南.html">下载完整文档</a>
+                    </div>
+                    <p style="margin-top: 20px; font-size: 0.9em;">
+                        <strong>使用说明：</strong>下载压缩包后请解压，将 DLL 文件放在您的应用程序目录或系统 PATH 中，
+                        并在代码中包含 hda_client.h 头文件。
+                    </p>
+                </div>
+            </div>
+
+            <div class="section" id="section-9">
+                <h2>9. 常见问题</h2>
+                
+                <div class="warning">
+                    <h4>Q: 如何解决 "找不到 DLL" 错误？</h4>
+                    <p>
+                        确保 DLL 文件在应用程序目录或系统 PATH 中，或使用绝对路径加载。
+                        Windows 系统需要将 DLL 放在应用程序同级目录或系统目录（如 C:\Windows\System32）。
+                    </p>
+                </div>
+
+                <div class="warning">
+                    <h4>Q: 支持哪些操作系统？</h4>
+                    <p>
+                        支持 Windows 7 SP1 及以上版本（64 位）。
+                        需要安装 Microsoft Visual C++ Redistributable 2019 或更高版本。
+                    </p>
+                </div>
+
+                <div class="warning">
+                    <h4>Q: 如何处理大数据量？</h4>
+                    <p>
+                        使用流式写入，分批写入数据，避免单次传输过大。
+                        建议每批不超过 10000 个样本。
+                    </p>
+                </div>
+
+                <div class="warning">
+                    <h4>Q: 连接超时怎么办？</h4>
+                    <p>
+                        检查网络连接，确认服务器地址和端口正确，检查防火墙设置。
+                        确保服务器端服务正常运行。
+                    </p>
+                </div>
+
+                <div class="warning">
+                    <h4>Q: 如何设置通道属性？</h4>
+                    <p>
+                        通道属性通过 hda_channel_attr_t 结构设置。
+                        如果不需要设置属性，可以将 attrs 字段设置为 NULL。
+                        建议至少设置 DESCRIPTION、V_UNIT、T_UNIT 等基本属性。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+        <footer>
+            <p>&copy;聚变科学实验所运行与控制研究室</p>
+            <p style="margin-top: 10px; font-size: 0.85em;">
+                如有疑问，请联系技术支持团队
+            </p>
+        </footer>
+    </div>
+
+    <script>
+    function toggleFunction(element) {
+        element.classList.toggle('open');
+    }
+    </script>
+</body>
+</html>

@@ -771,6 +771,19 @@ void MainWindow::initUi()
             mExternalSignalTriggered = true;
         }
 
+        // 修改系统时间需要管理员权限
+        QDateTime utc = tm.toUTC();
+        SYSTEMTIME st;
+        st.wYear         = utc.date().year();
+        st.wMonth        = utc.date().month();
+        st.wDay          = utc.date().day();
+        st.wHour         = utc.time().hour();
+        st.wMinute       = utc.time().minute();
+        st.wSecond       = utc.time().second();
+        st.wMilliseconds = utc.time().msec();
+        st.wDayOfWeek    = utc.date().dayOfWeek() % 7; // 0=周日
+        ::SetSystemTime(&st) != FALSE;
+
         // 记录指令
         recordExternalCommand(QString("时钟：%1").arg(tm.toString("yyyy-MM-dd hh:mm:ss.zzz")));
     });

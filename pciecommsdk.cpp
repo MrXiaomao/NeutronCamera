@@ -640,10 +640,10 @@ bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& cameraIndex,
     int endFileId = startFileId + (timeStop - timeStart) / PACKET_TIMELENGTH;
     //根据通道号判断是采集卡的A面还是B面
     QString sideFile = "B";
-    if ((cameraIndex % 6) >= 1 && (cameraIndex % 6) <= CAMNUMBER_DDR_PER)
+    if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
         sideFile = "A";
     //根据通道号计算采集卡的索引
-    int board_index = (cameraIndex + 5) / 6;
+    int board_index = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;
     int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
     //根据通道号计算对应采集卡的第几通道
     quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
@@ -780,10 +780,10 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
     int endFileId = startFileId + (timeStop - timeStart) / PACKET_TIMELENGTH;
     //根据通道号判断是采集卡的A面还是B面
     QString sideFile = "B";
-    if ((cameraIndex % 6) >= 1 && (cameraIndex % 6) <= CAMNUMBER_DDR_PER)
+    if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
         sideFile = "A";
     //根据通道号计算采集卡的索引
-    int board_index = (cameraIndex + 5) / 6;
+    int board_index = (cameraIndex + DETNUMBER_PCIE_PER - 1) / 6;
     int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
     //根据通道号计算对应采集卡的第几通道
     quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
