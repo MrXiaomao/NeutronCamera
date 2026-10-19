@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
     // 启用新的日子记录类
     QString filename = QFileInfo(QCoreApplication::applicationFilePath()).baseName();
     QStringList args = QCoreApplication::arguments();
-    if (args.contains("-m") && args.contains("offline")){
+    if (args.contains("-offline")){
         filename += ".offline";
     }
     else if (args.contains("-c") && args.contains("compress")){

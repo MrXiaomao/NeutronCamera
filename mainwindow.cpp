@@ -190,7 +190,7 @@ void MainWindow::initUi()
         ui->tableWidget_status->setItem(0, 0, new QTableWidgetItem("温度\n℃"));
         ui->tableWidget_status->item(0, 0)->setTextAlignment(Qt::AlignCenter);
         ui->tableWidget_status->item(0, 0)->setBackground(QColor::fromRgb(0x00,0x00,0xff,0x70));
-        QStringList headers = QStringList() << "单通"/*PSD1*/ << "加和"/*PSD2*/ << "LBD" <<  "LSD";
+        QStringList headers = QStringList() << "塑闪单通"/*PSD1*/ << "塑闪加和"/*PSD2*/ << "溴化镧"/*LBD*/ <<  "液闪"/*LSD*/;
         for (int i=0; i<=3; ++i){
             ui->tableWidget_status->setItem(i, 1, new QTableWidgetItem(headers[i]));
             ui->tableWidget_status->item(i, 1)->setTextAlignment(Qt::AlignCenter);
@@ -474,7 +474,7 @@ void MainWindow::initUi()
 
         // 检查模组通讯是否正常
         {
-            if (mLastCommunicationTime.isValid() && mLastCommunicationTime.elapsed() >= 10000){
+            if (mLastCommunicationTime.isValid() && mLastCommunicationTime.elapsed() >= 30000){
                 // 超过10s没通讯，网络出现故障
                 qWarning().noquote().nospace() << "性能检测设备网络发生故障，尝试重连...";
                 mLastCommunicationTime.invalidate();
@@ -912,41 +912,41 @@ void MainWindow::initUi()
                 }
             };
 
-            if (ui->action_typePSD->isChecked()){
-                checkValueValid(0, pairs["PSD1"].first, 10, 50, tr("PSD1温度异常，值："));
-                checkValueValid(1, pairs["PSD2"].first, 10, 50, tr("PSD2温度异常，值："));
-                checkValueValid(4, pairs["PSD1_29V"].first, 28, 30, tr("PSD1_29V电压异常，值："));
-                checkValueValid(5, pairs["PSD2_29V"].first, 28, 30, tr("PSD2_29V电压异常，值："));
-                checkValueValid(8, pairs["PSD1_29V"].second, 0.01, 20, tr("PSD1_29V电流异常，值："));
-                checkValueValid(9, pairs["PSD2_29V"].second, 0.01, 20, tr("PSD2_29V电流异常，值："));
-                checkValueValid(12, pairs["PSD1_48V"].first, 45, 50, tr("PSD1_48V电压异常，值："));
-                checkValueValid(13, pairs["PSD2_48V"].first, 45, 50, tr("PSD2_48V电压异常，值："));
-                checkValueValid(16, pairs["PSD1_48V"].second*2, 0.01, 20, tr("PSD1_48V电流异常，值："));
-                checkValueValid(17, pairs["PSD2_48V"].second*2, 0.01, 20, tr("PSD2_48V电流异常，值："));
-                checkValueValid(20, pairs["PSD1-AMP"].first, 45, 50, tr("PSD1运放板电压异常，值："));
-                checkValueValid(21, pairs["PSD2-AMP"].first, 45, 50, tr("PSD2运放板电压异常，值："));
-                checkValueValid(24, pairs["PSD1-AMP"].second*2, 0.01, 20, tr("PSD1运放板电流异常，值："));
-                checkValueValid(25, pairs["PSD2-AMP"].second*2, 0.01, 20, tr("PSD2运放板电流异常，值："));
+            if (ui->action_typePSD->isChecked()){//塑闪
+                checkValueValid(0, pairs["PSD1"].first, 10, 50, tr("塑闪单通温度异常，值："));
+                checkValueValid(1, pairs["PSD2"].first, 10, 50, tr("塑闪加和温度异常，值："));
+                checkValueValid(4, pairs["PSD1_29V"].first, 28, 30, tr("塑闪单通_29V电压异常，值："));
+                checkValueValid(5, pairs["PSD2_29V"].first, 28, 30, tr("塑闪加和_29V电压异常，值："));
+                checkValueValid(8, pairs["PSD1_29V"].second, 0.01, 20, tr("塑闪单通_29V电流异常，值："));
+                checkValueValid(9, pairs["PSD2_29V"].second, 0.01, 20, tr("塑闪加和_29V电流异常，值："));
+                checkValueValid(12, pairs["PSD1_48V"].first, 45, 50, tr("塑闪单通_48V电压异常，值："));
+                checkValueValid(13, pairs["PSD2_48V"].first, 45, 50, tr("塑闪加和_48V电压异常，值："));
+                checkValueValid(16, pairs["PSD1_48V"].second*2, 0.01, 20, tr("塑闪单通_48V电流异常，值："));
+                checkValueValid(17, pairs["PSD2_48V"].second*2, 0.01, 20, tr("塑闪加和_48V电流异常，值："));
+                checkValueValid(20, pairs["PSD1-AMP"].first, 45, 50, tr("塑闪单通运放板电压异常，值："));
+                checkValueValid(21, pairs["PSD2-AMP"].first, 45, 50, tr("塑闪加和运放板电压异常，值："));
+                checkValueValid(24, pairs["PSD1-AMP"].second*2, 0.01, 20, tr("塑闪单通运放板电流异常，值："));
+                checkValueValid(25, pairs["PSD2-AMP"].second*2, 0.01, 20, tr("塑闪加和运放板电流异常，值："));
             }
 
-            else if (ui->action_typeLBD->isChecked()){
-                checkValueValid(2, pairs["LBD"].first, 10, 50, tr("LBD温度异常，值："));
-                checkValueValid(6, pairs["LBD_29V"].first, 28, 30, tr("LBD_29V电压异常，值："));
-                checkValueValid(10, pairs["LBD_29V"].second, 0.01, 20, tr("LBD_29V电流异常，值："));
-                checkValueValid(14, pairs["LBD_48V"].first, 45, 50, tr("LBD_48V电压异常，值："));
-                checkValueValid(18, pairs["LBD_48V"].second*2, 0.01, 20, tr("LBD_48V电流异常，值："));
-                checkValueValid(22, pairs["LBD-AMP"].first, 45, 50, tr("LBD运放板电压异常，值："));
-                checkValueValid(26, pairs["LBD-AMP"].second*2, 0.01, 20, tr("LBD运放板电流异常，值："));
+            else if (ui->action_typeLBD->isChecked()){//溴化镧
+                checkValueValid(2, pairs["LBD"].first, 10, 50, tr("溴化镧温度异常，值："));
+                checkValueValid(6, pairs["LBD_29V"].first, 28, 30, tr("溴化镧_29V电压异常，值："));
+                checkValueValid(10, pairs["LBD_29V"].second, 0.01, 20, tr("溴化镧_29V电流异常，值："));
+                checkValueValid(14, pairs["LBD_48V"].first, 45, 50, tr("溴化镧_48V电压异常，值："));
+                checkValueValid(18, pairs["LBD_48V"].second*2, 0.01, 20, tr("溴化镧_48V电流异常，值："));
+                checkValueValid(22, pairs["LBD-AMP"].first, 45, 50, tr("溴化镧运放板电压异常，值："));
+                checkValueValid(26, pairs["LBD-AMP"].second*2, 0.01, 20, tr("溴化镧运放板电流异常，值："));
             }
 
-            else if (ui->action_typeLSD->isChecked()){
-                checkValueValid(3, pairs["LSD"].first, 10, 50, tr("LSD温度异常，值："));
-                checkValueValid(7, pairs["LSD_29V"].first, 28, 30, tr("LSD_29V电压异常，值："));
-                checkValueValid(11, pairs["LSD_29V"].second, 0.01, 20, tr("LBD_29V电流异常，值："));
-                checkValueValid(15, pairs["LSD_48V"].first, 45, 50, tr("LSD_48V电压异常，值："));
-                checkValueValid(19, pairs["LSD_48V"].second*2, 0.01, 20, tr("LSD_48V电流异常，值："));
-                checkValueValid(23, pairs["LSD-AMP"].first, 45, 50, tr("LSD运放板电压异常，值："));
-                checkValueValid(27, pairs["LSD-AMP"].second*2, 0.01, 20, tr("LSD运放板电流异常，值："));
+            else if (ui->action_typeLSD->isChecked()){//液闪
+                checkValueValid(3, pairs["LSD"].first, 10, 50, tr("液闪温度异常，值："));
+                checkValueValid(7, pairs["LSD_29V"].first, 28, 30, tr("液闪_29V电压异常，值："));
+                checkValueValid(11, pairs["LSD_29V"].second, 0.01, 20, tr("液闪_29V电流异常，值："));
+                checkValueValid(15, pairs["LSD_48V"].first, 45, 50, tr("液闪_48V电压异常，值："));
+                checkValueValid(19, pairs["LSD_48V"].second*2, 0.01, 20, tr("液闪_48V电流异常，值："));
+                checkValueValid(23, pairs["LSD-AMP"].first, 45, 50, tr("液闪运放板电压异常，值："));
+                checkValueValid(27, pairs["LSD-AMP"].second*2, 0.01, 20, tr("液闪运放板电流异常，值："));
             }
 
             //温度
@@ -1235,6 +1235,19 @@ void MainWindow::initUi()
 
     mToastManager = new ToastManager(this);
     mToastManager->setMaxQueued(10);
+
+#ifdef SINGLE_BOARD_MODE
+    ui->toolBar->removeAction(ui->action_status);
+    ui->menubar->removeAction(ui->menu_detType->menuAction());
+    ui->action_typeLBD->setChecked(true);
+    ui->leftSidewidget->hide();
+    ui->leftStackedWidget->hide();
+
+    ui->label_7->hide();
+    ui->comboBox_horCamera->hide();
+    ui->label_9->hide();
+    ui->comboBox_verCamera->hide();
+#endif //SINGLE_BOARD_MODE
 }
 
 
@@ -1251,12 +1264,17 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
     if (customPlot == ui->spectroMeter_neutronSpectrum || customPlot == ui->spectroMeter_gammaSpectrum){
         customPlot->xAxis->setRange(0, 2048);
         customPlot->yAxis->setRange(0, 10000);
+        customPlot->legend->setVisible(true);
+
+#ifdef SINGLE_BOARD_MODE
+        QStringList title = {""};
+#else
+        QStringList title = {"水平相机", "垂直相机"};
+        customPlot->legend->setCheckable(true);
+#endif //SINGLE_BOARD_MODE
 
         QColor colors[] = {Qt::red, Qt::blue};
-        QString title[] = {"水平", "垂直"};
-        customPlot->legend->setVisible(true);
-        customPlot->legend->setCheckable(true);
-        for (int i=0; i<2; ++i){
+        for (int i=0; i<title.size(); ++i){
             QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
             graph->setAntialiased(false);
             graph->setPen(QPen(colors[i]));
@@ -1787,8 +1805,8 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
             ui->spectroMeter_gammaSpectrum->show();
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
         }
-        this->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
-        mainWindow->setWindowTitle(QApplication::applicationName() + "LSD探测器" + " - " + APP_VERSION);
+        this->setWindowTitle(QApplication::applicationName() + "液闪探测器" + " - " + APP_VERSION);
+        mainWindow->setWindowTitle(QApplication::applicationName() + "液闪探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetectType", OfflineWindow::dtLSD);
 
@@ -1818,8 +1836,8 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
             ui->spectroMeter_gammaSpectrum->hide();
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
         }
-        this->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
-        mainWindow->setWindowTitle(QApplication::applicationName() + "PSD探测器" + " - " + APP_VERSION);
+        this->setWindowTitle(QApplication::applicationName() + "塑闪探测器" + " - " + APP_VERSION);
+        mainWindow->setWindowTitle(QApplication::applicationName() + "塑闪探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetectType", OfflineWindow::dtPSD);
 
@@ -1849,8 +1867,8 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
             ui->spectroMeter_gammaSpectrum->show();
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
         }
-        this->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
-        mainWindow->setWindowTitle(QApplication::applicationName() + "LBD探测器" + " - " + APP_VERSION);
+        this->setWindowTitle(QApplication::applicationName() + "溴化镧探测器" + " - " + APP_VERSION);
+        mainWindow->setWindowTitle(QApplication::applicationName() + "溴化镧探测器" + " - " + APP_VERSION);
         GlobalSettings settings(DEVICE_CONFIG_FILE);
         settings.setValue("Global/DetectType", OfflineWindow::dtLBD);
 
@@ -1977,6 +1995,7 @@ void MainWindow::onStartMeasure()
     if (ui->action_typeLSD->isChecked())
         mPCIeCommSdk.setPSDThreshold();
 
+    mPCIeCommSdk.setTriggerThreshold();
     mPCIeCommSdk.startAllCapture(fileSaveDir,
                                  ui->spinBox_timeLength->value(),
                                  ui->lineEdit_shotNum->text());
@@ -2112,8 +2131,9 @@ void MainWindow::on_action_reset_triggered()
     // PCIe重置
     mCurrentMeasuerCount = 0;
     qInfo().nospace() << "复位中，请等待...";
-    QtConcurrent::run([this]() {
-        mPCIeCommSdk.reset();
+    qint32 timeLength = ui->spinBox_timeLength->value();
+    QtConcurrent::run([this, timeLength]() {
+        mPCIeCommSdk.reset(timeLength);
     });
 }
 

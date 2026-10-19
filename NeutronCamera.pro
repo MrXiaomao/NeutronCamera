@@ -139,6 +139,8 @@ DEFINES += APP_VERSION="\\\"V3.3.1009\\\""
 DEFINES +=_WIN32_WINNT=0x0601
 DEFINES += "HDF5_DATAFORMAT_VERSION=(quint32)261009" #如果HDF5数据存储格式发生改变，这里就需要把版本号改一下，否则会导致解析HDF5文件内容失败
 
+DEFINES += SINGLE_BOARD_MODE #单张采集卡模式
+
 ################################################################################################
 windows {
     message("The current environment is a Windows system")

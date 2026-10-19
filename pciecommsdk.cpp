@@ -201,7 +201,7 @@ void PCIeCommSdk::printDevicesInfomation()
         for (int physicalNo=1; physicalNo<=3; ++physicalNo)
         {
             quint8 boardIndex = boardIndexFromName(mPhysicalNames[physicalNo-1]);
-            if (boardExists(boardIndex)){
+            if (boardIndex>0 && boardExists(physicalNo)){
                 bool isEnable = boardIsEnable(boardIndex);
                 AppConfig::instance().enableBoard(boardIndex, isEnable);
                 AppConfig::instance().setBoardCaptureState(boardIndex, isEnable);
@@ -228,7 +228,7 @@ bool PCIeCommSdk::boardExists(const quint8& physicalNo/*采集卡序号1-3*/)
 #ifdef _WIN32
 #include <processtopologyapi.h> //SetThreadGroupAffinity
 #endif
-void PCIeCommSdk::startCapture(quint32 deviceIndex, QString fileSavePath, quint32 captureTimeSeconds, QString shotNum/*炮号*/, bool testMode)
+void PCIeCommSdk::startCapture(quint32 deviceIndex, QString fileSavePath, quint32 captureTimeMillisecond, QString shotNum/*炮号*/, bool testMode)
 {
     auto iter = mMapDeviceCaptureThread.find(deviceIndex);
     if (iter != mMapDeviceCaptureThread.end()){
@@ -238,9 +238,9 @@ void PCIeCommSdk::startCapture(quint32 deviceIndex, QString fileSavePath, quint3
         // else if (i==1)
         //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&10D89B97&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
         // else if (i==2)
-        //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
+        //        = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
 
-        mMapDeviceCaptureThread[deviceIndex]->setParamter(fileSavePath, captureTimeSeconds, testMode);
+        mMapDeviceCaptureThread[deviceIndex]->setParamter(fileSavePath, captureTimeMillisecond, testMode);
 
         //启动写文件线程
         mDeviceThreadRunning[deviceIndex] = true;
@@ -261,7 +261,7 @@ void PCIeCommSdk::stopCapture(quint32 deviceIndex)
     }
 }
 
-void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeSeconds,  QString shotNum/*炮号*/)
+void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMillisecond,  QString shotNum/*炮号*/)
 {
     for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
     {
@@ -270,7 +270,7 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeSecon
         quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
         quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
         if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
-            startCapture(deviceIndex, fileSavePath, captureTimeSeconds, shotNum, mMeasureMode & mmTest);
+            startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest);
         else
             mDeviceThreadRunning[deviceIndex] = false;
     }
@@ -298,8 +298,13 @@ void PCIeCommSdk::init()
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
+        // 初始化，设置测量时间
+#ifndef SINGLE_BOARD_MODE
         PCIeCommSdk::writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));
         ::QThread::msleep(100);
+#endif // SINGLE_BOARD_MODE
+
+        // 清零
         PCIeCommSdk::writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
         ::QThread::msleep(100);
 
@@ -307,7 +312,7 @@ void PCIeCommSdk::init()
     }
 }
 
-void PCIeCommSdk::reset()
+void PCIeCommSdk::reset(qint32 timeLength)
 {
     /*复位*/
     for (int boardIndex = 1; boardIndex <= mEnumedDevices.size(); ++boardIndex){
@@ -321,16 +326,43 @@ void PCIeCommSdk::reset()
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
-        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("02 D0 34 12"));//数采
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("02 D0 34 12"));//数采-前端
         QThread::msleep(100);
         writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
         QThread::msleep(100);
-        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("01 D0 34 12"));//DDR
+
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("01 D0 34 12"));//DDR-后端
         QThread::msleep(100);
         writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
 
-        // 初始化，设置测量时间
-        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));//16-160ms 18-800ms 20-4000ms
+        /* 初始化，设置测量时间
+            32位指令	帧数N	总测量时间	写入字节
+            0x1234FA16	4	640ms	16 FA 34 12
+            0x1234FA17	8	1.28s	17 FA 34 12
+            0x1234FA18	20	3.2s	18 FA 34 12
+            0x1234FA19	40	6.4s	19 FA 34 12
+            0x1234FA20	60	9.6s	20 FA 34 12
+            0x1234FA21	80	12.8s	21 FA 34 12
+        */
+
+#ifdef SINGLE_BOARD_MODE
+        if (timeLength>=10000)
+            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("21 FA 34 12"));
+        else if (timeLength>=9600)
+            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("20 FA 34 12"));
+        else if (timeLength>=6400)
+            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("19 FA 34 12"));
+        else if (timeLength>=3200)
+            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("18 FA 34 12"));
+        else if (timeLength>=1280)
+            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("17 FA 34 12"));
+        else if (timeLength>=640)
+            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));
+        else
+            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));
+#else
+        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));//16-160ms 18-800ms 20-4000ms 30-12000ms
+#endif
         ::QThread::msleep(100);
         writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
         ::QThread::msleep(100);
@@ -538,7 +570,6 @@ void PCIeCommSdk::setTriggerThreshold()
         if (!AppConfig::instance().isEnableCapture(physicalNo, true) && !AppConfig::instance().isEnableCapture(physicalNo, false))
             continue;
 
-        quint16 threshold = AppConfig::instance().triggerThreshold();
         HANDLE fUserHandle = PCIeCommSdk::getHandle(mPhysicalNames[physicalNo-1] + XDMA_FILE_USER,
                                                     GENERIC_READ | GENERIC_WRITE,
                                                     FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
@@ -547,7 +578,26 @@ void PCIeCommSdk::setTriggerThreshold()
 
         // 保证句柄一定会被释放，避免泄漏
         QScopeGuard handleGuard([fUserHandle](){ CloseHandle(fUserHandle); });
+#ifdef SINGLE_BOARD_MODE
+        using namespace XdmaRegDef;
 
+        // 选择通道
+        quint8 channelAurora = AppConfig::instance().channelAurora();
+        quint8 channelIndex = AppConfig::instance().channelIndex();
+        quint8 lowCmd = 0xFB;
+        quint8 highCmd = channelIndex;
+        if (channelAurora==0)
+            lowCmd = 0xFB;
+        else
+            lowCmd = 0xFC;
+        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, REG_CMD_BASE | (lowCmd<<16) | (highCmd << 24));
+
+        // 触发阈值
+        quint16 threshold = AppConfig::instance().triggerThreshold();
+        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, 0x1234000F);
+        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, 0xFA120000);
+        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, (threshold << 16) | 0xABCD);
+#else
         using namespace XdmaRegDef;
         // 拆分高低位寄存器配置
         quint32 lowCmd = REG_CMD_BASE | THRESHOLD_LOW_OFS | (threshold & 0x00FF);
@@ -573,8 +623,13 @@ void PCIeCommSdk::setTriggerThreshold()
 
         // writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
         // ::QThread::msleep(10);
+#endif //SINGLE_BOARD_MODE
 
         qInfo().nospace() << "采集卡#" << (physicalNo) << "设置触发阈值：" << threshold;
+
+#ifdef SINGLE_BOARD_MODE
+        break; // 单张采集卡只需要设置一张卡参数配置
+#endif // SINGLE_BOARD_MODE
     }
 
 }
@@ -789,6 +844,44 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
     quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
     for (int id = startFileId; id <= endFileId; ++id){
         QString filePath = QString("%1/%2%3data%4.bin").arg(fileDir).arg(board_index).arg(sideFile).arg(id);
+#ifdef SINGLE_BOARD_MODE
+        QVector<quint16> ch[1];
+        cameraNo = 0;
+        if (DataAnalysisWorker::readBinAllCh_fast(filePath, ch[0], true)) {
+
+            //计算出是当前文件波形的第几个数据点
+            quint32 timeFrom;
+            quint32 timeTo;
+
+            if (id == startFileId)
+                timeFrom = (timeStart % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
+            else
+                timeFrom = 1;
+
+            if (id == endFileId){
+                if ((timeStop % PACKET_TIMELENGTH) == 0)
+                    timeTo  = ch[cameraNo].size();
+                else
+                    timeTo = (timeStop % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
+            }
+            else
+                timeTo  = ch[cameraNo].size();
+
+            //计算出是当前文件波形的第几个数据点
+            int packPos = timeFrom - 1;
+            int point_num = timeTo - timeFrom;
+
+            //扣基线，调整数据
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
+            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, deviceIndex, cameraNo + 1);
+
+            //提取通道号的数据cameraNo
+            QVector<qint16> waveform = baselineAdjustData.mid(packPos, point_num);
+
+            for (int i=0;i<waveform.size();++i)
+                waveformPair.insert((quint64)((id-startFileId)* PACKET_TIMELENGTH + timeStart) * 1000 * 1000  + i*2, waveform[i]);
+        }
+#else
         QVector<QVector<quint16>> ch(3);
         if (DataAnalysisWorker::readBin3Ch_fast(filePath, ch[0], ch[1], ch[2], true)) {
 
@@ -824,6 +917,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
             for (int i=0;i<waveform.size();++i)
                 waveformPair.insert((quint64)((id-startFileId)* PACKET_TIMELENGTH + timeStart) * 1000 * 1000  + i*2, waveform[i]);
         }
+#endif //SINGLE_BOARD_MODE
     }
 
     callback(waveformPair);
@@ -1379,7 +1473,7 @@ QByteArray PCIeCommSdk::reverseArray(const QByteArray& data, quint8 offset)
 * @param[in]    hUser Fpga控制指令句柄
 * @param[in]    hBypass DDR内存句柄
 * @param[in]    saveFilePath 文件保存路径
-* @param[in]    captureTimeSeconds 采集时长
+* @param[in]    captureTimeMillisecond 采集时长
 * @param[out]
 * @return
 */
@@ -1485,7 +1579,7 @@ CaptureThread::CaptureThread(const quint32 deviceIndex, const quint32 physicalNo
         mPcieReader = nullptr;
     }
     for (int i=0; i<=3; ++i){
-//        if (!mPcieReader->init(devicePath + XDMA_FILE_C2H + QStringLiteral("_%1").arg(i), 1, 0x07270E00)) {
+//        if (!mPcieReader->init(devicePath + XDMA_FILE_C2H + QStringLiteral("_%1").arg(i), 1, WAVEFORM_FRAMESIZE_GROUP_PER)) {
 //            delete mPcieReader;
 //            mPcieReader = nullptr;
 //            break;
@@ -1494,15 +1588,19 @@ CaptureThread::CaptureThread(const quint32 deviceIndex, const quint32 physicalNo
 #else
 #endif //ENABLE_IOCP
 
-    int capacity = 260;// 40ms, 4s共100帧，10s共250帧
+#ifdef SINGLE_BOARD_MODE
+    int capacity = 320;// 40ms/帧，12.8s共320帧
+#else
+    int capacity = 250;// 40ms/帧, 4s共100帧，10s共250帧
+#endif
     mDDRWaveformDatas.reserve(capacity);
     mRAMSpectrumDatas.reserve(capacity);
     try{
         for (int i=0; i < capacity; ++i){
-            // mDDRWaveformDatas.push_back(QByteArray(0x07270E00, 0));//200MB=0x0BEBC200 150MB=0x09600000 12*10e70=0x07270E00
-            // mRAMSpectrumDatas.push_back(QByteArray(0xA000, 0));
+            // mDDRWaveformDatas.push_back(QByteArray(WAVEFORM_FRAMESIZE_GROUP_PER, 0));//200MB=0x0BEBC200 150MB=0x09600000 12*10e70=0x07270E00
+            // mRAMSpectrumDatas.push_back(QByteArray(SPECTRUM_FRAMESIZE_GROUP_PER, 0));
             {
-                char* alignedBuffer = allocPhysicsAlignedBuffer(0x07270E00);//allocate_buffer(0x07270E00, 4096);
+                char* alignedBuffer = allocPhysicsAlignedBuffer(WAVEFORM_FRAMESIZE_GROUP_PER);//allocate_buffer(WAVEFORM_FRAMESIZE_GROUP_PER, 4096);
                 if (!alignedBuffer)
                     qCritical() << i+1 << "allocate_buffer fail. err:" << GetLastError();
                 else{
@@ -1510,15 +1608,15 @@ CaptureThread::CaptureThread(const quint32 deviceIndex, const quint32 physicalNo
                         qCritical() << i+1 << "allocate_buffer align fail.";
                 }
 
-                mDDRWaveformDatas.push_back(QByteArray::fromRawData(alignedBuffer, 0x07270E00));
+                mDDRWaveformDatas.push_back(QByteArray::fromRawData(alignedBuffer, WAVEFORM_FRAMESIZE_GROUP_PER));
             }
 
             {
-                char* alignedBuffer = allocPhysicsAlignedBuffer(0xA000);//allocate_buffer(0xA000, 4096);
+                char* alignedBuffer = allocPhysicsAlignedBuffer(SPECTRUM_FRAMESIZE_GROUP_PER);//allocate_buffer(SPECTRUM_FRAMESIZE_GROUP_PER, 4096);
                 if (!alignedBuffer)
                     qCritical() << i+1 << "allocate_buffer fail. err:" << GetLastError();
 
-                mRAMSpectrumDatas.push_back(QByteArray::fromRawData(alignedBuffer, 0xA000));
+                mRAMSpectrumDatas.push_back(QByteArray::fromRawData(alignedBuffer, SPECTRUM_FRAMESIZE_GROUP_PER));
             }
         }
     }
@@ -1557,10 +1655,14 @@ CaptureThread::~CaptureThread()
 #endif //ENABLE_IOCP
 }
 
-void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTimeSeconds, bool testMode)
+void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTimeMillisecond, bool testMode)
 {
     this->mSaveFilePath = saveFilePath;
-    this->mCaptureCount = quint32((double)captureTimeSeconds / 40.0 + 0.4);
+#ifdef SINGLE_BOARD_MODE
+    this->mCaptureCount = quint32((double)captureTimeMillisecond / 160.0 + 0.4);
+#else
+    this->mCaptureCount = quint32((double)captureTimeMillisecond / 40.0 + 0.4);
+#endif // SINGLE_BOARD_MODE
     this->mEnableTestMode = testMode;
 }
 
@@ -1670,8 +1772,14 @@ bool CaptureThread::checkDataError()
     // 检测波形序号
     int lastSeq = 0;
     for (int i=0; i<this->mCapturedRef; ++i){
+#ifdef SINGLE_BOARD_MODE
+        QByteArray pkgHead = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).left(16));
+        QByteArray pkgTail = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).right(16));
+#else
         QByteArray pkgHead = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).left(12));
         QByteArray pkgTail = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).right(12));
+#endif //SINGLE_BOARD_MODE
+
         int headSeq = (quint8)pkgHead[7];
         int tailSeq = (quint8)pkgTail[7];
         int currentSeq = headSeq;
@@ -1804,8 +1912,14 @@ void CaptureThread::printDebugInfo()
 
     // 先输出包头信息
     for (int i=0; i<this->mCapturedRef; ++i){
+#ifdef SINGLE_BOARD_MODE
+        QByteArray pkgHead = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).left(16));
+        QByteArray pkgTail = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).right(16));
+#else
         QByteArray pkgHead = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).left(12));
         QByteArray pkgTail = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).right(12));
+#endif //SINGLE_BOARD_MODE
+
         int headSeq = (quint8)pkgHead[7];
         int tailSeq = (quint8)pkgTail[7];
 
@@ -2179,9 +2293,9 @@ void CaptureThread::run()
 
                 mBeforeReadTime[capturedRef] = elapsedTimer.elapsed();
                 //读波形数据
-                readWaveformData(step, mDDRWaveformDatas.at(capturedRef-1), memOffet + step * 0x07271400);
+                readWaveformData(step, mDDRWaveformDatas.at(capturedRef-1), memOffet + step * WAVEFORM_FRAMEPOS_STEP_PER);
                 //读能谱数据
-                readSpectrumData(step, mRAMSpectrumDatas.at(capturedRef-1), memRamOffet + step * 0xA000);
+                readSpectrumData(step, mRAMSpectrumDatas.at(capturedRef-1), memRamOffet + step * SPECTRUM_FRAMESIZE_GROUP_PER);
 				mAfterReadTime[capturedRef] = elapsedTimer.elapsed();
 
             }, QThread::HighestPriority);

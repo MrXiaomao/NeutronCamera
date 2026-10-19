@@ -289,7 +289,7 @@
     <item>
      <widget class="QStackedWidget" name="centralStackedWidget">
       <property name="currentIndex">
-       <number>2</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="pageInfoWidget_cps"/>
       <widget class="QWidget" name="pageInfoWidget_waveform"/>
@@ -380,14 +380,14 @@
            <widget class="QCustomPlot" name="spectroMeter_horCamera_PSD" native="true"/>
           </item>
           <item>
-           <widget class="QCustomPlot" name="spectroMeter_horCamera_FOM" native="true"/>
+           <widget class="QCustomPlot" name="spectroMeter_verCamera_PSD" native="true"/>
           </item>
          </layout>
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_3">
           <item>
-           <widget class="QCustomPlot" name="spectroMeter_verCamera_PSD" native="true"/>
+           <widget class="QCustomPlot" name="spectroMeter_horCamera_FOM" native="true"/>
           </item>
           <item>
            <widget class="QCustomPlot" name="spectroMeter_verCamera_FOM" native="true"/>
@@ -485,6 +485,9 @@
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
+         </property>
+         <property name="currentIndex">
+          <number>3</number>
          </property>
          <widget class="QWidget" name="page_waveform">
           <property name="sizePolicy">
@@ -2127,6 +2130,63 @@
             </widget>
            </item>
            <item>
+            <widget class="QGroupBox" name="groupBox_14">
+             <property name="title">
+              <string>图像显示通道</string>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_15">
+              <item row="0" column="0">
+               <widget class="QTableWidget" name="tableWidget_channel">
+                <property name="rowCount">
+                 <number>18</number>
+                </property>
+                <attribute name="verticalHeaderVisible">
+                 <bool>false</bool>
+                </attribute>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <row/>
+                <column>
+                 <property name="text">
+                  <string/>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>通道</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string/>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>显示</string>
+                 </property>
+                </column>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
             <widget class="QWidget" name="widget_6" native="true">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -2329,14 +2389,7 @@
     <addaction name="separator"/>
     <addaction name="action_colorTheme"/>
    </widget>
-   <widget class="QMenu" name="menu_setup">
-    <property name="title">
-     <string>编辑(&amp;E)</string>
-    </property>
-    <addaction name="action_cfgParam"/>
-   </widget>
    <addaction name="menu_file"/>
-   <addaction name="menu_setup"/>
    <addaction name="menu_theme"/>
    <addaction name="menu_help"/>
   </widget>

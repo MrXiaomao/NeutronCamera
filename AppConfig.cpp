@@ -42,7 +42,13 @@ public:
 
     //探测器参数设置
     QtnPropertySet* propSetDetector;
+#ifdef SINGLE_BOARD_MODE
+    QtnPropertyQString* channelAurora;// 采集链路/区域
+    QtnPropertyQString* channelIndex;// 采集通道
+    QtnPropertyInt* psdThreshold[1]; // PSD甄别阈值
+#else
     QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
+#endif
     QtnPropertyInt* deathTime; // 死时间
     QtnPropertyInt* triggerThreshold;// 触发阈值
     QtnPropertyInt* spectrumRefreshTimelength;// 能谱刷新时长
@@ -150,6 +156,45 @@ AppConfig::AppConfig(QObject* parent)
         propSet->setName("探测器参数设置");
         propSet->setId(ID_DETECTOR_SET);
 
+#ifdef SINGLE_BOARD_MODE
+        // 采集链路/区域
+        QtnPropertyQString* channelId;
+        d->channelAurora = qtnCreateProperty<QtnPropertyQString>(propSet);
+        d->channelAurora->setId(++baseId);
+        d->channelAurora->setName("采集链路");
+        d->channelAurora->setDescription("采集链路：Aurara1 Aurora2");
+        {
+            QtnPropertyDelegateInfo listDele;
+            listDele.name = "ComboBox";
+            listDele.attributes["items"] = QStringList()<<"Auraro1"<<"Auraro2";
+            d->channelAurora->setDelegateInfo(listDele);
+        }
+        d->channelAurora->setValue("Auraro1");
+
+        // 采集通道
+        d->channelIndex = qtnCreateProperty<QtnPropertyQString>(propSet);
+        d->channelIndex->setId(++baseId);
+        d->channelIndex->setName("采集通道");
+        d->channelIndex->setDescription("采集通道：CH1/CH2/CH3/CH4");
+        {
+            QtnPropertyDelegateInfo listDele;
+            listDele.name = "ComboBox";
+            listDele.attributes["items"] = QStringList()<<"CH1"<<"CH2"<<"CH3"<<"CH4";
+            d->channelIndex->setDelegateInfo(listDele);
+        }
+        d->channelIndex->setValue("CH1");
+
+        // 甄别阈值
+        for (int i=0; i<sizeof(d->psdThreshold)/sizeof(QtnPropertyInt*); ++i){
+            d->psdThreshold[i] = qtnCreateProperty<QtnPropertyInt>(propSet);
+            d->psdThreshold[i]->setId(++baseId);
+            d->psdThreshold[i]->setName(QStringLiteral("甄别阈值").arg(i+1));
+            d->psdThreshold[i]->setDescription("范围：0 ~ 255");
+            d->psdThreshold[i]->setMaxValue(255);
+            d->psdThreshold[i]->setMinValue(0);
+            d->psdThreshold[i]->setValue(133);
+        }
+#else
         // 甄别阈值
         QtnPropertySet* propSetPSDThreshold = new QtnPropertySet(d->propSetRoot);
         propSet->addChildProperty(propSetPSDThreshold);
@@ -157,7 +202,7 @@ AppConfig::AppConfig(QObject* parent)
         propSetPSDThreshold->setId(++baseId);
         propSetPSDThreshold->collapse();
 
-        for (int i=0; i<18; ++i){
+        for (int i=0; i<sizeof(d->psdThreshold)/sizeof(QtnPropertyInt*); ++i){
             d->psdThreshold[i] = qtnCreateProperty<QtnPropertyInt>(propSetPSDThreshold);
             d->psdThreshold[i]->setId(++baseId);
             d->psdThreshold[i]->setName(QStringLiteral("[通道#%1]甄别阈值").arg(i+1));
@@ -166,6 +211,7 @@ AppConfig::AppConfig(QObject* parent)
             d->psdThreshold[i]->setMinValue(0);
             d->psdThreshold[i]->setValue(133);
         }
+#endif //SINGLE_BOARD_MODE
 
         //死时间*10ns
         d->deathTime = qtnCreateProperty<QtnPropertyInt>(propSet);
@@ -584,6 +630,14 @@ bool AppConfig::isEnableCapture(quint8 physicalIndex, bool isDDR1)
 }
 
 // 探测器测量参数设置
+quint8 AppConfig::channelAurora() const{
+    QStringList lst = QStringList()<<"Aurora1"<<"Aurora2";
+    return lst.indexOf(d->channelAurora->value());
+}
+quint8 AppConfig::channelIndex() const{
+    QStringList lst = QStringList()<<"CH1"<<"CH2"<<"CH3"<<"CH4";
+    return lst.indexOf(d->channelIndex->value());
+}
 int AppConfig::psdThreshold(quint8 channelNo) const {
     return d->psdThreshold[channelNo]->value();
 }

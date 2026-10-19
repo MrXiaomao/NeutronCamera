@@ -172,10 +172,10 @@ private:
 namespace XdmaRegDef {
     // 寄存器映射定义，和FPGA文档一一对应
     constexpr quint64 USER_CTRL_ADDR = 0x20000; // 寄存器地址
-    constexpr quint8 REG_CMD_BASE = 0x12340000; // 寄存器命令基值
+    constexpr quint32 REG_CMD_BASE = 0x12340000; // 寄存器命令基值
 
-    constexpr quint8 THRESHOLD_LOW_OFS = 0xF7;// 触发阈值低位
-    constexpr quint8 THRESHOLD_HIGH_OFS = 0xF8;// 触发阈值高位
+    constexpr quint16 THRESHOLD_LOW_OFS = 0xF700;// 触发阈值低位
+    constexpr quint16 THRESHOLD_HIGH_OFS = 0xF800;// 触发阈值高位
 
     constexpr quint8 CARD1_PSD_THRESHOLD_OFS = 0xF1;// 卡#1PSD阈值
     constexpr quint8 CARD2_PSD_THRESHOLD_OFS = 0xF2;// 卡#2PSD阈值
@@ -189,8 +189,20 @@ namespace XdmaRegDef {
     constexpr int REG_CLEAR_WAIT_MS = 5;// 清零
 }
 
+#ifdef SINGLE_BOARD_MODE
+#define CAMNUMBER_DDR_PER   1   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
+#define DETNUMBER_PCIE_PER  1   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
+#define WAVEFORM_FRAMESIZE_GROUP_PER 0x09896800 // 每一组波形帧数据包大小(0x09896800=0x09897000-2048)
+#define SPECTRUM_FRAMESIZE_GROUP_PER 0xA000 // 每一组能谱帧数据包大小
+#define WAVEFORM_FRAMEPOS_STEP_PER 0x09897000 // 每组波形帧数据在内存中位置间隔
+#else
 #define CAMNUMBER_DDR_PER   3   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define DETNUMBER_PCIE_PER  6   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
+#define WAVEFORM_FRAMESIZE_GROUP_PER 0x07270E00 // 每一组波形帧数据包大小
+#define SPECTRUM_FRAMESIZE_GROUP_PER 0xA000 // 每一组能谱帧数据包大小
+#define WAVEFORM_FRAMEPOS_STEP_PER 0x07271400 // 每组波形帧数据在内存中位置间隔(因为4个通道只取了3个通道数据，所以实际大小比WAVEFORM_FRAMESIZE_GROUP_PER大)
+#endif //SINGLE_BOARD_MODE
+
 #define DETNUMBER_MAX       18  // 探测器有效数只用到了18路（11路水平+7路垂直）
 #define PACKET_TIMELENGTH   40 // 每个文件对应采集时间40ms
 class PCIeCommSdk : public QObject
@@ -229,13 +241,13 @@ public:
 
     Q_SLOT void onSettingFinished();
 
-    void startCapture(quint32 deviceIndex, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
-    void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeSeconds/*保存时长*/, QString shotNum/*炮号*/);
+    void startCapture(quint32 deviceIndex, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeMillisecond/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
+    void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeMillisecond/*保存时长*/, QString shotNum/*炮号*/);
     void stopCapture(quint32 deviceIndex);
     void stopAllCapture();
 
     void init(); /* 初始化 */
-    void reset();/* 重置 */
+    void reset(qint32 timeLength = 10000/*ms*/);/* 重置/复位 */
     void reboot();/* 重启 */
     void setPSDThreshold();/* 设置PSD甄别阈值 */
     void setTriggerThreshold();/* 设置触发阈值 */
@@ -308,7 +320,11 @@ public:
     //触发阈值
     void writeTriggerThold(quint16);
 
+#ifdef SINGLE_BOARD_MODE
+    static QByteArray reverseArray(const QByteArray& data, quint8 offset = 16);
+#else
     static QByteArray reverseArray(const QByteArray& data, quint8 offset = 12);
+#endif //SINGLE_BOARD_MODE
 
     /*********************************************************
      波形基本配置

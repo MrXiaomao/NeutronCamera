@@ -183,6 +183,58 @@ bool DataAnalysisWorker::readBin3Ch_fast(const QByteArray& fileData,
     return true;
 }
 
+bool DataAnalysisWorker::readBinAllCh_fast(const QString& filePath,
+                                         QVector<quint16>& ch0,
+                                         bool littleEndian /*= true*/)
+{
+    // 打开文件进行只读访问
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+    QByteArray buf = f.readAll();;
+    f.close();
+
+    return DataAnalysisWorker::readBinAllCh_fast(buf, ch0, littleEndian);
+}
+
+bool DataAnalysisWorker::readBinAllCh_fast(const QByteArray& fileData,
+                                         QVector<quint16>& ch0,
+                                         bool littleEndian/* = true*/)
+{
+    // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
+    // 注释掉的代码显示原始格式可能有16字节的文件头和文件尾
+    const qint64 headBytes = 16;
+    const qint64 tailBytes = 16;
+
+    // 获取文件总大小，并检查是否小于头尾字节数之和（避免负数）
+    const qint64 fileSize = fileData.size();
+    if (fileSize < headBytes + tailBytes) return false;
+
+    // 计算有效数据负载的字节数（总大小减去文件头和文件尾）
+    const qint64 payloadBytes = fileSize - headBytes - tailBytes;
+    // 检查负载字节数是否为2的倍数（每个采样点占2字节）
+    if (payloadBytes % 2 != 0) return false;
+
+    // 计算总采样点数（每2字节为一个采样点）
+    const qint64 totalSamples = payloadBytes / 2;
+    // 检查总采样点数是否为4的倍数（4帧数据，每帧数据采样点数必须相等）
+    if (totalSamples % 4 != 0) return false;
+    // 计算每个通道的采样点数（总采样点数除以4）
+    const qint64 samplesPerChannel = totalSamples;
+
+    // 预分配各通道数据向量的容量，避免读取过程中反复扩容，提高性能
+    ch0.resize(samplesPerChannel);
+
+    // 使用内存映射方式读取文件，从headBytes位置开始，映射payloadBytes长度的数据
+    // 这种方式比逐字节读取效率更高，特别是在大文件的情况下
+    uchar* p = (uchar *)fileData.constData() + headBytes;
+
+    // 将映射的内存区域转换为16位无符号整数数组指针，方便后续读取
+    const quint16* src = reinterpret_cast<const quint16*>(p);
+    memcpy(ch0.data(), src, sizeof(samplesPerChannel) * sizeof(quint16));
+
+    return true;
+}
+
 // 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
 qint16 DataAnalysisWorker::calculateBaseline(const QVector<quint16>& data_ch)
 {

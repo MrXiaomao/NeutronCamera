@@ -56,6 +56,14 @@ public:
                                 QVector<quint16>& ch2,
                                 bool littleEndian = true);
 
+    static bool readBinAllCh_fast(const QString& filePath,
+                                QVector<quint16>& ch0,
+                                bool littleEndian = true);
+
+    static bool readBinAllCh_fast(const QByteArray& fileData,
+                                QVector<quint16>& ch0,
+                                bool littleEndian = true);
+
     // 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
     // 当波形信号过多时，该方法明显会出现问题（暂时采用该方法）
     static qint16 calculateBaseline(const QVector<quint16>& data_ch);
@@ -191,6 +199,32 @@ public:
     }
 
     void run() override {
+#ifdef SINGLE_BOARD_MODE
+        QVector<quint16> ch[1];
+        if (!DataAnalysisWorker::readBinAllCh_fast(mJob.filePath, ch[0], true)) {
+            if (mOnFinished) mOnFinished();
+            return;
+        }
+
+        // 2) 通道选择逻辑（0=全通道；否则按相机号映射采集卡+通道）
+        quint8 deviceIndex = mJob.deviceIndex;
+        int cameraNo = 0;
+        if (mCameraIndex != 0) {
+            //只有nγ甄别才会进入到此处
+            deviceIndex = (mCameraIndex - 1) / 3 + 1;
+        }
+
+        quint32 packerCurrentTime = mJob.packerStartTime;
+
+        // 3) 基线 + 调整 + 过阈提取（每个通道独立）
+        if ((cameraNo == 0 || mCameraIndex == 0) && ch[0].size() > 0) {
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0]);
+            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, deviceIndex, 1);
+            quint32 threshold = mThresholds[0];
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 1, threshold, mPre, mPost);
+            mCallback(packerCurrentTime, 1, wave);
+        }
+#else
         // 1) 从 buffer 解交织出 4 通道
         QVector<quint16> ch[3];
         if (!DataAnalysisWorker::readBin3Ch_fast(mJob.filePath, ch[0], ch[1], ch[2], true)) {
@@ -207,7 +241,7 @@ public:
             cameraNo = (mCameraIndex - 1) % 3; // 0..2
         }
 
-         quint32 packerCurrentTime = mJob.packerStartTime;
+        quint32 packerCurrentTime = mJob.packerStartTime;
 
         // 3) 基线 + 调整 + 过阈提取（每个通道独立）
         qint8 channelStart = (deviceIndex-1) * 3;
@@ -232,6 +266,7 @@ public:
             auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 3, threshold, mPre, mPost);
             mCallback(packerCurrentTime, 3, wave);
         }
+#endif //SINGLE_BOARD_MODE
 
         if (mOnFinished) mOnFinished();
     }

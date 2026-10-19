@@ -1813,7 +1813,7 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>LSD探测器</string>
+    <string>液闪探测器</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
@@ -1827,7 +1827,7 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>PSD探测器</string>
+    <string>塑闪探测器</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
@@ -1838,7 +1838,7 @@
     <bool>true</bool>
    </property>
    <property name="text">
-    <string>LBD探测器</string>
+    <string>溴化镧探测器</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
