@@ -191,20 +191,21 @@ namespace XdmaRegDef {
 
 #ifdef SINGLE_BOARD_MODE
 #define CAMNUMBER_DDR_PER   1   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
-#define DETNUMBER_PCIE_PER  1   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
+#define DETNUMBER_PCIE_PER  2   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define WAVEFORM_FRAMESIZE_GROUP_PER 0x09896800 // 每一组波形帧数据包大小(0x09896800=0x09897000-2048)
 #define SPECTRUM_FRAMESIZE_GROUP_PER 0xA000 // 每一组能谱帧数据包大小
-#define WAVEFORM_FRAMEPOS_STEP_PER 0x09897000 // 每组波形帧数据在内存中位置间隔
+#define WAVEFORM_FRAMEPOS_STEP_PER 0x09897000 // 每组波形帧数据在内存中位置间隔（160,002,048）
+#define PACKET_TIMELENGTH   160 // 每个文件对应采集时间160ms
 #else
 #define CAMNUMBER_DDR_PER   3   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define DETNUMBER_PCIE_PER  6   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define WAVEFORM_FRAMESIZE_GROUP_PER 0x07270E00 // 每一组波形帧数据包大小
 #define SPECTRUM_FRAMESIZE_GROUP_PER 0xA000 // 每一组能谱帧数据包大小
 #define WAVEFORM_FRAMEPOS_STEP_PER 0x07271400 // 每组波形帧数据在内存中位置间隔(因为4个通道只取了3个通道数据，所以实际大小比WAVEFORM_FRAMESIZE_GROUP_PER大)
+#define PACKET_TIMELENGTH   40 // 每个文件对应采集时间40ms
 #endif //SINGLE_BOARD_MODE
 
 #define DETNUMBER_MAX       18  // 探测器有效数只用到了18路（11路水平+7路垂直）
-#define PACKET_TIMELENGTH   40 // 每个文件对应采集时间40ms
 class PCIeCommSdk : public QObject
 {
     Q_OBJECT
@@ -247,10 +248,11 @@ public:
     void stopAllCapture();
 
     void init(); /* 初始化 */
-    void reset(qint32 timeLength = 10000/*ms*/);/* 重置/复位 */
+    void reset();/* 重置/复位 */
     void reboot();/* 重启 */
     void setPSDThreshold();/* 设置PSD甄别阈值 */
     void setTriggerThreshold();/* 设置触发阈值 */
+    void setCaptureTimelength(qint32 timeLength = 10000/*ms*/);/* 设置采集时长 */
     bool test();
     inline bool writeRegAndClear(int physicalNo, HANDLE handle, quint64 addr, quint32 regValue);
 

@@ -2804,7 +2804,19 @@ void OfflineWindow::onNGammaFilter()
                     auto indexToPrefix = [=](const int& cameraIndex)
                     {
                         QString filename;
+#ifdef SINGLE_BOARD_MODE
+                        switch (cameraIndex){
+                        case 1: filename = "1A"; break;
+                        case 2: filename = "1A"; break;
+                        case 3: filename = "1A"; break;
+                        case 4: filename = "1A"; break;
 
+                        case 5: filename = "1B"; break;
+                        case 6: filename = "1B"; break;
+                        case 7: filename = "1B"; break;
+                        case 8: filename = "1B"; break;
+                        }
+#else
                         switch (cameraIndex){
                         case 1: filename = "1A"; break;
                         case 2: filename = "1A"; break;
@@ -2827,6 +2839,7 @@ void OfflineWindow::onNGammaFilter()
                         case 17: filename = "3B"; break;
                         case 18: filename = "3B"; break;
                         }
+#endif // SINGLE_BOARD_MODE
 
                         return filename;
                     };

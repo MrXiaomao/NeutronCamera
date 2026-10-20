@@ -1,6 +1,7 @@
 ﻿#include "dataanalysisworker.h"
 #include "globalsettings.h"
 #include <cstring> // std::memcpy
+#include "pciecommsdk.h"
 
 // ========== DataAnalysisWorker 实现 ==========
 
@@ -476,7 +477,7 @@ void DataAnalysisWorker::getValidWave()
     }
 
     writeWaveformHeadToHDF5(hdf5FilePath, startTime, endTime, mThresholds);
-    for(int deviceIndex=1; deviceIndex<=6; ++deviceIndex) {
+    for(int deviceIndex=1; deviceIndex<=DETNUMBER_PCIE_PER; ++deviceIndex) {
         {
             QMutexLocker locker(&mMutex);
             if (mCancelled) {
