@@ -40,14 +40,13 @@ public:
     bool isEnableCapture(quint8 physicalIndex, bool isDDR1);
 
     // 探测器测量参数设置
+#ifdef SINGLE_BOARD_MODE
     quint8 channelAurora() const;
     quint8 channelIndex() const;
+#endif // SINGLE_BOARD_MODE
+
     int psdThreshold(quint8 channelNo = 0/*通道号*/) const;
-    int deathTime() const;
     int triggerThreshold() const;
-    int spectrumRefreshTimelength() const;
-    int triggerMode() const;
-    int waveformLength() const;
 
     // 状态监测模块
     QString ipAddress() const;

@@ -36,24 +36,18 @@ public:
     QtnPropertyBool* propBoard3EnableDDR1;
     QtnPropertyBool* propBoard3EnableDDR2;
 
-    //PDU程控电源
-    QtnPropertySet* propSetPDU;
-    QtnPropertyQString* PDUIpAddress;// 设备地址
-
     //探测器参数设置
     QtnPropertySet* propSetDetector;
 #ifdef SINGLE_BOARD_MODE
     QtnPropertyQString* channelAurora;// 采集链路/区域
     QtnPropertyQString* channelIndex;// 采集通道
-    QtnPropertyInt* psdThreshold[1]; // PSD甄别阈值
-#else
-    QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
 #endif
-    QtnPropertyInt* deathTime; // 死时间
+    QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
     QtnPropertyInt* triggerThreshold;// 触发阈值
-    QtnPropertyInt* spectrumRefreshTimelength;// 能谱刷新时长
-    QtnPropertyQString* triggerMode;// 触发模式
-    QtnPropertyQString* waveformLength;// 波形长度
+
+    //PDU程控电源
+    QtnPropertySet* propSetPDU;
+    QtnPropertyQString* PDUIpAddress;// 设备地址
 
     //状态监测模块
     QtnPropertySet* propSetState;
@@ -133,7 +127,6 @@ AppConfig::AppConfig(QObject* parent)
     {
         QtnPropertySet* propSet = new QtnPropertySet(d->propSetRoot);
         d->propSetPDU = propSet;
-        d->propSetRoot->addChildProperty(propSet);
         propSet->setName("PDU程控电源");
         propSet->setId(ID_PDU_SET);
 
@@ -144,7 +137,10 @@ AppConfig::AppConfig(QObject* parent)
         d->PDUIpAddress->setDescription("如：192.168.0.168");
         d->PDUIpAddress->setValue("192.168.0.168");
 
+#ifndef SINGLE_BOARD_MODE
         propSet->addChildProperty(d->PDUIpAddress);
+        d->propSetRoot->addChildProperty(propSet);
+#endif // SINGLE_BOARD_MODE
     }
 
     // 探测器参数设置
@@ -162,14 +158,14 @@ AppConfig::AppConfig(QObject* parent)
         d->channelAurora = qtnCreateProperty<QtnPropertyQString>(propSet);
         d->channelAurora->setId(++baseId);
         d->channelAurora->setName("采集链路");
-        d->channelAurora->setDescription("采集链路：Aurara1 Aurora2");
+        d->channelAurora->setDescription("采集链路：Aurora1 Aurora2");
         {
             QtnPropertyDelegateInfo listDele;
             listDele.name = "ComboBox";
-            listDele.attributes["items"] = QStringList()<<"Auraro1"<<"Auraro2";
+            listDele.attributes["items"] = QStringList()<<"Aurora1"<<"Aurora2";
             d->channelAurora->setDelegateInfo(listDele);
         }
-        d->channelAurora->setValue("Auraro1");
+        d->channelAurora->setValue("Aurora1");
 
         // 采集通道
         d->channelIndex = qtnCreateProperty<QtnPropertyQString>(propSet);
@@ -184,16 +180,15 @@ AppConfig::AppConfig(QObject* parent)
         }
         d->channelIndex->setValue("CH1");
 
-        // 甄别阈值
-        for (int i=0; i<sizeof(d->psdThreshold)/sizeof(QtnPropertyInt*); ++i){
-            d->psdThreshold[i] = qtnCreateProperty<QtnPropertyInt>(propSet);
-            d->psdThreshold[i]->setId(++baseId);
-            d->psdThreshold[i]->setName(QStringLiteral("甄别阈值").arg(i+1));
-            d->psdThreshold[i]->setDescription("范围：0 ~ 255");
-            d->psdThreshold[i]->setMaxValue(255);
-            d->psdThreshold[i]->setMinValue(0);
-            d->psdThreshold[i]->setValue(133);
-        }
+        //触发阈值
+        d->triggerThreshold = qtnCreateProperty<QtnPropertyInt>(propSet);
+        d->triggerThreshold->setId(++baseId);
+        d->triggerThreshold->setName("触发阈值");
+        d->triggerThreshold->setDescription("阈值范围：0 ~ 1000");
+        d->triggerThreshold->setMaxValue(16000);
+        d->triggerThreshold->setMinValue(0);
+        d->triggerThreshold->setValue(100);
+
 #else
         // 甄别阈值
         QtnPropertySet* propSetPSDThreshold = new QtnPropertySet(d->propSetRoot);
@@ -211,16 +206,6 @@ AppConfig::AppConfig(QObject* parent)
             d->psdThreshold[i]->setMinValue(0);
             d->psdThreshold[i]->setValue(133);
         }
-#endif //SINGLE_BOARD_MODE
-
-        //死时间*10ns
-        d->deathTime = qtnCreateProperty<QtnPropertyInt>(propSet);
-        d->deathTime->setId(++baseId);
-        d->deathTime->setName("死时间（*10ns）");
-        d->deathTime->setDescription("死时间范围：0 ~ 1000");
-        d->deathTime->setMaxValue(1000);
-        d->deathTime->setMinValue(0);
-        d->deathTime->setValue(30);
 
         //触发阈值
         d->triggerThreshold = qtnCreateProperty<QtnPropertyInt>(propSet);
@@ -230,41 +215,8 @@ AppConfig::AppConfig(QObject* parent)
         d->triggerThreshold->setMaxValue(16000);
         d->triggerThreshold->setMinValue(0);
         d->triggerThreshold->setValue(100);
+#endif //SINGLE_BOARD_MODE
 
-        //能谱刷新时间
-        d->spectrumRefreshTimelength = qtnCreateProperty<QtnPropertyInt>(propSet);
-        d->spectrumRefreshTimelength->setId(++baseId);
-        d->spectrumRefreshTimelength->setName("能谱刷新时间");
-        d->spectrumRefreshTimelength->setDescription("时间范围：0 ~ 10000");
-        d->spectrumRefreshTimelength->setMaxValue(10000);
-        d->spectrumRefreshTimelength->setMinValue(0);
-        d->spectrumRefreshTimelength->setValue(1000);
-
-        //触发模式
-        d->triggerMode = qtnCreateProperty<QtnPropertyQString>(propSet);
-        d->triggerMode->setId(++baseId);
-        d->triggerMode->setName("触发模式");
-        d->triggerMode->setDescription("模式：定时触发 正常触发");
-        {
-            QtnPropertyDelegateInfo listDele;
-            listDele.name = "ComboBox";
-            listDele.attributes["items"] = QStringList()<<"定时触发"<<"正常触发";
-            d->triggerMode->setDelegateInfo(listDele);
-        }
-        d->triggerMode->setValue("正常触发");
-
-        //波形长度
-        d->waveformLength = qtnCreateProperty<QtnPropertyQString>(propSet);
-        d->waveformLength->setId(++baseId);
-        d->waveformLength->setName("波形长度");
-        d->waveformLength->setDescription("取值范围：64 128 256 512");
-        {
-            QtnPropertyDelegateInfo listDele;
-            listDele.name = "ComboBox";
-            listDele.attributes.insert("items", QVariant::fromValue(QStringList() << "64" << "128" << "256" << "512"));
-            d->waveformLength->setDelegateInfo(listDele);
-        }
-        d->waveformLength->setValue("64");
     }
 
     // 状态监测模块
@@ -272,7 +224,6 @@ AppConfig::AppConfig(QObject* parent)
     {
         QtnPropertySet* propSet = new QtnPropertySet(d->propSetRoot);
         d->propSetState = propSet;
-        d->propSetRoot->addChildProperty(propSet);
         propSet->setName("状态监测模块");
         propSet->setId(ID_STATEDEV_SET);
 
@@ -301,9 +252,12 @@ AppConfig::AppConfig(QObject* parent)
         d->devLocalPort->setMinValue(0);
         d->devLocalPort->setValue(1000);
 
+#ifndef SINGLE_BOARD_MODE
         propSet->addChildProperty(d->devIpAddress);
         propSet->addChildProperty(d->devRemotePort);
         propSet->addChildProperty(d->devLocalPort);
+        d->propSetRoot->addChildProperty(propSet);
+#endif // SINGLE_BOARD_MODE
     }
 
     // 数据中心网络
@@ -311,7 +265,6 @@ AppConfig::AppConfig(QObject* parent)
     {
         QtnPropertySet* propSet = new QtnPropertySet(d->propSetRoot);
         d->propSetControlCenter = propSet;
-        d->propSetRoot->addChildProperty(propSet);
         propSet->setName("数据中心网络");
         propSet->setId(ID_CONTROLCENTER_SET);
 
@@ -340,9 +293,12 @@ AppConfig::AppConfig(QObject* parent)
         d->dataSrvRemotePort->setMinValue(0);
         d->dataSrvRemotePort->setValue(8000);
 
+#ifndef SINGLE_BOARD_MODE
         propSet->addChildProperty(d->cmdUdpBroadcastPort);
         propSet->addChildProperty(d->dataSrvIpAddress);
         propSet->addChildProperty(d->dataSrvRemotePort);
+        d->propSetRoot->addChildProperty(propSet);
+#endif // SINGLE_BOARD_MODE
     }
 
     this->load();
@@ -490,10 +446,12 @@ QtnPropertySet* AppConfig::propertySet(int id)
 {
     if (ID_DETECTOR_SET == id)
         return d->propSetDetector;
+#ifndef SINGLE_BOARD_MODE
     else if (ID_STATEDEV_SET == id)
         return d->propSetState;
     else if (ID_CONTROLCENTER_SET == id)
         return d->propSetControlCenter;
+#endif // SINGLE_BOARD_MODE
     else
         return d->propSetRoot;
 }
@@ -629,6 +587,7 @@ bool AppConfig::isEnableCapture(quint8 physicalIndex, bool isDDR1)
         return false;
 }
 
+#ifdef SINGLE_BOARD_MODE
 // 探测器测量参数设置
 quint8 AppConfig::channelAurora() const{
     QStringList lst = QStringList()<<"Aurora1"<<"Aurora2";
@@ -638,23 +597,10 @@ quint8 AppConfig::channelIndex() const{
     QStringList lst = QStringList()<<"CH1"<<"CH2"<<"CH3"<<"CH4";
     return lst.indexOf(d->channelIndex->value());
 }
+#endif // SINGLE_BOARD_MODE
+
 int AppConfig::psdThreshold(quint8 channelNo) const {
     return d->psdThreshold[channelNo]->value();
-}
-int AppConfig::deathTime() const { return d->deathTime->value(); }
-
-int AppConfig::triggerThreshold() const { return d->triggerThreshold->value(); }
-
-int AppConfig::spectrumRefreshTimelength() const { return d->spectrumRefreshTimelength->value(); }
-
-int AppConfig::triggerMode() const {
-    QStringList lst = QStringList()<<"定时触发"<<"正常触发";
-    return lst.indexOf(d->triggerMode->value());
-}
-
-int AppConfig::waveformLength() const {
-    QStringList lst = QStringList() << "64" << "128" << "256" << "512";
-    return lst.indexOf(d->waveformLength->value());
 }
 
 // 状态监测模块
@@ -670,3 +616,5 @@ int AppConfig::boardcastPort() const { return d->cmdUdpBroadcastPort->value(); }
 QString AppConfig::dataSrvIpAddress() const { return d->dataSrvIpAddress->value(); }
 
 int AppConfig::dataSrvRemotePort() const { return d->dataSrvRemotePort->value(); }
+
+int AppConfig::triggerThreshold() const { return d->triggerThreshold->value(); }

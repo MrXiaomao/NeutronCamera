@@ -167,12 +167,6 @@ private:
 
     PDUControlWidget *mPDUControlWidget = nullptr;
     ToastManager* mToastManager = nullptr;
-
-#ifdef SINGLE_BOARD_MODE
-    quint8 mActiveDeviceIndex = 1;
-    quint8 mCaptureChannelNo = 6;// A面-1\3\5 B面-2\4\6
-#endif // SINGLE_BOARD_MODE
-
 private:
     struct LogItem {
         QString text;

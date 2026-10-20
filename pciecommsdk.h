@@ -190,14 +190,14 @@ namespace XdmaRegDef {
 }
 
 #ifdef SINGLE_BOARD_MODE
-#define CAMNUMBER_DDR_PER   1   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
-#define DETNUMBER_PCIE_PER  2   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
+#define CAMNUMBER_DDR_PER   4   // 每张PCIe对应一个Fpga数采板，每个DDR对应的是4个数据采集通道
+#define DETNUMBER_PCIE_PER  8   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器
 #define WAVEFORM_FRAMESIZE_GROUP_PER 0x09896800 // 每一组波形帧数据包大小(0x09896800=0x09897000-2048)
 #define SPECTRUM_FRAMESIZE_GROUP_PER 0xA000 // 每一组能谱帧数据包大小
 #define WAVEFORM_FRAMEPOS_STEP_PER 0x09897000 // 每组波形帧数据在内存中位置间隔（160,002,048）
 #define PACKET_TIMELENGTH   160 // 每个文件对应采集时间160ms
 #else
-#define CAMNUMBER_DDR_PER   3   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
+#define CAMNUMBER_DDR_PER   3   // 每张PCIe对应一个Fpga数采板，每个DDR对应的是3个数据采集通道
 #define DETNUMBER_PCIE_PER  6   // 每张PCIe对应一个Fpga数采板，每个数采板对应的是8个探测器（但是考虑带宽可能只用到了6路，分2个DDR存储数据，所以每个DDR存储3路）
 #define WAVEFORM_FRAMESIZE_GROUP_PER 0x07270E00 // 每一组波形帧数据包大小
 #define SPECTRUM_FRAMESIZE_GROUP_PER 0xA000 // 每一组能谱帧数据包大小
@@ -280,7 +280,7 @@ public:
     void initCaptureThreads();
 
     /*解析能谱数据*/
-    static bool analyzeHistorySpectrumData(const quint8& cameraIndex,
+    bool analyzeHistorySpectrumData(const quint8& cameraIndex,
                                     const quint32& timeStart/*开始时刻*/,
                                     const quint32& timeStop/*停止时刻*/ ,
                                     const QString& filePath/*文件名*/,
@@ -290,7 +290,7 @@ public:
                                         )> callback);
 
     // 根据通道号、开始时间、结束时间以及文件存储目录解析波形数据
-    static bool analyzeHistoryWaveformData(
+    bool analyzeHistoryWaveformData(
                                 const quint8& cameraIndex,
                                 const quint32& timeStart/*开始时刻ms*/,
                                 const quint32& timeStop/*结束时刻ms*/,
@@ -300,7 +300,7 @@ public:
                                     )> callback);
 
     // 从H5文件解析计数率信息和能谱信息
-    static bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
+    bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
                                const quint32 timeWidth/*时间宽度ms（统计计数率用）*/,
                                const quint32 timeStart/*开始时刻ms*/,
                                const quint32 timeStop/*结束时刻ms*/,
@@ -396,6 +396,7 @@ private:
     static QStringList mEnumedDevices;// 搜索出来的采集卡设备列表，对应的是 boardIndex
     static QStringList mPhysicalNames;// 机器插入的采集卡名称列表，对应的是 physicalNo
 
+    quint8 mActivePhysicalNo = 1; // 当前激活的卡号
     MeasureMode mMeasureMode = mmSingle;
 };
 

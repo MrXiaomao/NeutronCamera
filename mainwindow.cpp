@@ -2023,6 +2023,7 @@ void MainWindow::onStartMeasure()
     ui->spinBox_timeLength->setEnabled(false);
 }
 
+#include "AppConfig.h"
 void MainWindow::on_pushButton_preview_clicked()
 {
     auto joinFilename = [=](const int& cameraIndex)->QString
@@ -2075,7 +2076,10 @@ void MainWindow::on_pushButton_preview_clicked()
 
 #ifdef SINGLE_BOARD_MODE
     // 水平相机
-    mPCIeCommSdk.analyzeHistorySpectrumData(mCaptureChannelNo,
+    quint8 channelAurora = AppConfig::instance().channelAurora();
+    quint8 channelIndex = AppConfig::instance().channelIndex();
+    quint8 captureChannelNo = channelAurora * 4/*1面（A/B）支持4通道*/ + channelIndex + 1;
+    mPCIeCommSdk.analyzeHistorySpectrumData(captureChannelNo,
                                             timeStart,
                                             timeStop,
                                             dataDir,
@@ -2083,7 +2087,7 @@ void MainWindow::on_pushButton_preview_clicked()
                                                 QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
                                                 QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
                                             {
-                                                emit showGammaSpectrum(mCaptureChannelNo, pairSpectrumGamma);
+                                                emit showGammaSpectrum(captureChannelNo, pairSpectrumGamma);
                                                 //onWaveformPlot(horCameraIndex, mapPair);
                                                 // QMetaObject::invokeMethod(this, [=](){
                                                 //      mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);

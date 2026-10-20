@@ -199,7 +199,8 @@ void PCIeCommSdk::printDevicesInfomation()
     else{
         QStringList lst;
 #ifdef SINGLE_BOARD_MODE
-        int physicalNo = 3;
+        //int physicalNo = 3;
+        for (int physicalNo=1; physicalNo<=3; ++physicalNo)
 #else
         for (int physicalNo=1; physicalNo<=3; ++physicalNo)
 #endif // SINGLE_BOARD_MODE
@@ -210,6 +211,10 @@ void PCIeCommSdk::printDevicesInfomation()
                 AppConfig::instance().enableBoard(physicalNo, isEnable);
                 AppConfig::instance().setBoardCaptureState(physicalNo, isEnable);
                 lst << QStringLiteral("卡%1%2").arg(physicalNo).arg((isEnable ? "" : "[未启用]"));
+
+                if (isEnable){
+                    mActivePhysicalNo = physicalNo;
+                }
             }
         }
 
@@ -717,7 +722,7 @@ bool PCIeCommSdk::test()
  * @brief PCIeCommSdk::analyzeHistorySpectrumData 分析能谱历史数据
  * @param cameraIndex 相机序号
  */
-bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& cameraIndex,
+bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& _cameraIndex,
                                 const quint32& timeStart/*开始时刻*/,
                                 const quint32& timeStop/*停止时刻*/ ,
                                 const QString& fileDir/*文件名*/,
@@ -734,13 +739,17 @@ bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& cameraIndex,
     int endFileId = startFileId + (timeStop - timeStart) / PACKET_TIMELENGTH;
     //根据通道号判断是采集卡的A面还是B面
     QString sideFile = "B";
-    if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
+#ifdef SINGLE_BOARD_MODE
+    quint8 cameraIndex = (mActivePhysicalNo-1) * DETNUMBER_PCIE_PER + _cameraIndex;
+#else
+    quint8 cameraIndex = _cameraIndex;
+#endif
+        if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
         sideFile = "A";
     //根据通道号计算采集卡的索引
-    int board_index = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;
-    int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
-    //根据通道号计算对应采集卡的第几通道
-    quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
+    int board_index = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;//计算通道属于第几张采集卡
+    int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;//计算通道属于第几个DDR
+    quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;//根据通道号计算对应DDR的第几通道
     for (int id = startFileId; id <= endFileId; ++id){
         QString filePath = QString("%1/%2%3spec%4.bin").arg(fileDir).arg(board_index).arg(sideFile).arg(id);
 
@@ -1242,18 +1251,18 @@ bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
 
 void PCIeCommSdk::onSettingFinished()
 {
-    quint16 deathTime = AppConfig::instance().deathTime();
-    writeDeathTime(deathTime);
+    // quint16 deathTime = AppConfig::instance().deathTime();
+    // writeDeathTime(deathTime);
 
-    quint16 triggerThreshold = AppConfig::instance().triggerThreshold();
-    writeTriggerThold(triggerThreshold);
+    // quint16 triggerThreshold = AppConfig::instance().triggerThreshold();
+    // writeTriggerThold(triggerThreshold);
 
-    quint32 refreshTime = AppConfig::instance().spectrumRefreshTimelength();
-    writeSpectnumRefreshTimelength(refreshTime);
+    // quint32 refreshTime = AppConfig::instance().spectrumRefreshTimelength();
+    // writeSpectnumRefreshTimelength(refreshTime);
 
-    quint16 triggerMode = AppConfig::instance().triggerMode();
-    quint16 waveformLength = AppConfig::instance().waveformLength();
-    writeWaveformMode((TriggerMode)triggerMode, (WaveformLength)waveformLength);
+    // quint16 triggerMode = AppConfig::instance().triggerMode();
+    // quint16 waveformLength = AppConfig::instance().waveformLength();
+    // writeWaveformMode((TriggerMode)triggerMode, (WaveformLength)waveformLength);
 }
 
 void PCIeCommSdk::writeDeathTime(quint16 deathTime)
