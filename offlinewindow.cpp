@@ -791,7 +791,7 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
                 count1data = DataCompressWindow::countFilesByPrefix(mfileList, "3Bdata");
 
             // 从 ComboBox 获取单个文件包对应的时间长度（单位ms）
-            const int time_per = 40;
+            const int time_per = PACKET_TIMELENGTH;
             int measureTime = DataCompressWindow::calculateMeasureTime(count1data, time_per);
 
             // 获取第一个文件名打包序号作为开始时间，如：1Adata27.bin
@@ -2013,12 +2013,14 @@ void OfflineWindow::onWaveformPlot(quint8/*通道号*/ channel, const QMap<quint
     QCPAxisRect *axisRect = nullptr;
     if (customPlot){
         axisRect = customPlot->axisRect();
+#ifndef SINGLE_BOARD_MODE
         if (channel <= 11){
             axisRect = customPlot->findChild<QCPAxisRect*>("horCameraAxisRect");
         }
         else {
             axisRect = customPlot->findChild<QCPAxisRect*>("verCameraAxisRect");
         }
+#endif
     }
     else{
         if (channel <= 11){
@@ -2385,7 +2387,8 @@ void OfflineWindow::onWaveform()
         QCPAxisRect* horCameraAxisRect = mWaveformPlot->findChild<QCPAxisRect*>("horCameraAxisRect");
         QCPAxisRect* verCameraAxisRect = mWaveformPlot->findChild<QCPAxisRect*>("verCameraAxisRect");
         mWaveformPlot->graph(horCameraAxisRect, 0)->data()->clear();
-        mWaveformPlot->graph(verCameraAxisRect, 0)->data()->clear();
+        if (verCameraAxisRect)
+            mWaveformPlot->graph(verCameraAxisRect, 0)->data()->clear();
         mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
     }
     else{
@@ -2400,6 +2403,28 @@ void OfflineWindow::onWaveform()
 
     mWaitingSpinnerWidget->start();
     std::thread producer([=]{
+#ifdef SINGLE_BOARD_MODE
+        mWaitingSpinnerWidget->setText(QStringLiteral("正在处理波形数据，请等待..."));
+
+        GlobalSettings settings(dataDir + "/device_config.ini");
+        quint8 PhysicalNo = settings.value("Global/PhysicalNo").toUInt();
+        quint8 AuroraNo = settings.value("Global/AuroraNo").toUInt();
+        quint8 ChannelNo = settings.value("Global/ChannelNo").toUInt();
+        bool UsedDDR1 = settings.value("Global/UsedDDR1").toBool();
+        quint8 cameraIndex = (PhysicalNo-1) * DETNUMBER_PCIE_PER + (UsedDDR1 ? 0 : 1) * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + ChannelNo + 1;
+        mPCIeCommSdk.analyzeHistoryWaveformData(cameraIndex, startTime, endTime, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+
+            onWaveformPlot(cameraIndex, mapPair);
+            QMetaObject::invokeMethod(this, [=](){
+                if (mWaveformPlot)
+                    mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
+                else
+                    mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+                mWaitingSpinnerWidget->stop();
+            }, Qt::QueuedConnection);
+
+        });
+#else
         if (ui->checkBox_hor->isChecked()){
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
 
@@ -2441,6 +2466,7 @@ void OfflineWindow::onWaveform()
 
             });
         }
+#endif // SINGLE_BOARD_MODE
     });
     producer.detach();
 }
@@ -2462,7 +2488,7 @@ QString OfflineWindow::humanReadableSize(qint64 bytes)
 void OfflineWindow::onDataProcess()
 {
     // 设置参数
-    int timePerFile = 40;// 每个文件40ms
+    int timePerFile = PACKET_TIMELENGTH;// 每个文件40ms
     int startTime = ui->spinBox_startT_2->value();
     int endTime = ui->spinBox_endT_2->value();
     int threshold = ui->spinBox_threshold_2->value();
@@ -2730,7 +2756,7 @@ void OfflineWindow::onNGammaFilter()
 
     qApp->setOverrideCursor(QCursor(Qt::WaitCursor));
 
-    int time_per = 40;
+    int time_per = PACKET_TIMELENGTH;
     //计算起始文件索引
     int fileIndex = floor(startT / time_per) + 1;
     //计算结束文件索引
@@ -2839,7 +2865,7 @@ void OfflineWindow::onNGammaFilter()
                         case 17: filename = "3B"; break;
                         case 18: filename = "3B"; break;
                         }
-#endif // SINGLE_BOARD_MODE
+#endif
 
                         return filename;
                     };

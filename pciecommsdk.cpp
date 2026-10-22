@@ -273,14 +273,34 @@ void PCIeCommSdk::stopCapture(quint32 deviceIndex)
 void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMillisecond,  QString shotNum/*炮号*/)
 {
 #ifdef SINGLE_BOARD_MODE
-    int deviceIndex = 2;
-    bool isDDR1 = false;
-    quint8 boardIndex = 1;
-    quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
-    if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
-        startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest);
-    else
-        mDeviceThreadRunning[deviceIndex] = false;
+    quint8 channelAurora = AppConfig::instance().channelAurora();
+    quint8 channelIndex = AppConfig::instance().channelIndex();
+    qInfo().nospace() << "卡[" << mActivePhysicalNo << "] " << "采集链路：" << "Aurora" << (channelAurora+1)<< "，通道：CH" << (channelIndex+1);
+
+    for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
+    {
+        bool isDDR1 = deviceIndex <= numberOfDevices();
+        quint8 cardIndex = (deviceIndex - 1) % numberOfDevices() + 1;
+        quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
+        quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
+        if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1)){
+            startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest);
+            mActiveDeviceIndex = deviceIndex;
+            break;
+        }
+        else
+            mDeviceThreadRunning[deviceIndex] = false;
+    }
+
+    // bool isDDR1 = channelAurora == 0;
+    // //根据通道号计算采集卡的索引
+    // int boardIndex = 1;// 机器上只插入了一张卡
+    // int deviceIndex = channelAurora + 1;
+    // quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
+    // if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
+    //     startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest);
+    // else
+    //     mDeviceThreadRunning[deviceIndex] = false;
 #else
     for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
     {
@@ -575,13 +595,13 @@ void PCIeCommSdk::setTriggerThreshold()
         qDebug() << "选择通道指令";
         quint8 channelAurora = AppConfig::instance().channelAurora();
         quint8 channelIndex = AppConfig::instance().channelIndex();
-        quint8 lowCmd = 0xFB;
-        quint8 highCmd = channelIndex;
+        quint16 highCmd = 0xFB00;
+        quint8 lowCmd = channelIndex;
         if (channelAurora==0)
-            lowCmd = 0xFB;
+            highCmd = 0xFB00;
         else
-            lowCmd = 0xFC;
-        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, REG_CMD_BASE | (lowCmd<<16) | (highCmd << 24));
+            highCmd = 0xFC00;
+        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, REG_CMD_BASE | highCmd | lowCmd);
 
         // 触发阈值
         qDebug() << "设置触发阈值指令";
@@ -617,7 +637,7 @@ void PCIeCommSdk::setTriggerThreshold()
         // ::QThread::msleep(10);
 #endif //SINGLE_BOARD_MODE
 
-        qInfo().nospace() << "采集卡#" << (physicalNo) << "设置触发阈值：" << threshold;
+        qInfo().nospace() << "卡[" << physicalNo << "] " << "设置触发阈值：" << threshold;
 
 #ifdef SINGLE_BOARD_MODE
         break; // 单张采集卡只需要设置一张卡参数配置
@@ -674,7 +694,7 @@ void PCIeCommSdk::setCaptureTimelength(qint32 timeLength)
 
         CloseHandle(fUserHandle);
 
-        qInfo().nospace() << "采集卡#" << (physicalNo) << "设置测量时长：" << timeLength << "ms";
+        qInfo().nospace() << "卡[" << physicalNo << "] " << "设置测量时长：" << timeLength << "ms";
     }
 }
 
@@ -685,7 +705,7 @@ inline bool PCIeCommSdk::writeRegAndClear(int physicalNo, HANDLE handle, quint64
     // 拆分32位值到4字节（小端对齐，匹配你现有XDMA操作逻辑）
     memcpy(cmd.data(), &regValue, sizeof(regValue));
     if (!writeData(physicalNo, handle, addr, cmd)) {
-        qCritical() << "采集卡" << physicalNo << "寄存器0x" << QString::number(addr,16) << "写入失败";
+        qCritical() << "卡" << physicalNo << "寄存器0x" << QString::number(addr,16) << "写入失败";
         return false;
     }
     QThread::msleep(XdmaRegDef::REG_OP_WAIT_MS);
@@ -722,7 +742,7 @@ bool PCIeCommSdk::test()
  * @brief PCIeCommSdk::analyzeHistorySpectrumData 分析能谱历史数据
  * @param cameraIndex 相机序号
  */
-bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& _cameraIndex,
+bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& cameraIndex,
                                 const quint32& timeStart/*开始时刻*/,
                                 const quint32& timeStop/*停止时刻*/ ,
                                 const QString& fileDir/*文件名*/,
@@ -739,19 +759,21 @@ bool PCIeCommSdk::analyzeHistorySpectrumData(const quint8& _cameraIndex,
     int endFileId = startFileId + (timeStop - timeStart) / PACKET_TIMELENGTH;
     //根据通道号判断是采集卡的A面还是B面
     QString sideFile = "B";
-#ifdef SINGLE_BOARD_MODE
-    quint8 cameraIndex = (mActivePhysicalNo-1) * DETNUMBER_PCIE_PER + _cameraIndex;
-#else
-    quint8 cameraIndex = _cameraIndex;
-#endif
-        if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
+// #ifdef SINGLE_BOARD_MODE
+//     bool isDDR1 = mActiveDeviceIndex <= numberOfDevices();
+//     quint8 _cameraIndex = (isDDR1 ? 0 : 1) * 4/*1面（A/B）支持4通道*/ + captureChannelNo + 1;
+//     quint8 cameraIndex = (mActivePhysicalNo-1) * DETNUMBER_PCIE_PER + _cameraIndex;
+// #else
+//     quint8 cameraIndex = _cameraIndex;
+// #endif
+    if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
         sideFile = "A";
     //根据通道号计算采集卡的索引
-    int board_index = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;//计算通道属于第几张采集卡
+    int boardIndex = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;//计算通道属于第几张采集卡
     int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;//计算通道属于第几个DDR
     quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;//根据通道号计算对应DDR的第几通道
     for (int id = startFileId; id <= endFileId; ++id){
-        QString filePath = QString("%1/%2%3spec%4.bin").arg(fileDir).arg(board_index).arg(sideFile).arg(id);
+        QString filePath = QString("%1/%2%3spec%4.bin").arg(fileDir).arg(boardIndex).arg(sideFile).arg(id);
 
         QFile f(filePath);
         if (!f.open(QIODevice::ReadOnly))
@@ -920,12 +942,12 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
     if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
         sideFile = "A";
     //根据通道号计算采集卡的索引
-    int board_index = (cameraIndex + DETNUMBER_PCIE_PER - 1) / 6;
+    int boardIndex = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;
     int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
     //根据通道号计算对应采集卡的第几通道
     quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
     for (int id = startFileId; id <= endFileId; ++id){
-        QString filePath = QString("%1/%2%3data%4.bin").arg(fileDir).arg(board_index).arg(sideFile).arg(id);
+        QString filePath = QString("%1/%2%3data%4.bin").arg(fileDir).arg(boardIndex).arg(sideFile).arg(id);
 #ifdef SINGLE_BOARD_MODE
         QVector<quint16> ch[1];
         cameraNo = 0;
@@ -1373,7 +1395,7 @@ bool PCIeCommSdk::writeData(quint8 physicalNo, HANDLE fd, quint64 offset, const 
     write(fd, data.data(), data.size());
 #endif
 
-    qDebug() << "采集卡[" << physicalNo << "] writeData" << QString("0x%1").arg((quint64)offset, 8, 16, QLatin1Char('0')) << data.toHex(' ');
+    qDebug().nospace() << "卡[" << physicalNo << "] writeData" << QString("0x%1").arg((quint64)offset, 8, 16, QLatin1Char('0')) << data.toHex(' ');
     return true;
 }
 
@@ -1765,7 +1787,7 @@ bool CaptureThread::startMeasure()
 
     CloseHandle(fHandle);
 
-    qInfo().nospace() << "采集卡[" << mPhysicalNo << "] " << "发送开始测量指令";
+    qInfo().nospace() << "卡[" << mPhysicalNo << "] " << "发送开始测量指令";
     return true;
 }
 
@@ -1874,32 +1896,32 @@ bool CaptureThread::checkDataError()
     printDebugInfo();
 
     if (!waveformError && !mIsRegisterInvalid){
-        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 波形正常";
-        qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 波形正常";
+        qDebug().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 波形正常" << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+        qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 波形正常";
     }
     else{
         if (waveformError){
-            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 波形帧序号异常, 索引 = " << waveformErrorIndex;
-            qCritical().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 波形帧序号异常, 索引 = " << waveformErrorIndex;
+            qDebug().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 波形帧序号异常, 索引 = " << waveformErrorIndex << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+            qCritical().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 波形帧序号异常, 索引 = " << waveformErrorIndex;
         }
         else if (mIsRegisterInvalid){
-            qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
-            qCritical().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
+            qDebug().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+            qCritical().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 波形寄存器值异常, 索引 = " << mRegisterInvalidPosition;
         }
     }
 
     if (!spectrumError){
-        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 能谱正常";
-        qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 能谱正常";
+        qDebug().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 能谱正常" << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ";
+        qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 能谱正常";
     }
     else{
-        qDebug().nospace() << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> [" << mPhysicalNo << "] " << ddrName << " 能谱帧序号异常, 索引 = " << spectrumErrorIndex;
-        qCritical().nospace() << "[" << mPhysicalNo << "] " << ddrName << " 能谱帧序号异常, 索引 = " << spectrumErrorIndex;
+        qDebug().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 能谱帧序号异常, 索引 = " << spectrumErrorIndex << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+        qCritical().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 能谱帧序号异常, 索引 = " << spectrumErrorIndex;
     }
 
     if (!mEnableTestMode/*测试模式*/ || mDataError/*数据出现错误*/){
 
-        qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << "数据正在存储到硬盘中，请等待...";
+        qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 数据正在存储到硬盘中，请等待...";
 
         for (int i = 0; i < mCapturedRef; ++i)
         {
@@ -1939,7 +1961,7 @@ bool CaptureThread::checkDataError()
 
         }
 
-        qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << "数据已经全部存储到硬盘中！";
+        qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 数据已经全部存储到硬盘中";
     }
 
     // 清空内存耗时，暂时屏蔽
@@ -1988,14 +2010,14 @@ void CaptureThread::printDebugInfo()
         if (((headSeq != tailSeq) || ((currentSeq - lastSeq) != 1)) && headSeq!=0){
             index = i+1;
             ok = false;
-            out << "[" << mPhysicalNo << "] "
+            out << "卡[" << mPhysicalNo << "] "
                 << ddrName << " [" << i+1 << "] "
                 << pkgHead.toHex(' ')
                 << " ... "
                 << pkgTail.toHex(' ')
                 << "    xxxxxx"  << "\n";
         } else{
-            out << "[" << mPhysicalNo << "] "
+            out << "卡[" << mPhysicalNo << "] "
                 << ddrName << " [" << i+1 << "] "
                 << pkgHead.toHex(' ')
                 << " ... "
@@ -2011,7 +2033,7 @@ void CaptureThread::printDebugInfo()
     // 寄存器0值出现的时间段
     out << QStringLiteral("数据来到之前寄存器0值出现的时间段\n");
     for (int i = 0; i < zeroTime.size(); ++i){
-        out << "[" << mPhysicalNo << "] " << ddrName << " " << zeroTime[i] << "\n";
+        out << "卡[" << mPhysicalNo << "] " << ddrName << " " << zeroTime[i] << "\n";
     }
 
     // 读寄存器时间
@@ -2020,7 +2042,7 @@ void CaptureThread::printDebugInfo()
         const auto& pairVec = outerPair.second;
         for (int idx=0; idx<pairVec.size(); ++idx){
             const auto& pair = pairVec[idx];
-            out << "[" << mPhysicalNo << "] " << ddrName << " " << outerKey << " " <<
+            out << "卡[" << mPhysicalNo << "] " << ddrName << " " << outerKey << " " <<
                 QStringLiteral(" 读寄存器时刻：") << pair.first << "-" << pair.second.first <<
                 QStringLiteral(" 返回值：0x") << QString::number(pair.second.second, 16) << "\n";
         }
@@ -2029,7 +2051,7 @@ void CaptureThread::printDebugInfo()
     out << "================================================================================================\n\n";
     // 读数据时间
     for (int i=1; i<=this->mCapturedRef; ++i){
-        out << "[" << mPhysicalNo << "] " << ddrName << " " << i <<
+        out << "卡[" << mPhysicalNo << "] " << ddrName << " " << i <<
             QStringLiteral(" 寄存器值变化时刻：") << mRamChangedTime[i] <<
             QStringLiteral(" 创建读线程时刻：") << mCreateThreadTime[i] << "-" << mAfterCreateThreadTime[i] <<
             QStringLiteral(" 开始读数据时刻：") << mBeforeReadTime[i] <<
@@ -2041,11 +2063,11 @@ void CaptureThread::printDebugInfo()
 
     out << "================================================================================================\n\n";
     if (!ok){
-        out << "[" << mPhysicalNo << "] " << ddrName << " frames sequence exception, index = " << index;
+        out << "卡[" << mPhysicalNo << "] " << ddrName << " frames sequence exception, index = " << index;
     }
 
     if (mIsRegisterInvalid){
-        out << "[" << mPhysicalNo << "] " << ddrName << " frames ramvalue exception, index = " << mRegisterInvalidPosition;
+        out << "卡[" << mPhysicalNo << "] " << ddrName << " frames ramvalue exception, index = " << mRegisterInvalidPosition;
     }
 
     logFile.close();
@@ -2128,7 +2150,7 @@ void CaptureThread::run()
     QMutex timeMutex;
     quint8 lastRegisterValue = 0x00;// 最后寄存器值
 
-    qDebug().nospace() << "[" << mPhysicalNo << (mIsDDR1 ? "] DDR1" : "] DDR2") << " 数据采集线程 id:" << this->currentThreadId();
+    qDebug().nospace() << "卡[" << mPhysicalNo << (mIsDDR1 ? "] DDR1" : "] DDR2") << " 数据采集线程 id:" << this->currentThreadId();
 
     // 创建线程池
     QThreadPool* threadPool = new QThreadPool(this);
@@ -2138,8 +2160,8 @@ void CaptureThread::run()
     // 为 I/O 密集型任务调整最大线程数
     threadPool->setMaxThreadCount(defaultThreads);
     //threadPool->setExpiryTimeout(-1);//过期超时不收回
-	QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
 
+    QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
     mRamChangedTime.resize(500);// RAM值改变的时间
     mBeforeReadTime.resize(500);// DDR读之前的时间
     mAfterReadTime.resize(500);// DDR读之后的时间
@@ -2163,8 +2185,8 @@ void CaptureThread::run()
             QThread::usleep(100);
             continue;
         }
-        qDebug().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
-                           << "[" << mPhysicalNo << "] "
+        qDebug().noquote().nospace() << "卡[" << mPhysicalNo << "] "
+                           << "[" << QString("线程 id:0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
                            << ddrName
                            << " 苏醒";
 
@@ -2174,7 +2196,7 @@ void CaptureThread::run()
         if (fUserHandle == INVALID_HANDLE_VALUE)
         {
             qCritical().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
-                               << "[" << mPhysicalNo << "] "
+                               << "卡[" << mPhysicalNo << "] "
                                << ddrName
                                << " 设备打开失败";
             pause();
@@ -2203,7 +2225,6 @@ void CaptureThread::run()
 		zeroTime.clear();
 
         this->mInterruptSave = false;
-        qInfo().nospace() << "采集卡[" << mPhysicalNo << "] " << "发送开始测量指令";
 
 #ifdef SINGLE_BOARD_MODE
         startMeasure();
@@ -2221,7 +2242,7 @@ void CaptureThread::run()
         // continue;
 
         elapsedTimer.start();
-        qDebug().nospace() << "[" << mPhysicalNo << "] "
+        qDebug().nospace() << "卡[" << mPhysicalNo << "] "
                            << ddrName
                            << " 开始测量>>>>>>>>>>>>>>>>>>>>>>>>"
                            << elapsedTimer.elapsed();
@@ -2247,9 +2268,9 @@ void CaptureThread::run()
                             mRamChangedTime[mCapturedRef] = outnerKey;
                             lastRegisterValue = (quint8)readBuf[0];
                             isOver = true;
-                            qDebug().noquote().nospace() << "[" << mPhysicalNo << "] "
+                            qDebug().noquote().nospace() << "卡[" << mPhysicalNo << "] \""
                                                   << ddrName
-                                                  << " 收到停止测量指令"
+                                                  << "\" 收到停止测量指令"
                                                   << " 当前寄存器值:0x" << readBuf.toHex()
                                                   << " 帧序号:" << mCapturedRef;// 测试停止，最后一个数据包序号无效，所以减1
                             break;
@@ -2275,15 +2296,15 @@ void CaptureThread::run()
                     {
                         // 收到停止测量指令
 #ifdef SINGLE_BOARD_MODE
-                        if (!isFirstPacket && mCapturedRef == 80/*极限值*/){
+                        if (!isFirstPacket && mCapturedRef == this->mCaptureCount/*极限值*/){
 #else
                         if (!isFirstPacket && mCapturedRef == 250/*极限值*/){
 #endif // SINGLE_BOARD_MODE
                             mRamChangedTime[mCapturedRef] = outnerKey;
                             lastRegisterValue = (quint8)readBuf[0];
-                            qDebug().noquote().nospace() << "[" << mPhysicalNo << "] "
+                            qDebug().noquote().nospace() << "卡[" << mPhysicalNo << "] \""
                                                          << ddrName
-                                                         << " 收到停止测量指令"
+                                                         << "\" 收到停止测量指令"
                                                          << " 当前寄存器值:0x" << readBuf.toHex()
                                                          << " 帧序号:" << mCapturedRef;// 测试停止，最后一个数据包序号无效，所以减1
                             break;
@@ -2302,7 +2323,7 @@ void CaptureThread::run()
                     isOver = true;
 
                     // 读数失败了(从未进入到这里，如果进入到这里，肯定是硬件出问题了)
-                    qCritical().nospace() << "[" << mPhysicalNo << "] "
+                    qCritical().nospace() << "卡[" << mPhysicalNo << "] "
                                           << ddrName << "读寄存器失败，测量时刻：" << elapsedTimer.elapsed();
                     break;
                 }
@@ -2318,8 +2339,8 @@ void CaptureThread::run()
                     if (!isPrintedTimeoutInfo){ //一旦超时，后面数据可能都超时，所以这里只打印一次消息即可
                         isPrintedTimeoutInfo = true;
                         mRegisterInvalidPosition = mCapturedRef;
-                        qCritical().noquote().nospace() << "[" << mPhysicalNo << "] "
-                                          << ddrName << "寄存器值异常"
+                        qCritical().nospace().noquote() << "卡[" << mPhysicalNo << "] \""
+                                          << ddrName << "\" 寄存器值异常"
                                           << " 当前寄存器值:0x" << readBuf.toHex()
                                           << " 帧序号:" << mCapturedRef;
                     }
@@ -2388,7 +2409,7 @@ void CaptureThread::run()
             //emit captureFinished(mDeviceIndex, mIsDDR1);
 
             threadPool->waitForDone();
-            qInfo().nospace() << "[" << mPhysicalNo << "] " << ddrName << "采集结束，共采集：" << mCapturedRef;
+            qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 采集结束，共采集：" << mCapturedRef << "帧/160ms";
 
             checkDataError();
             emit captureFinished(mPhysicalNo, mIsDDR1);
@@ -2397,7 +2418,7 @@ void CaptureThread::run()
             // 暂停逻辑
             {
                 qDebug().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
-                                   << "[" << mPhysicalNo << "] "
+                                   << "卡[" << mPhysicalNo << "] "
                                    << ddrName
                                    << " 休眠";
             }

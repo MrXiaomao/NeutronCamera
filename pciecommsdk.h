@@ -386,6 +386,11 @@ public:
     };
     void setMeasureMode(MeasureMode mm = mmSingle){mMeasureMode = mm;};
 
+#ifdef SINGLE_BOARD_MODE
+    quint8 activePhysicalNo() const{return mActivePhysicalNo;}
+    bool isUsedDDR1() const {return mActiveDeviceIndex <= mEnumedDevices.size();}
+#endif // SINGLE_BOARD_MODE
+
 signals:
 
 private:
@@ -396,7 +401,10 @@ private:
     static QStringList mEnumedDevices;// 搜索出来的采集卡设备列表，对应的是 boardIndex
     static QStringList mPhysicalNames;// 机器插入的采集卡名称列表，对应的是 physicalNo
 
+#ifdef SINGLE_BOARD_MODE
     quint8 mActivePhysicalNo = 1; // 当前激活的卡号
+    quint8 mActiveDeviceIndex = 1; //
+#endif // SINGLE_BOARD_MODE
     MeasureMode mMeasureMode = mmSingle;
 };
 

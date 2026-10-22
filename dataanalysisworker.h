@@ -12,6 +12,7 @@
 #include <QThreadPool>
 #include <QQueue>
 #include "globalsettings.h"
+#include "pciecommsdk.h"
 
 // ====== 有界队列：最多缓存 N 个文件（N * 256MB 内存）======
 struct FileJob {
@@ -211,7 +212,7 @@ public:
         int cameraNo = 0;
         if (mCameraIndex != 0) {
             //只有nγ甄别才会进入到此处
-            deviceIndex = (mCameraIndex - 1) / 3 + 1;
+            deviceIndex = (mCameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
         }
 
         quint32 packerCurrentTime = mJob.packerStartTime;

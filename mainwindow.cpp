@@ -6,6 +6,7 @@
 #include "switchbutton.h"
 #include "pducontrolwidget.h"
 #include "ToastNotification.h"
+#include "AppConfig.h"
 #include <QShortcut>
 
 // 对尾缀_1等数字进行加1操作。一定要有下划线
@@ -1995,24 +1996,17 @@ void MainWindow::onStartMeasure()
     else if (ui->action_typeLBD->isChecked())
         mCurrentDetectorType = dtLBD;
 
-    GlobalSettings settings(DEVICE_CONFIG_FILE);
-    settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
-    settings.setValue("Global/ShotNumIsAutoIncrease", ui->checkBox_autoIncrease->isChecked());
-    settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
-    settings.setValue("Global/DetectType", mCurrentDetectorType);
-    QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
     int measureMode = mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle;//mMeasureMode
     if (ui->action_test->isChecked())
         measureMode |= PCIeCommSdk::mmTest;
     mPCIeCommSdk.setMeasureMode((PCIeCommSdk::MeasureMode)measureMode);
 
-    // 先发送PSD甄别阈值
-    if (ui->action_typeLSD->isChecked())
-        mPCIeCommSdk.setPSDThreshold();
-
     qint32 timeLength = ui->spinBox_timeLength->value();
     mPCIeCommSdk.setCaptureTimelength(timeLength);
     mPCIeCommSdk.setTriggerThreshold();
+    // 先发送PSD甄别阈值
+    if (ui->action_typeLSD->isChecked())
+        mPCIeCommSdk.setPSDThreshold();
     mPCIeCommSdk.startAllCapture(fileSaveDir,
                                  ui->spinBox_timeLength->value(),
                                  ui->lineEdit_shotNum->text());
@@ -2021,9 +2015,26 @@ void MainWindow::onStartMeasure()
     ui->action_stopMeasure->setEnabled(true);
     ui->lineEdit_savePath->setEnabled(false);
     ui->spinBox_timeLength->setEnabled(false);
+
+#ifdef SINGLE_BOARD_MODE
+    mCurrentAuroraNo = AppConfig::instance().channelAurora();
+    mCurrentChannelNo = AppConfig::instance().channelIndex();
+#endif // SINGLE_BOARD_MODE
+
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
+    settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
+    settings.setValue("Global/ShotNumIsAutoIncrease", ui->checkBox_autoIncrease->isChecked());
+    settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
+    settings.setValue("Global/DetectType", mCurrentDetectorType);
+#ifdef SINGLE_BOARD_MODE
+    settings.setValue("Global/PhysicalNo", mPCIeCommSdk.activePhysicalNo());
+    settings.setValue("Global/AuroraNo", mCurrentAuroraNo);
+    settings.setValue("Global/ChannelNo", mCurrentChannelNo);
+    settings.setValue("Global/UsedDDR1", mPCIeCommSdk.isUsedDDR1());
+#endif // SINGLE_BOARD_MODE
+    QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
 }
 
-#include "AppConfig.h"
 void MainWindow::on_pushButton_preview_clicked()
 {
     auto joinFilename = [=](const int& cameraIndex)->QString
@@ -2076,10 +2087,9 @@ void MainWindow::on_pushButton_preview_clicked()
 
 #ifdef SINGLE_BOARD_MODE
     // 水平相机
-    quint8 channelAurora = AppConfig::instance().channelAurora();
-    quint8 channelIndex = AppConfig::instance().channelIndex();
-    quint8 captureChannelNo = channelAurora * 4/*1面（A/B）支持4通道*/ + channelIndex + 1;
-    mPCIeCommSdk.analyzeHistorySpectrumData(captureChannelNo,
+    //quint8 _cameraIndex = AppConfig::instance().channelAurora() * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + mCurrentChannelNo + 1;
+    quint8 cameraIndex = (mPCIeCommSdk.activePhysicalNo()-1) * DETNUMBER_PCIE_PER + (mPCIeCommSdk.isUsedDDR1() ? 0 : 1) * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + mCurrentChannelNo + 1;
+    mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex,
                                             timeStart,
                                             timeStop,
                                             dataDir,
@@ -2087,7 +2097,7 @@ void MainWindow::on_pushButton_preview_clicked()
                                                 QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
                                                 QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
                                             {
-                                                emit showGammaSpectrum(captureChannelNo, pairSpectrumGamma);
+                                                emit showGammaSpectrum(cameraIndex, pairSpectrumGamma);
                                                 //onWaveformPlot(horCameraIndex, mapPair);
                                                 // QMetaObject::invokeMethod(this, [=](){
                                                 //      mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
@@ -2350,5 +2360,6 @@ void MainWindow::initLogEvent()
     // 使用 QPlainTextEdit 内建限行能力，自动丢弃最早日志
     ui->plainTextEdit_log->document()->setMaximumBlockCount(5000);
     ui->plainTextEdit_log->installEventFilter(this);
+    ui->plainTextEdit_log->viewport()->installEventFilter(this);
 }
 

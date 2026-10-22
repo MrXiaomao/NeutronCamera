@@ -41,13 +41,18 @@ public:
 #ifdef SINGLE_BOARD_MODE
     QtnPropertyQString* channelAurora;// 采集链路/区域
     QtnPropertyQString* channelIndex;// 采集通道
+
+    //小板卡
+    QtnPropertySet* propSetPDU;
+    QtnPropertyQString* PDUIpAddress;// 设备地址
+
 #endif
     QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
     QtnPropertyInt* triggerThreshold;// 触发阈值
 
     //PDU程控电源
-    QtnPropertySet* propSetPDU;
-    QtnPropertyQString* PDUIpAddress;// 设备地址
+    // QtnPropertySet* propSetPDU;
+    // QtnPropertyQString* PDUIpAddress;// 设备地址
 
     //状态监测模块
     QtnPropertySet* propSetState;
@@ -108,6 +113,75 @@ AppConfig::AppConfig(QObject* parent)
         d->propBoard2EnableDDR2 = qtnCreateProperty<QtnPropertyBool>(d->propSetBoard2, QStringLiteral("启用DDR#2"));
         d->propBoard3EnableDDR1 = qtnCreateProperty<QtnPropertyBool>(d->propSetBoard3, QStringLiteral("启用DDR#1"));
         d->propBoard3EnableDDR2 = qtnCreateProperty<QtnPropertyBool>(d->propSetBoard3, QStringLiteral("启用DDR#2"));
+
+#ifdef SINGLE_BOARD_MODE
+        connect(d->propBoard1EnableDDR1, &QtnPropertyBool::propertyWillChange,
+                this, [=](QtnPropertyChangeReason reason, QtnPropertyValuePtr newValue, int typeId) {
+                    Q_UNUSED(typeId);
+                    if (reason & QtnPropertyChangeReasonValue) {
+                        using ValueType = decltype(d->propBoard1EnableDDR1->value());
+                        bool value = *qtnCastPropertyValue<ValueType>(newValue);
+                        d->propBoard1EnableDDR2->blockSignals(true);
+                        d->propBoard1EnableDDR2->setValue(!value);
+                        d->propBoard1EnableDDR2->blockSignals(false);
+                    }
+                });
+        connect(d->propBoard1EnableDDR2, &QtnPropertyBool::propertyWillChange,
+                this, [=](QtnPropertyChangeReason reason, QtnPropertyValuePtr newValue, int typeId) {
+                    Q_UNUSED(typeId);
+                    if (reason & QtnPropertyChangeReasonValue) {
+                        using ValueType = decltype(d->propBoard1EnableDDR2->value());
+                        bool value = *qtnCastPropertyValue<ValueType>(newValue);
+                        d->propBoard1EnableDDR1->blockSignals(true);
+                        d->propBoard1EnableDDR1->setValue(!value);
+                        d->propBoard1EnableDDR1->blockSignals(false);
+                    }
+                });
+        connect(d->propBoard2EnableDDR1, &QtnPropertyBool::propertyWillChange,
+                this, [=](QtnPropertyChangeReason reason, QtnPropertyValuePtr newValue, int typeId) {
+                    Q_UNUSED(typeId);
+                    if (reason & QtnPropertyChangeReasonValue) {
+                        using ValueType = decltype(d->propBoard2EnableDDR1->value());
+                        bool value = *qtnCastPropertyValue<ValueType>(newValue);
+                        d->propBoard2EnableDDR2->blockSignals(true);
+                        d->propBoard2EnableDDR2->setValue(!value);
+                        d->propBoard2EnableDDR2->blockSignals(false);
+                    }
+                });
+        connect(d->propBoard3EnableDDR2, &QtnPropertyBool::propertyWillChange,
+                this, [=](QtnPropertyChangeReason reason, QtnPropertyValuePtr newValue, int typeId) {
+                    Q_UNUSED(typeId);
+                    if (reason & QtnPropertyChangeReasonValue) {
+                        using ValueType = decltype(d->propBoard2EnableDDR2->value());
+                        bool value = *qtnCastPropertyValue<ValueType>(newValue);
+                        d->propBoard2EnableDDR1->blockSignals(true);
+                        d->propBoard2EnableDDR1->setValue(!value);
+                        d->propBoard2EnableDDR1->blockSignals(false);
+                    }
+                });
+        connect(d->propBoard3EnableDDR1, &QtnPropertyBool::propertyWillChange,
+                this, [=](QtnPropertyChangeReason reason, QtnPropertyValuePtr newValue, int typeId) {
+                    Q_UNUSED(typeId);
+                    if (reason & QtnPropertyChangeReasonValue) {
+                        using ValueType = decltype(d->propBoard3EnableDDR1->value());
+                        bool value = *qtnCastPropertyValue<ValueType>(newValue);
+                        d->propBoard3EnableDDR2->blockSignals(true);
+                        d->propBoard3EnableDDR2->setValue(!value);
+                        d->propBoard3EnableDDR2->blockSignals(false);
+                    }
+                });
+        connect(d->propBoard3EnableDDR2, &QtnPropertyBool::propertyWillChange,
+                this, [=](QtnPropertyChangeReason reason, QtnPropertyValuePtr newValue, int typeId) {
+                    Q_UNUSED(typeId);
+                    if (reason & QtnPropertyChangeReasonValue) {
+                        using ValueType = decltype(d->propBoard3EnableDDR2->value());
+                        bool value = *qtnCastPropertyValue<ValueType>(newValue);
+                        d->propBoard3EnableDDR1->blockSignals(true);
+                        d->propBoard3EnableDDR1->setValue(!value);
+                        d->propBoard3EnableDDR1->blockSignals(false);
+                    }
+                });
+#endif // SINGLE_BOARD_MODE
 
         // d->propSetBoard1->setState(QtnPropertyStateNone);
         // d->propSetBoard2->setState(QtnPropertyStateImmutable, false);
@@ -462,6 +536,7 @@ QString AppConfig::PDUipAddress() const { return d->PDUIpAddress->value(); }
 // 采集卡通道管理
 void AppConfig::enableBoardCapture(quint8 physicalIndex)
 {
+    return;
     QtnPropertySet* propSetBoard = nullptr;
     if (1 == physicalIndex)
         propSetBoard = d->propSetBoard1;
@@ -491,6 +566,7 @@ void AppConfig::enableBoardCapture(quint8 physicalIndex)
 
 void AppConfig::disableBoardCapture(quint8 physicalIndex)
 {
+    return;
     QtnPropertySet* propSetBoard = nullptr;
     if (1 == physicalIndex)
         propSetBoard = d->propSetBoard1;

@@ -477,7 +477,7 @@ void DataAnalysisWorker::getValidWave()
     }
 
     writeWaveformHeadToHDF5(hdf5FilePath, startTime, endTime, mThresholds);
-    for(int deviceIndex=1; deviceIndex<=DETNUMBER_PCIE_PER; ++deviceIndex) {
+    for(int deviceIndex=1; deviceIndex<=6/*机器插入最多3张卡，每张卡AB两面，就是6个设备*/; ++deviceIndex) {
         {
             QMutexLocker locker(&mMutex);
             if (mCancelled) {
