@@ -51,19 +51,28 @@ public:
                                 QVector<quint16>& ch2,
                                 bool littleEndian = true);
 
+    QT_DEPRECATED
     static bool readBin3Ch_fast(const QByteArray& fileData,
                                 QVector<quint16>& ch0,
                                 QVector<quint16>& ch1,
                                 QVector<quint16>& ch2,
                                 bool littleEndian = true);
 
+    static bool readBin1Ch_fast(const QString& filePath,
+                                const quint8& cameraNo,
+                                QVector<quint16>& ch0,
+                                bool littleEndian = true);
+
+#ifdef SINGLE_BOARD_MODE
     static bool readBinAllCh_fast(const QString& filePath,
                                 QVector<quint16>& ch0,
                                 bool littleEndian = true);
 
+    QT_DEPRECATED
     static bool readBinAllCh_fast(const QByteArray& fileData,
                                 QVector<quint16>& ch0,
                                 bool littleEndian = true);
+#endif // SINGLE_BOARD_MODE
 
     // 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
     // 当波形信号过多时，该方法明显会出现问题（暂时采用该方法）
@@ -75,7 +84,7 @@ public:
     //     ch1和ch2：根据采集卡编号的奇偶性决定调整方式
     //     ch3：data - baseline（与采集卡编号无关）
     //     ch4：baseline - data（与采集卡编号无关）
-    static QVector<qint16> adjustDataWithBaseline(QVector<quint16>& data_ch, qint16 baseline_ch, int boardNum, int ch);
+    static QVector<qint16> adjustDataWithBaseline(QVector<quint16>& data_ch, qint16 baseline_ch, int boardNum = -1, int ch = -1);
 
     // 提取超过阈值的有效波形数据
     // data: 输入数据（已扣基线）

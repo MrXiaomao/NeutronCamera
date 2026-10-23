@@ -211,10 +211,11 @@ void PCIeCommSdk::printDevicesInfomation()
                 AppConfig::instance().enableBoard(physicalNo, isEnable);
                 AppConfig::instance().setBoardCaptureState(physicalNo, isEnable);
                 lst << QStringLiteral("卡%1%2").arg(physicalNo).arg((isEnable ? "" : "[未启用]"));
-
+#ifdef SINGLE_BOARD_MODE
                 if (isEnable){
                     mActivePhysicalNo = physicalNo;
                 }
+#endif // SINGLE_BOARD_MODE
             }
         }
 
@@ -610,6 +611,8 @@ void PCIeCommSdk::setTriggerThreshold()
         writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, 0xFA120000);
         writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, (threshold << 16) | 0xABCD);
 #else
+        qDebug() << "设置触发阈值指令";
+        quint16 threshold = AppConfig::instance().triggerThreshold();
         using namespace XdmaRegDef;
         // 拆分高低位寄存器配置
         quint32 lowCmd = REG_CMD_BASE | THRESHOLD_LOW_OFS | (threshold & 0x00FF);

@@ -43,16 +43,16 @@ public:
     QtnPropertyQString* channelIndex;// 采集通道
 
     //小板卡
-    QtnPropertySet* propSetPDU;
-    QtnPropertyQString* PDUIpAddress;// 设备地址
+    QtnPropertySet* propSetBoard;
+    QtnPropertyQString* BoardIpAddress;// 设备地址
 
 #endif
     QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
     QtnPropertyInt* triggerThreshold;// 触发阈值
 
     //PDU程控电源
-    // QtnPropertySet* propSetPDU;
-    // QtnPropertyQString* PDUIpAddress;// 设备地址
+    QtnPropertySet* propSetPDU;
+    QtnPropertyQString* PDUIpAddress;// 设备地址
 
     //状态监测模块
     QtnPropertySet* propSetState;
