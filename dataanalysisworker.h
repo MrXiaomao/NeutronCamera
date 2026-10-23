@@ -62,6 +62,12 @@ public:
                                 const quint8& cameraNo,
                                 QVector<qint16>& ch0,
                                 bool littleEndian = true);
+    static bool readBin1Ch_range_fast(
+        const QString& filePath,
+        quint8         cameraNo,
+        qint64         from,
+        qint64         to,
+        QVector<qint16>& out);
 
 #ifdef SINGLE_BOARD_MODE
     static bool readBinAllCh_fast(const QString& filePath,

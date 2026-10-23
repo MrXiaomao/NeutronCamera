@@ -342,6 +342,51 @@ bool DataAnalysisWorker::readBin1Ch_fast(const QString& filePath,
     return true;
 }
 
+bool DataAnalysisWorker::readBin1Ch_range_fast(
+    const QString& filePath,
+    quint8         cameraNo,
+    qint64         from,
+    qint64         to,
+    QVector<qint16>& out)
+{
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+
+    constexpr qint64 HEAD_BYTES      = 12;
+    constexpr qint64 TAIL_BYTES      = 12;
+    constexpr qint64 BYTES_PER_GROUP = 6;
+
+    const qint64 payload = f.size() - HEAD_BYTES - TAIL_BYTES;
+    if (payload <= 0 || payload % BYTES_PER_GROUP != 0) { f.close(); return false; }
+
+    const qint64 pointsPerChannel = payload / BYTES_PER_GROUP;   // 19,999,996
+
+    from = qBound<qint64>(0, from, pointsPerChannel);
+    to   = qBound<qint64>(from, to, pointsPerChannel);
+    const qint64 count = to - from;
+    if (count <= 0) { f.close(); return false; }
+
+    // 只映射需要的字节区间
+    const qint64 byteOffset = HEAD_BYTES + from * BYTES_PER_GROUP;
+    const qint64 byteLength = count * BYTES_PER_GROUP;
+
+    uchar* buf = f.map(byteOffset, byteLength);
+    if (!buf) { f.close(); return false; }
+
+    out.resize(static_cast<int>(count));
+    const quint16* src = reinterpret_cast<const quint16*>(buf);
+    qint16* dst = out.data();
+    const int chOffset = cameraNo * 2;
+
+    for (qint64 i = 0; i < count; ++i) {
+        dst[i] = static_cast<qint16>(qFromLittleEndian(src[chOffset + i * 3]));
+    }
+
+    f.unmap(buf);
+    f.close();
+    return true;
+}
+
 #ifdef SINGLE_BOARD_MODE
 bool DataAnalysisWorker::readBinAllCh_fast(const QString& filePath,
                                          QVector<qint16>& ch0,

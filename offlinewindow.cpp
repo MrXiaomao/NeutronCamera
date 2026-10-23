@@ -2033,7 +2033,7 @@ void OfflineWindow::onWaveformPlot(quint8/*通道号*/ channel, const QMap<quint
         axisRect = customPlot->axisRect();
     }
 
-    customPlot->graph(axisRect, 0)->setData(xData, yData);
+    customPlot->graph(axisRect, 0)->addData(xData, yData);
 
     // 队列刷新
     QCPAxis* xAxis = axisRect->axis(QCPAxis::AxisType::atBottom);
@@ -2432,7 +2432,8 @@ void OfflineWindow::onWaveform()
             mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, startTime, endTime, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
 
                 onWaveformPlot(horCameraIndex, mapPair);
-                if (!ui->checkBox_ver->isChecked()){
+                //if (!ui->checkBox_ver->isChecked())
+                {
                     QMetaObject::invokeMethod(this, [=](){
                         if (mWaveformPlot)
                             mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
