@@ -115,6 +115,7 @@ OfflineWindow::OfflineWindow(bool isDarkTheme, QWidget *parent)
 
     connect(this, SIGNAL(writeLog(const QString&,QtMsgType)), this, SLOT(onWriteLog(const QString&,QtMsgType)));
     connect(this, SIGNAL(showWaveform(quint8/*通道号*/,const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&)), this, SLOT(onWaveformPlot(quint8/*通道号*/,const QMap<quint64/*时刻（ns）*/,qint16/*波形值*/>&)));
+    connect(this, SIGNAL(showWaveform(quint8/*通道号*/,const quint64&/*时刻 ns*/,const std::vector<qint16>&/*扣基线后的波形值*/)), this, SLOT(onWaveformPlot(quint8/*通道号*/,const quint64&/*时刻 ns*/,const std::vector<qint16>&/*扣基线后的波形值*/)));
     connect(this, SIGNAL(showSpectrumPlot(QMap<quint8/*通道号*/,QMap<quint16/*道址*/,quint32/*计数率*/>>)), this, SLOT(onSpectrumPlot(QMap<quint8/*通道号*/,QMap<quint16/*道址*/,quint32/*计数率*/>>)));
     connect(this, SIGNAL(showCpsPlot(QMap<quint8/*通道号*/,QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>)), this, SLOT(onCpsPlot(QMap<quint8/*通道号*/,QMap<quint16/*时刻（ms）*/,quint32/*计数率*/>>)));
     connect(this, SIGNAL(showPSDPlot(quint8,const QVector<double>&, const QVector<double>&, const QVector<double>&)), this,
@@ -1996,6 +1997,55 @@ void OfflineWindow::initCpsPage()
 }
 
 #include <QtMath>
+void OfflineWindow::onWaveformPlot(quint8 channel/*通道号*/, const quint64& keyBase/*时刻 ns*/, const std::vector<qint16>& values/*扣基线后的波形值*/)
+{
+    double yMax = 0;
+
+    // 计算当前组的x和y数据
+    QVector<double> xData, yData;
+    for (size_t i = 0; i < values.size(); ++i) {
+        quint64 t = keyBase + static_cast<quint64>(i) * 2;  // 时刻 ns
+        qint16  v = values[i];                               // 值
+        xData.append(t);
+        yData.append(v);
+        yMax = qMax((double)yMax, (double)v);
+    }
+
+    // 时间+计数率曲线
+    QCustomPlot* customPlot = mWaveformPlot;
+    QCPAxisRect *axisRect = nullptr;
+    if (customPlot){
+        axisRect = customPlot->axisRect();
+#ifndef SINGLE_BOARD_MODE
+        if (channel <= 11){
+            axisRect = customPlot->findChild<QCPAxisRect*>("horCameraAxisRect");
+        }
+        else {
+            axisRect = customPlot->findChild<QCPAxisRect*>("verCameraAxisRect");
+        }
+#endif
+    }
+    else{
+        if (channel <= 11){
+            customPlot = mWaveformHorPlot;
+        }
+        else{
+            customPlot = mWaveformVerPlot;
+        }
+
+        axisRect = customPlot->axisRect();
+    }
+
+    customPlot->graph(axisRect, 0)->addData(xData, yData);
+
+    // 队列刷新
+    QCPAxis* xAxis = axisRect->axis(QCPAxis::AxisType::atBottom);
+    QCPAxis* yAxis = axisRect->axis(QCPAxis::AxisType::atLeft);
+    xAxis->rescale(true);
+    yAxis->rescale(false);
+    yAxis->setRange(QCPRange(0,  yMax * 1.1));
+}
+
 void OfflineWindow::onWaveformPlot(quint8/*通道号*/ channel, const QMap<quint64/*时刻*/,qint16/*扣基线后的波形值*/>& mapPair)
 {
     double yMax = 0;
@@ -2429,10 +2479,11 @@ void OfflineWindow::onWaveform()
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
 
             // 水平相机
-            mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, startTime, endTime, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+            mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, startTime, endTime, dataDir,
+                                                    [&](quint64 keyBase, const std::vector<qint16>& values){
 
-                onWaveformPlot(horCameraIndex, mapPair);
-                //if (!ui->checkBox_ver->isChecked())
+                onWaveformPlot(horCameraIndex, keyBase, values);
+                if (!ui->checkBox_ver->isChecked())
                 {
                     QMetaObject::invokeMethod(this, [=](){
                         if (mWaveformPlot)
@@ -2450,9 +2501,10 @@ void OfflineWindow::onWaveform()
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
 
             // 垂直相机
-            mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, startTime, endTime , dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+            mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, startTime, endTime , dataDir,
+                                                    [&](quint64 keyBase, const std::vector<qint16>& values){
 
-                onWaveformPlot(verCameraIndex, mapPair);
+                onWaveformPlot(horCameraIndex, keyBase, values);
                 QMetaObject::invokeMethod(this, [=](){
                     if (mWaveformPlot){
                         mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);

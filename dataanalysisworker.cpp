@@ -344,9 +344,9 @@ bool DataAnalysisWorker::readBin1Ch_fast(const QString& filePath,
 
 bool DataAnalysisWorker::readBin1Ch_range_fast(
     const QString& filePath,
-    quint8         cameraNo,
-    qint64         from,
-    qint64         to,
+    quint8         cameraNo,     // 0 / 1 / 2
+    qint64         from,         // 起始点（含）
+    qint64         to,           // 结束点（不含）
     QVector<qint16>& out)
 {
     QFile f(filePath);
@@ -359,14 +359,13 @@ bool DataAnalysisWorker::readBin1Ch_range_fast(
     const qint64 payload = f.size() - HEAD_BYTES - TAIL_BYTES;
     if (payload <= 0 || payload % BYTES_PER_GROUP != 0) { f.close(); return false; }
 
-    const qint64 pointsPerChannel = payload / BYTES_PER_GROUP;   // 19,999,996
+    const qint64 pointsPerChannel = payload / BYTES_PER_GROUP;
 
     from = qBound<qint64>(0, from, pointsPerChannel);
     to   = qBound<qint64>(from, to, pointsPerChannel);
     const qint64 count = to - from;
     if (count <= 0) { f.close(); return false; }
 
-    // 只映射需要的字节区间
     const qint64 byteOffset = HEAD_BYTES + from * BYTES_PER_GROUP;
     const qint64 byteLength = count * BYTES_PER_GROUP;
 
@@ -378,8 +377,9 @@ bool DataAnalysisWorker::readBin1Ch_range_fast(
     qint16* dst = out.data();
     const int chOffset = cameraNo * 2;
 
+    // 小端文件 + 小端环境：直接取
     for (qint64 i = 0; i < count; ++i) {
-        dst[i] = static_cast<qint16>(qFromLittleEndian(src[chOffset + i * 3]));
+        dst[i] = static_cast<qint16>(src[chOffset + i * 3]);
     }
 
     f.unmap(buf);

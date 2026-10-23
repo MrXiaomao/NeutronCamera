@@ -295,9 +295,7 @@ public:
                                 const quint32& timeStart/*开始时刻ms*/,
                                 const quint32& timeStop/*结束时刻ms*/,
                                 const QString& fileDir/*文件存储路径*/,
-                                std::function<void(
-                                    const QMap<quint64/*时刻（ns）*/,qint16/*扣基线后的数值*/>&
-                                    )> callback);
+                                std::function<void(quint64, const std::vector<qint16>&)> callback);
 
     bool analyzeHistoryWaveformData_old(
         const quint8& cameraIndex,

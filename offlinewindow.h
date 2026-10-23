@@ -223,6 +223,8 @@ public:
 public slots:
     void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
     void onWaveformPlot(quint8/*通道号*/, const QMap<quint64/*时刻（ns）*/,qint16/*扣基线后的波形值*/>&);
+    void onWaveformPlot(quint8/*通道号*/, const quint64& keyBase/*时刻 ns*/, const std::vector<qint16>& values/*扣基线后的波形值*/);
+
     void onPSDPlot(quint8, const QVector<double>& psd_x, const QVector<double>& psd_y, const QVector<double>& density);// PSD分布密度图绘制
     void onFoMPlot(quint8, QPair<double,double> xlim, const QVector<FOM_CurvePoint>&, double);// FoM图绘制
     void onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>>);
