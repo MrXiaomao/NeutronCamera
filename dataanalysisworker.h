@@ -46,37 +46,37 @@ public:
     // 每个数据点 16 bit（2 字节，无符号）
     // 数据排列方式：ch2, ch2, ch0, ch0, ch1, ch1...（逐点交织）
     static bool readBin3Ch_fast(const QString& filePath,
-                                QVector<quint16>& ch0,
-                                QVector<quint16>& ch1,
-                                QVector<quint16>& ch2,
+                                QVector<qint16>& ch0,
+                                QVector<qint16>& ch1,
+                                QVector<qint16>& ch2,
                                 bool littleEndian = true);
 
     QT_DEPRECATED
     static bool readBin3Ch_fast(const QByteArray& fileData,
-                                QVector<quint16>& ch0,
-                                QVector<quint16>& ch1,
-                                QVector<quint16>& ch2,
+                                QVector<qint16>& ch0,
+                                QVector<qint16>& ch1,
+                                QVector<qint16>& ch2,
                                 bool littleEndian = true);
 
     static bool readBin1Ch_fast(const QString& filePath,
                                 const quint8& cameraNo,
-                                QVector<quint16>& ch0,
+                                QVector<qint16>& ch0,
                                 bool littleEndian = true);
 
 #ifdef SINGLE_BOARD_MODE
     static bool readBinAllCh_fast(const QString& filePath,
-                                QVector<quint16>& ch0,
+                                QVector<qint16>& ch0,
                                 bool littleEndian = true);
 
     QT_DEPRECATED
     static bool readBinAllCh_fast(const QByteArray& fileData,
-                                QVector<quint16>& ch0,
+                                QVector<qint16>& ch0,
                                 bool littleEndian = true);
 #endif // SINGLE_BOARD_MODE
 
     // 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
     // 当波形信号过多时，该方法明显会出现问题（暂时采用该方法）
-    static qint16 calculateBaseline(const QVector<quint16>& data_ch);
+    static qint16 calculateBaseline(const QVector<qint16>& data_ch);
 
     // 根据基线调整数据：根据采集卡编号和通道号对数据进行不同的调整
     // boardNum: 采集卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数采集卡，2,4,6为偶数采集卡）
@@ -84,7 +84,7 @@ public:
     //     ch1和ch2：根据采集卡编号的奇偶性决定调整方式
     //     ch3：data - baseline（与采集卡编号无关）
     //     ch4：baseline - data（与采集卡编号无关）
-    static QVector<qint16> adjustDataWithBaseline(QVector<quint16>& data_ch, qint16 baseline_ch, int boardNum = -1, int ch = -1);
+    static void adjustDataWithBaseline(QVector<qint16>& data_ch, qint16 baseline_ch, int boardNum = -1, int ch = -1);
 
     // 提取超过阈值的有效波形数据
     // data: 输入数据（已扣基线）
@@ -236,7 +236,7 @@ public:
         }
 #else
         // 1) 从 buffer 解交织出 4 通道
-        QVector<quint16> ch[3];
+        QVector<qint16> ch[3];
         if (!DataAnalysisWorker::readBin3Ch_fast(mJob.filePath, ch[0], ch[1], ch[2], true)) {
             if (mOnFinished) mOnFinished();
             return;
@@ -257,23 +257,23 @@ public:
         qint8 channelStart = (deviceIndex-1) * 3;
         if ((cameraNo == 0 || mCameraIndex == 0) && ch[0].size() > 0) {
             qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0]);
-            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, deviceIndex, 1);
+            DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, deviceIndex, 1);
             quint32 threshold = mThresholds[channelStart];
-            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 1, threshold, mPre, mPost);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[0], 1, threshold, mPre, mPost);
             mCallback(packerCurrentTime, 1, wave);
         }
         if ((cameraNo == 1 || mCameraIndex == 0) && ch[1].size() > 0) {
             qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[1]);
-            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[1], baseline_ch, deviceIndex, 2);
+            DataAnalysisWorker::adjustDataWithBaseline(ch[1], baseline_ch, deviceIndex, 2);
             quint32 threshold = mThresholds[channelStart + 1];
-            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 2, threshold, mPre, mPost);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[1], 2, threshold, mPre, mPost);
             mCallback(packerCurrentTime, 2, wave);
         }
         if ((cameraNo == 2 || mCameraIndex == 0) && ch[2].size() > 0) {
             qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[2]);
-            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[2], baseline_ch, deviceIndex, 3);
+            DataAnalysisWorker::adjustDataWithBaseline(ch[2], baseline_ch, deviceIndex, 3);
             quint32 threshold = mThresholds[channelStart + 2];
-            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 3, threshold, mPre, mPost);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[2], 3, threshold, mPre, mPost);
             mCallback(packerCurrentTime, 3, wave);
         }
 #endif //SINGLE_BOARD_MODE

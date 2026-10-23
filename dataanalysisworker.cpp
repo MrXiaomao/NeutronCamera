@@ -72,9 +72,9 @@ void DataAnalysisWorker::startAnalysis()
  * @return true 读取成功，false 读取失败（文件不存在、格式错误、映射失败等）
  */
 bool DataAnalysisWorker::readBin3Ch_fast(const QString& filePath,
-                                         QVector<quint16>& ch0,
-                                         QVector<quint16>& ch1,
-                                         QVector<quint16>& ch2,
+                                         QVector<qint16>& ch0,
+                                         QVector<qint16>& ch1,
+                                         QVector<qint16>& ch2,
                                          bool littleEndian /*= true*/)
 {
     // 打开文件进行只读访问
@@ -178,9 +178,9 @@ bool DataAnalysisWorker::readBin3Ch_fast(const QString& filePath,
 }
 
 bool DataAnalysisWorker::readBin3Ch_fast(const QByteArray& fileData,
-                                         QVector<quint16>& ch0,
-                                         QVector<quint16>& ch1,
-                                         QVector<quint16>& ch2,
+                                         QVector<qint16>& ch0,
+                                         QVector<qint16>& ch1,
+                                         QVector<qint16>& ch2,
                                          bool littleEndian/* = true*/)
 {
     // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
@@ -277,17 +277,84 @@ bool DataAnalysisWorker::readBin3Ch_fast(const QByteArray& fileData,
 
 bool DataAnalysisWorker::readBin1Ch_fast(const QString& filePath,
                                          const quint8& cameraNo,
-                                         QVector<quint16>& ch0,
+                                         QVector<qint16>& ch0,
+                                         bool littleEndian /*= true*/)
+{
+    if (cameraNo > 2) return false;
+
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+
+    const qint64 headBytes = 12;
+    const qint64 tailBytes = 12;
+    const qint64 fileSize  = f.size();
+    if (fileSize < headBytes + tailBytes) return false;
+
+    const qint64 payloadBytes = fileSize - headBytes - tailBytes;
+    if (payloadBytes % 2 != 0) return false;
+
+    const qint64 totalSamples = payloadBytes / 2;
+    if (totalSamples % 3 != 0) return false;
+
+    const qint64 samplesPerChannel = totalSamples / 3;
+    if (samplesPerChannel == 0) return false;
+
+    ch0.resize(static_cast<int>(samplesPerChannel));
+
+    uchar* mappedBuffer = f.map(0, fileSize);
+    if (!mappedBuffer) {
+        ch0.clear();
+        return false;
+    }
+
+    const quint16* src = reinterpret_cast<const quint16*>(mappedBuffer + headBytes);
+    qint16* dst = ch0.data();
+
+    // 字节序转换：lambda 包裹，规避 Qt5.15.2 重载歧义
+    auto toHost = [littleEndian](quint16 v) -> quint16 {
+        return littleEndian ? qFromLittleEndian(v) : qFromBigEndian(v);
+    };
+
+    const qint64 channelOffset = cameraNo * 2;   // 0 / 2 / 4
+    const qint64 loopCount     = samplesPerChannel / 2;
+    const qint64 remainder     = samplesPerChannel % 2;
+
+    const quint16* srcPtr = src;
+    qint16*        dstPtr = dst;
+
+    for (qint64 i = 0; i < loopCount; ++i) {
+        // 只取目标通道的 2 个采样点，其余通道直接跳过
+        const quint16 v0 = toHost(srcPtr[channelOffset + 0]);
+        const quint16 v1 = toHost(srcPtr[channelOffset + 1]);
+        // 位模式写入，不做数值转换
+        *dstPtr++ = static_cast<qint16>(v0);
+        *dstPtr++ = static_cast<qint16>(v1);
+        srcPtr += 6;
+    }
+
+    if (remainder != 0) {
+        const quint16 v = toHost(srcPtr[channelOffset]);
+        *dstPtr = static_cast<qint16>(v);
+    }
+
+    f.unmap(mappedBuffer);
+    f.close();
+    return true;
+}
+
+#ifdef SINGLE_BOARD_MODE
+bool DataAnalysisWorker::readBinAllCh_fast(const QString& filePath,
+                                         QVector<qint16>& ch0,
                                          bool littleEndian /*= true*/)
 {
     // 打开文件进行只读访问
     QFile f(filePath);
     if (!f.open(QIODevice::ReadOnly)) return false;
-
+    //QByteArray buf = f.readAll();;
     // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
     // 注释掉的代码显示原始格式可能有16字节的文件头和文件尾
-    const qint64 headBytes = 12;
-    const qint64 tailBytes = 12;
+    const qint64 headBytes = 16;
+    const qint64 tailBytes = 16;
 
     // 获取文件总大小，并检查是否小于头尾字节数之和（避免负数）
     const qint64 fileSize = f.size();
@@ -300,10 +367,10 @@ bool DataAnalysisWorker::readBin1Ch_fast(const QString& filePath,
 
     // 计算总采样点数（每2字节为一个采样点）
     const qint64 totalSamples = payloadBytes / 2;
-    // 检查总采样点数是否为3的倍数（3个通道，每个通道采样点数必须相等）
-    if (totalSamples % 3 != 0) return false;
-    // 计算每个通道的采样点数（总采样点数除以3）
-    const qint64 samplesPerChannel = totalSamples / 3;
+    // 检查总采样点数是否为4的倍数（4帧数据，每帧数据采样点数必须相等）
+    if (totalSamples % 4 != 0) return false;
+    // 计算每个通道的采样点数（总采样点数除以4）
+    const qint64 samplesPerChannel = totalSamples;
 
     // 预分配各通道数据向量的容量，避免读取过程中反复扩容，提高性能
     ch0.resize(samplesPerChannel);
@@ -315,97 +382,16 @@ bool DataAnalysisWorker::readBin1Ch_fast(const QString& filePath,
 
     // 将映射的内存区域转换为16位无符号整数数组指针，方便后续读取
     const quint16* src = reinterpret_cast<const quint16*>(p);
-
-    if (littleEndian) {
-        // 小端序（Little Endian）处理
-        // 逐点解交织：将原始数据按通道分离
-        // 原始数据顺序：src = [ch2_0,ch2_1,ch0_0,ch0_1,ch1_0,ch1_1, ...]
-        // i: 源数据索引（每6个12位数据为一个周期）
-        // j: 目标通道数据索引（每个通道每次处理2个采样点）
-        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 6) {
-            // 从源数据中读取6个16位无符号整数（一个周期）
-            quint16 v0 = src[i + 0];  // ch2 的第一个采样点
-            quint16 v1 = src[i + 1];  // ch2 的第二个采样点
-            quint16 v2 = src[i + 2];  // ch0 的第一个采样点
-            quint16 v3 = src[i + 3];  // ch0 的第二个采样点
-            quint16 v4 = src[i + 4];  // ch1 的第一个采样点
-            quint16 v5 = src[i + 5];  // ch1 的第二个采样点
-
-            // 将小端序的16位无符号整数转换为系统字节序（如果系统不是小端序则进行字节交换）
-            v0 = qFromLittleEndian(v0); v1 = qFromLittleEndian(v1);
-            v2 = qFromLittleEndian(v2); v3 = qFromLittleEndian(v3);
-            v4 = qFromLittleEndian(v4); v5 = qFromLittleEndian(v5);
-
-            // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            // 除以4的原因可能是原始数据进行了放大（左移2位），这里恢复原始范围
-            // ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
-            // ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
-            // ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
-            if (cameraNo == 0){
-                ch0[j] = static_cast<quint16>(v0); ch0[j+1] = static_cast<quint16>(v1);
-            }
-            else if (cameraNo == 1){
-                ch0[j] = static_cast<quint16>(v2); ch0[j+1] = static_cast<quint16>(v3);
-            }
-            else if (cameraNo == 2){
-                ch0[j] = static_cast<quint16>(v4); ch0[j+1] = static_cast<quint16>(v5);
-            }
-        }
-    } else {
-        // 大端序（Big Endian）处理
-        // 如果文件是大端序，需要将字节顺序转换为系统字节序
-        for (qint64 i = 0, j = 0; j < samplesPerChannel; j +=2, i += 6) {
-            // 从源数据中读取8个16位无符号整数（一个周期）
-            quint16 v0 = src[i + 0];  // ch2 的第一个采样点
-            quint16 v1 = src[i + 1];  // ch2 的第二个采样点
-            quint16 v2 = src[i + 2];  // ch0 的第一个采样点
-            quint16 v3 = src[i + 3];  // ch0 的第二个采样点
-            quint16 v4 = src[i + 4];  // ch1 的第一个采样点
-            quint16 v5 = src[i + 5];  // ch1 的第二个采样点
-
-            // 将大端序的16位无符号整数转换为系统字节序（如果系统不是大端序则进行字节交换）
-            v0 = qFromBigEndian(v0); v1 = qFromBigEndian(v1);
-            v2 = qFromBigEndian(v2); v3 = qFromBigEndian(v3);
-            v4 = qFromBigEndian(v4); v5 = qFromBigEndian(v5);
-
-            // 将无符号整数转换为有符号整数，并除以4进行数据缩放
-            // ch2[j] = static_cast<qint16>(v0)/4; ch2[j+1] = static_cast<qint16>(v1)/4;
-            // ch0[j] = static_cast<qint16>(v2)/4; ch0[j+1] = static_cast<qint16>(v3)/4;
-            // ch1[j] = static_cast<qint16>(v4)/4; ch1[j+1] = static_cast<qint16>(v5)/4;
-            if (cameraNo == 0){
-                ch0[j] = static_cast<quint16>(v0); ch0[j+1] = static_cast<quint16>(v1);
-            }
-            else if (cameraNo == 1){
-                ch0[j] = static_cast<quint16>(v2); ch0[j+1] = static_cast<quint16>(v3);
-            }
-            else if (cameraNo == 2){
-                ch0[j] = static_cast<quint16>(v4); ch0[j+1] = static_cast<quint16>(v5);
-            }
-        }
-    }
+    memcpy(ch0.data(), src, sizeof(samplesPerChannel) * sizeof(quint16));
 
     f.unmap(mappedBuffer);
     f.close();
 
-    return true;//DataAnalysisWorker::readBin1Ch_fast(buf, cameraNo, ch0, littleEndian);
-}
-
-#ifdef SINGLE_BOARD_MODE
-bool DataAnalysisWorker::readBinAllCh_fast(const QString& filePath,
-                                         QVector<quint16>& ch0,
-                                         bool littleEndian /*= true*/)
-{
-    // 打开文件进行只读访问
-    QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly)) return false;
-    QByteArray buf = f.readAll();;
-    f.close();
-
-    return DataAnalysisWorker::readBinAllCh_fast(buf, ch0, littleEndian);
+    return true;//DataAnalysisWorker::readBinAllCh_fast(buf, ch0, littleEndian);
 }
 
 bool DataAnalysisWorker::readBinAllCh_fast(const QByteArray& fileData,
-                                         QVector<quint16>& ch0,
+                                         QVector<qint16>& ch0,
                                          bool littleEndian/* = true*/)
 {
     // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
@@ -445,81 +431,72 @@ bool DataAnalysisWorker::readBinAllCh_fast(const QByteArray& fileData,
 #endif //SINGLE_BOARD_MODE
 
 // 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
-qint16 DataAnalysisWorker::calculateBaseline(const QVector<quint16>& data_ch)
+qint16 DataAnalysisWorker::calculateBaseline(const QVector<qint16>& data_ch)
 {
-    if (data_ch.isEmpty()) {
-        return 0;
-    }
+    if (data_ch.isEmpty()) return 0;
 
-    // 每个线程一份，避免多线程争用；每次调用清零即可
-    thread_local std::array<int, 65536> hist;
+    // 普通静态对象，不用 thread_local，彻底避开 MinGW TLS 坑
+    static std::array<int, 65536> hist;
+    static std::mutex mtx;
 
-    // 清零（65536 个 int，成本可接受；比 QMap 快很多）
-    std::fill(hist.begin(), hist.end(), 0);
+    std::lock_guard<std::mutex> lock(mtx);
+    std::memset(hist.data(), 0, sizeof(hist));
 
-    // qint16 映射到 [0,65535]
-    // 将 value 转成 uint16_t 后直接作为索引（等价于 +32768 的映射）
     for (qint16 v : data_ch) {
-        const uint16_t idx = static_cast<uint16_t>(v);
-        ++hist[idx];
+        ++hist[static_cast<uint16_t>(v)];
     }
 
-    // 找最大计数
     int maxCount = -1;
     uint16_t bestIdx = 0;
-    for (uint32_t i = 0; i < hist.size(); ++i) {
-        const int c = hist[i];
-        if (c > maxCount) {
-            maxCount = c;
+    for (size_t i = 0; i < hist.size(); ++i) {
+        if (hist[i] > maxCount) {
+            maxCount = hist[i];
             bestIdx = static_cast<uint16_t>(i);
         }
     }
-
-    // bestIdx 还原成 qint16（位级别 reinterpret 等价）
     return static_cast<qint16>(bestIdx);
 }
-
 
 // 根据基线调整数据：根据采集卡编号和通道号对数据进行不同的调整
 // boardNum: 采集卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数采集卡，2,4,6为偶数采集卡）
 // ch: 1-4 (通道号)
-QVector<qint16> DataAnalysisWorker::adjustDataWithBaseline(QVector<quint16>& data_ch, qint16 baseline_ch, int boardNum, int ch)
+void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch,
+                                                qint16 baseline_ch,
+                                                int boardNum,
+                                                int ch)
 {
-    QVector<qint16> result;
-    if (data_ch.isEmpty()) {
-        return result;
+    const int sampleCount = data_ch.size();
+    if (sampleCount == 0) return;
+
+    bool isPositive = true;
+#if 0
+    if (ch < 1 || ch > 4) {
+        isPositive = true;
+    } else if (ch == 3) {
+        isPositive = true;
+    } else if (ch == 4) {
+        isPositive = false;
+    } else {
+        const bool isOddBoard = (boardNum % 2 == 1);
+        isPositive = isOddBoard ? (ch == 2) : (ch == 1);
     }
+#endif
 
-    // 当前通道中波形信号有两类，部分为负脉冲信号，部分为正脉冲信号
-    // ch1和ch2：采集卡编号、通道号共同决定调整方式
-    // ch3和ch4：通道号决定调整方式，与采集卡编号无关
+    qint16* ptr = data_ch.data();
+    const int32_t base = static_cast<int32_t>(baseline_ch);
 
-    // bool isPositive = false; //是否为正脉冲信号
-    // //采集卡编号为奇数，则2、3为正，1为负
-    // //采集卡编号为偶数，则1、3为正，2为负
-
-    // bool isOddBoard = (boardNum % 2 == 1);  // 判断是否为奇数采集卡
-    // if (isOddBoard)
-    // {
-    //     if (ch==2 || ch==3)
-    //         isPositive = true;
-    // }
-    // else{
-    //     if (ch==1 || ch==3)
-    //         isPositive = true;
-    // }
-    bool isPositive = true;// 全部为正脉冲信号
-    result.resize(data_ch.size());
-    for (int i = 0; i < data_ch.size(); ++i) {
-        if (isPositive) {
-            result[i] = data_ch[i] - baseline_ch;
-        } else {
-            result[i] = baseline_ch - data_ch[i];
+    if (isPositive) {
+        for (int i = 0; i < sampleCount; ++i) {
+            // 单指针原地读写，消除别名冲突；32位中间值防回绕
+            ptr[i] = static_cast<qint16>(static_cast<int32_t>(ptr[i]) - base);
+        }
+    } else {
+        for (int i = 0; i < sampleCount; ++i) {
+            ptr[i] = static_cast<qint16>(base - static_cast<int32_t>(ptr[i]));
         }
     }
-
-    return result;
 }
+
 
 // 提取超过阈值的有效波形数据
 QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quint16 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)

@@ -989,40 +989,84 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(const quint8& cameraIndex,
                 waveformPair.insert((quint64)((id-startFileId)* PACKET_TIMELENGTH + timeStart) * 1000 * 1000  + i*2, waveform[i]);
         }
 #else
-        QVector<QVector<quint16>> ch(3);
-        if (DataAnalysisWorker::readBin3Ch_fast(filePath, ch[0], ch[1], ch[2], true)) {
 
-            //计算出是当前文件波形的第几个数据点
-            quint32 timeFrom;
-            quint32 timeTo;
+        // QVector<qint16> ch;
+        // if (DataAnalysisWorker::readBin1Ch_fast(filePath, cameraNo, ch, true)) {
 
-            if (id == startFileId)
-                timeFrom = (timeStart % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
-            else
-                timeFrom = 1;
+        //     //计算出是当前文件波形的第几个数据点
+        //     quint32 timeFrom;
+        //     quint32 timeTo;
 
-            if (id == endFileId){
-                if ((timeStop % PACKET_TIMELENGTH) == 0)
-                    timeTo  = ch[cameraNo].size();
-                else
-                    timeTo = (timeStop % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
-            }
-            else
-                timeTo  = ch[cameraNo].size();
+        //     if (id == startFileId)
+        //         timeFrom = (timeStart % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
+        //     else
+        //         timeFrom = 0;
 
-            //计算出是当前文件波形的第几个数据点
-            int packPos = timeFrom - 1;
-            int point_num = timeTo - timeFrom;
+        //     if (id == endFileId){
+        //         if ((timeStop % PACKET_TIMELENGTH) == 0)
+        //             timeTo  = ch.size();
+        //         else
+        //             timeTo = (timeStop % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
+        //     }
+        //     else
+        //         timeTo  = ch.size();
 
-            //扣基线，调整数据
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
-            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, deviceIndex, cameraNo + 1);
+        //     //计算出是当前文件波形的第几个数据点
+        //     int packPos = timeFrom;
+        //     int point_num = timeTo - timeFrom;
 
-            //提取通道号的数据cameraNo
-            QVector<qint16> waveform = baselineAdjustData.mid(packPos, point_num);
+        //     //扣基线，调整数据
+        //     qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch);
+        //     // continue;
+        //     DataAnalysisWorker::adjustDataWithBaseline(ch, baseline_ch, deviceIndex, cameraNo + 1);
+        //     //提取通道号的数据cameraNo
+        //     QVector<qint16> waveform = ch.mid(packPos, point_num);
 
-            for (int i=0;i<waveform.size();++i)
-                waveformPair.insert((quint64)((id-startFileId)* PACKET_TIMELENGTH + timeStart) * 1000 * 1000  + i*2, waveform[i]);
+        //     for (int i=0;i<waveform.size();++i)
+        //         waveformPair.insert((quint64)((id-startFileId)* PACKET_TIMELENGTH + timeStart) * 1000 * 1000  + i*2, waveform[i]);
+        // }
+
+        QVector<qint16> ch;
+        if (!DataAnalysisWorker::readBin1Ch_fast(filePath, cameraNo, ch, true)) continue;
+
+        const int totalSample = ch.size();
+        if (totalSample == 0) continue;
+
+        // 区间计算
+        const qint64 packetHalf = static_cast<qint64>(PACKET_TIMELENGTH) * 1000 * 1000 / 2;
+
+        qint64 timeFrom = 0;
+        qint64 timeTo   = totalSample;
+        if (id == startFileId)
+            timeFrom = static_cast<qint64>(timeStart % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
+        if (id == endFileId && (timeStop % PACKET_TIMELENGTH) != 0)
+            timeTo = static_cast<qint64>(timeStop % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
+
+        timeFrom = qBound<qint64>(0, timeFrom, totalSample);
+        timeTo   = qBound<qint64>(timeFrom, timeTo, totalSample);
+
+        const int packPos  = static_cast<int>(timeFrom);
+        const int pointNum = static_cast<int>(timeTo - timeFrom);
+        if (pointNum <= 0) continue;
+
+        // 基线：只对有效区间计算，精度更高
+        QVector<qint16> seg(ch.constBegin() + packPos, ch.constBegin() + packPos + pointNum);
+        const qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(seg);
+        seg.clear();
+//        const qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch.constData() + packPos, pointNum);
+
+        // 就地扣基线：零额外分配
+        DataAnalysisWorker::adjustDataWithBaseline(ch, baseline_ch, deviceIndex, cameraNo + 1);
+
+        // 以指针方式遍历有效区间，不再做 mid 拷贝
+        const qint16* wavePtr = ch.constData() + packPos;
+
+        const quint64 keyBase =
+            (static_cast<quint64>(id - startFileId) * PACKET_TIMELENGTH
+             + static_cast<quint64>(timeStart)) * 1000ULL * 1000ULL;
+
+        for (int i = 0; i < pointNum; ++i) {
+            waveformPair.insert(keyBase + static_cast<quint64>(i) * 2, wavePtr[i]);
         }
 #endif //SINGLE_BOARD_MODE
     }
