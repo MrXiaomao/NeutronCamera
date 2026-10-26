@@ -297,15 +297,6 @@ public:
                                 const QString& fileDir/*文件存储路径*/,
                                 std::function<void(quint64, const std::vector<qint16>&)> callback);
 
-    bool analyzeHistoryWaveformData_old(
-        const quint8& cameraIndex,
-        const quint32& timeStart/*开始时刻ms*/,
-        const quint32& timeStop/*结束时刻ms*/,
-        const QString& fileDir/*文件存储路径*/,
-        std::function<void(
-            const QMap<quint64/*时刻（ns）*/,qint16/*扣基线后的数值*/>&
-            )> callback);
-
     // 从H5文件解析计数率信息和能谱信息
     bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
                                const quint32 timeWidth/*时间宽度ms（统计计数率用）*/,

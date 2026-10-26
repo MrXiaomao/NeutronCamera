@@ -145,8 +145,10 @@ private:
     bool mIsMeasuring = false;// 测量是否正在进行
     DetectorType mCurrentDetectorType = dtLSD; // 当前探测器类型：1-LSD 2-PSD 3-LBD
     QString mCurrentSavePath;// 本次实验数据存储路径
+#ifdef SINGLE_BOARD_MODE
     quint8 mCurrentAuroraNo = 0;// 当前测量链路
     quint8 mCurrentChannelNo = 0;// 当前测量通道
+#endif //SINGLE_BOARD_MODE
     bool mReconnecting = false; // 自动重连标识
 
     std::atomic<bool> mModuleOccurred[20];// 模组通讯异常

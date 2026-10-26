@@ -72,9 +72,9 @@ void DataAnalysisWorker::startAnalysis()
  * @return true 读取成功，false 读取失败（文件不存在、格式错误、映射失败等）
  */
 bool DataAnalysisWorker::readBin3Ch_fast(const QString& filePath,
-                                         QVector<qint16>& ch0,
-                                         QVector<qint16>& ch1,
-                                         QVector<qint16>& ch2,
+                                         std::vector<qint16>& ch0,
+                                         std::vector<qint16>& ch1,
+                                         std::vector<qint16>& ch2,
                                          bool littleEndian /*= true*/)
 {
     // 打开文件进行只读访问
@@ -178,9 +178,9 @@ bool DataAnalysisWorker::readBin3Ch_fast(const QString& filePath,
 }
 
 bool DataAnalysisWorker::readBin3Ch_fast(const QByteArray& fileData,
-                                         QVector<qint16>& ch0,
-                                         QVector<qint16>& ch1,
-                                         QVector<qint16>& ch2,
+                                         std::vector<qint16>& ch0,
+                                         std::vector<qint16>& ch1,
+                                         std::vector<qint16>& ch2,
                                          bool littleEndian/* = true*/)
 {
     // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
@@ -277,7 +277,7 @@ bool DataAnalysisWorker::readBin3Ch_fast(const QByteArray& fileData,
 
 bool DataAnalysisWorker::readBin1Ch_fast(const QString& filePath,
                                          const quint8& cameraNo,
-                                         QVector<qint16>& ch0,
+                                         std::vector<qint16>& ch0,
                                          bool littleEndian /*= true*/)
 {
     if (cameraNo > 2) return false;
@@ -389,55 +389,87 @@ bool DataAnalysisWorker::readBin1Ch_range_fast(
 }
 
 #ifdef SINGLE_BOARD_MODE
-bool DataAnalysisWorker::readBinAllCh_fast(const QString& filePath,
-                                         QVector<qint16>& ch0,
-                                         bool littleEndian /*= true*/)
+bool DataAnalysisWorker::readBin1Ch_range_fast(const QString& filePath,
+                                           qint64         from,
+                                           qint64         to,
+                                           std::vector<qint16>& out,
+                                           bool littleEndian /*= true*/)
 {
-    // 打开文件进行只读访问
     QFile f(filePath);
     if (!f.open(QIODevice::ReadOnly)) return false;
-    //QByteArray buf = f.readAll();;
-    // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
-    // 注释掉的代码显示原始格式可能有16字节的文件头和文件尾
-    const qint64 headBytes = 16;
-    const qint64 tailBytes = 16;
 
-    // 获取文件总大小，并检查是否小于头尾字节数之和（避免负数）
-    const qint64 fileSize = f.size();
-    if (fileSize < headBytes + tailBytes) return false;
+    constexpr qint64 HEAD_BYTES      = 12;
+    constexpr qint64 TAIL_BYTES      = 12;
+    constexpr qint64 BYTES_PER_GROUP = 2;
 
-    // 计算有效数据负载的字节数（总大小减去文件头和文件尾）
-    const qint64 payloadBytes = fileSize - headBytes - tailBytes;
-    // 检查负载字节数是否为2的倍数（每个采样点占2字节）
-    if (payloadBytes % 2 != 0) return false;
+    const qint64 payload = f.size() - HEAD_BYTES - TAIL_BYTES;
+    if (payload <= 0 || payload % BYTES_PER_GROUP != 0) { f.close(); return false; }
 
-    // 计算总采样点数（每2字节为一个采样点）
-    const qint64 totalSamples = payloadBytes / 2;
-    // 检查总采样点数是否为4的倍数（4帧数据，每帧数据采样点数必须相等）
-    if (totalSamples % 4 != 0) return false;
-    // 计算每个通道的采样点数（总采样点数除以4）
-    const qint64 samplesPerChannel = totalSamples;
+    const qint64 pointsPerChannel = payload / BYTES_PER_GROUP;
 
-    // 预分配各通道数据向量的容量，避免读取过程中反复扩容，提高性能
-    ch0.resize(samplesPerChannel);
+    from = qBound<qint64>(0, from, pointsPerChannel);
+    to   = qBound<qint64>(from, to, pointsPerChannel);
+    const qint64 count = to - from;
+    if (count <= 0) { f.close(); return false; }
 
-    // 使用内存映射方式读取文件，从headBytes位置开始，映射payloadBytes长度的数据
-    // 这种方式比逐字节读取效率更高，特别是在大文件的情况下
-    uchar *mappedBuffer = f.map(0, f.size());
-    uchar* p = (uchar *)mappedBuffer + headBytes;
+    const qint64 byteOffset = HEAD_BYTES + from * BYTES_PER_GROUP;
+    const qint64 byteLength = count * BYTES_PER_GROUP;
 
-    // 将映射的内存区域转换为16位无符号整数数组指针，方便后续读取
-    const quint16* src = reinterpret_cast<const quint16*>(p);
-    memcpy(ch0.data(), src, sizeof(samplesPerChannel) * sizeof(quint16));
+    // 只映射所需字节区间：跳过头12字节，按6字节/组定位
+    uchar* buf = f.map(byteOffset, byteLength);
+    if (!buf) { f.close(); return false; }
 
-    f.unmap(mappedBuffer);
+    out.resize(static_cast<int>(count));
+    const quint16* src = reinterpret_cast<const quint16*>(buf);
+    qint16* dst = out.data();
+
+    // 小端文件 + 小端环境：直接取
+    memcpy(dst, src, sizeof(count) * sizeof(quint16));
+
+    f.unmap(buf);
     f.close();
-
     return true;//DataAnalysisWorker::readBinAllCh_fast(buf, ch0, littleEndian);
 }
 
-bool DataAnalysisWorker::readBinAllCh_fast(const QByteArray& fileData,
-                                         QVector<qint16>& ch0,
+bool DataAnalysisWorker::readBin1Ch_all_fast(const QString& filePath,
+                                               std::vector<qint16>& out,
+                                               bool littleEndian /*= true*/)
+{
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+
+    constexpr qint64 HEAD_BYTES      = 12;
+    constexpr qint64 TAIL_BYTES      = 12;
+    constexpr qint64 BYTES_PER_GROUP = 2;
+
+    const qint64 payload = f.size() - HEAD_BYTES - TAIL_BYTES;
+    if (payload <= 0 || payload % BYTES_PER_GROUP != 0) { f.close(); return false; }
+
+    const qint64 pointsPerChannel = payload / BYTES_PER_GROUP;
+    const qint64 count = pointsPerChannel;
+    if (count <= 0) { f.close(); return false; }
+
+    const qint64 byteOffset = HEAD_BYTES;
+    const qint64 byteLength = count * BYTES_PER_GROUP;
+
+    // 只映射所需字节区间：跳过头12字节，按6字节/组定位
+    uchar* buf = f.map(byteOffset, byteLength);
+    if (!buf) { f.close(); return false; }
+
+    out.resize(static_cast<int>(count));
+    const quint16* src = reinterpret_cast<const quint16*>(buf);
+    qint16* dst = out.data();
+
+    // 小端文件 + 小端环境：直接取
+    memcpy(dst, src, sizeof(count) * sizeof(quint16));
+
+    f.unmap(buf);
+    f.close();
+    return true;//DataAnalysisWorker::readBinAllCh_fast(buf, ch0, littleEndian);
+}
+
+bool DataAnalysisWorker::readBin1Ch_all_fast(const QByteArray& fileData,
+                                         std::vector<qint16>& ch0,
                                          bool littleEndian/* = true*/)
 {
     // 文件头和文件尾字节数（当前设置为0，表示不使用文件头尾）
@@ -641,7 +673,7 @@ void DataAnalysisWorker::adjustDataBaselineParallel(
 }
 
 // 提取超过阈值的有效波形数据
-QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quint16 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
+QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quint16 packerStartTime, const std::vector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
 {
     QVector<std::array<qint16, H5_DATA_COLS>> wave_ch;
     QVector<int> cross_indices;
@@ -804,7 +836,20 @@ void DataAnalysisWorker::getValidWave()
     }
 
     writeWaveformHeadToHDF5(hdf5FilePath, startTime, endTime, mThresholds);
-    for(int deviceIndex=1; deviceIndex<=6/*机器插入最多3张卡，每张卡AB两面，就是6个设备*/; ++deviceIndex) {
+
+#ifdef SINGLE_BOARD_MODE
+    totalBoards = 1;
+    GlobalSettings settings(dataDir + "/device_config.ini");
+    quint8 PhysicalNo = settings.value("Global/PhysicalNo").toUInt();
+    quint8 AuroraNo = settings.value("Global/AuroraNo").toUInt();
+    quint8 ChannelNo = settings.value("Global/ChannelNo").toUInt();
+    bool UsedDDR1 = settings.value("Global/UsedDDR1").toBool();
+    quint8 cameraIndex = (PhysicalNo-1) * DETNUMBER_PCIE_PER + (UsedDDR1 ? 0 : 1) * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + ChannelNo + 1;
+    const int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
+#else
+    for(int deviceIndex=1; deviceIndex<=6/*机器插入最多3张卡，每张卡AB两面，就是6个设备*/; ++deviceIndex)
+#endif
+    {
         {
             QMutexLocker locker(&mMutex);
             if (mCancelled) {
@@ -823,7 +868,11 @@ void DataAnalysisWorker::getValidWave()
             emit progressUpdated(currentProgress, totalProgress);
             processedBoards++;
             emit logMessage(QString("采集卡%1无数据...").arg(cardName), QtInfoMsg);
+#ifdef SINGLE_BOARD_MODE
+            emit analysisFinished(false, "分析已取消");
+#else
             continue;
+#endif
         }
 
         emit logMessage(QString("开始处理采集卡%1的数据...").arg(cardName), QtInfoMsg);
@@ -970,6 +1019,12 @@ void DataAnalysisWorker::getValidWave()
             emit analysisFinished(false, QString("写入采集卡%1的波形数据失败").arg(cardName));
             return;
         } else {
+#ifdef SINGLE_BOARD_MODE
+            emit logMessage(QString("采集卡%1写入成功: 共%3个波形")
+                                .arg(cardName)
+                                .arg(wave_ch0_all.size())
+                                , QtInfoMsg);
+#else
             emit logMessage(QString("采集卡%1写入成功: 通道%2=%3个波形, 通道%4=%5个波形, 通道%6=%7个波形")
                         .arg(cardName)
                         .arg((deviceIndex-1)*3+1)
@@ -978,6 +1033,7 @@ void DataAnalysisWorker::getValidWave()
                         .arg(wave_ch1_all.size())
                         .arg((deviceIndex-1)*3+3)
                         .arg(wave_ch2_all.size()), QtInfoMsg);
+#endif
         }
 
         processedBoards++;
@@ -1062,12 +1118,17 @@ bool DataAnalysisWorker::writeWaveformToHDF5(const QString& filePath, int boardN
         };
 
         // 写入4个通道的数据
+#ifdef SINGLE_BOARD_MODE
+        if (wave_ch0.size() > 0)
+            writeChannel(QString("data_ch%1").arg(1), wave_ch0);
+#else
         if (wave_ch0.size() > 0)
             writeChannel(QString("data_ch%1").arg(boardNum*3-2), wave_ch0);
         if (wave_ch1.size() > 0)
             writeChannel(QString("data_ch%1").arg(boardNum*3-1), wave_ch1);
         if (wave_ch2.size() > 0)
             writeChannel(QString("data_ch%1").arg(boardNum*3), wave_ch2);
+#endif //SINGLE_BOARD_MODE
 
         boardGroup.close();
         file.close();

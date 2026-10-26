@@ -46,21 +46,21 @@ public:
     // 每个数据点 16 bit（2 字节，无符号）
     // 数据排列方式：ch2, ch2, ch0, ch0, ch1, ch1...（逐点交织）
     static bool readBin3Ch_fast(const QString& filePath,
-                                QVector<qint16>& ch0,
-                                QVector<qint16>& ch1,
-                                QVector<qint16>& ch2,
+                                std::vector<qint16>& ch0,
+                                std::vector<qint16>& ch1,
+                                std::vector<qint16>& ch2,
                                 bool littleEndian = true);
 
     QT_DEPRECATED
     static bool readBin3Ch_fast(const QByteArray& fileData,
-                                QVector<qint16>& ch0,
-                                QVector<qint16>& ch1,
-                                QVector<qint16>& ch2,
+                                std::vector<qint16>& ch0,
+                                std::vector<qint16>& ch1,
+                                std::vector<qint16>& ch2,
                                 bool littleEndian = true);
 
     static bool readBin1Ch_fast(const QString& filePath,
                                 const quint8& cameraNo,
-                                QVector<qint16>& ch0,
+                                std::vector<qint16>& ch0,
                                 bool littleEndian = true);
     static bool readBin1Ch_range_fast(
         const QString& filePath,
@@ -70,13 +70,17 @@ public:
         std::vector<qint16>& out);
 
 #ifdef SINGLE_BOARD_MODE
-    static bool readBinAllCh_fast(const QString& filePath,
-                                QVector<qint16>& ch0,
+    static bool readBin1Ch_range_fast(const QString& filePath,
+                                qint64         from,
+                                qint64         to,
+                                std::vector<qint16>& ch0,
                                 bool littleEndian = true);
-
+    static bool readBin1Ch_all_fast(const QString& filePath,
+                                  std::vector<qint16>& ch0,
+                                  bool littleEndian = true);
     QT_DEPRECATED
-    static bool readBinAllCh_fast(const QByteArray& fileData,
-                                QVector<qint16>& ch0,
+    static bool readBin1Ch_all_fast(const QByteArray& fileData,
+                                std::vector<qint16>& ch0,
                                 bool littleEndian = true);
 #endif // SINGLE_BOARD_MODE
 
@@ -106,7 +110,7 @@ public:
     // post_points: 触发点之后的点数
     // 返回: 所有提取的波形，每个波形是固定长度512的数组（优化内存使用）
     static QVector<std::array<qint16, H5_DATA_COLS>>/*波形数据*/ overThreshold(quint16 packerStartTime/*毫秒*/,
-                                                                                const QVector<qint16>& data,
+                                                                                const std::vector<qint16>& data,
                                                                                 int ch, int threshold,
                                                                                 int pre_points/*触发阈值往前多少个点*/,
                                                                                 int post_points/*触发阈值往后多少个点*/);
@@ -222,8 +226,14 @@ public:
 
     void run() override {
 #ifdef SINGLE_BOARD_MODE
-        QVector<quint16> ch[1];
-        if (!DataAnalysisWorker::readBinAllCh_fast(mJob.filePath, ch[0], true)) {
+        std::vector<qint16> ch;
+        if (!DataAnalysisWorker::readBin1Ch_all_fast(mJob.filePath, ch, true)) {
+            if (mOnFinished) mOnFinished();
+            return;
+        }
+
+        const int n = ch.size();
+        if (n == 0) {
             if (mOnFinished) mOnFinished();
             return;
         }
@@ -239,16 +249,18 @@ public:
         quint32 packerCurrentTime = mJob.packerStartTime;
 
         // 3) 基线 + 调整 + 过阈提取（每个通道独立）
-        if ((cameraNo == 0 || mCameraIndex == 0) && ch[0].size() > 0) {
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0]);
-            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, deviceIndex, 1);
+        if ((cameraNo == 0 || mCameraIndex == 0) && ch.size() > 0) {
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch.data(), n);
+            //DataAnalysisWorker::adjustDataWithBaseline(ch, baseline_ch, deviceIndex, 1);
+            DataAnalysisWorker::adjustDataBaselineParallel(
+                ch.data(), n, baseline_ch, deviceIndex, cameraNo + 1);
             quint32 threshold = mThresholds[0];
-            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, baselineAdjustData, 1, threshold, mPre, mPost);
+            auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch, 1, threshold, mPre, mPost);
             mCallback(packerCurrentTime, 1, wave);
         }
 #else
         // 1) 从 buffer 解交织出 4 通道
-        QVector<qint16> ch[3];
+        std::vector<qint16> ch[3];
         if (!DataAnalysisWorker::readBin3Ch_fast(mJob.filePath, ch[0], ch[1], ch[2], true)) {
             if (mOnFinished) mOnFinished();
             return;
@@ -268,22 +280,28 @@ public:
         // 3) 基线 + 调整 + 过阈提取（每个通道独立）
         qint8 channelStart = (deviceIndex-1) * 3;
         if ((cameraNo == 0 || mCameraIndex == 0) && ch[0].size() > 0) {
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0]);
-            DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, deviceIndex, 1);
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[0].data(), ch[0].size());
+            //DataAnalysisWorker::adjustDataWithBaseline(ch[0], baseline_ch, deviceIndex, 1);
+            DataAnalysisWorker::adjustDataBaselineParallel(
+                ch[0].data(), ch[0].size(), baseline_ch, deviceIndex, cameraNo + 1);
             quint32 threshold = mThresholds[channelStart];
             auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[0], 1, threshold, mPre, mPost);
             mCallback(packerCurrentTime, 1, wave);
         }
         if ((cameraNo == 1 || mCameraIndex == 0) && ch[1].size() > 0) {
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[1]);
-            DataAnalysisWorker::adjustDataWithBaseline(ch[1], baseline_ch, deviceIndex, 2);
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[1].data(), ch[1].size());
+            //DataAnalysisWorker::adjustDataWithBaseline(ch[1], baseline_ch, deviceIndex, 2);
+            DataAnalysisWorker::adjustDataBaselineParallel(
+                ch[1].data(), ch[1].size(), baseline_ch, deviceIndex, cameraNo + 1);
             quint32 threshold = mThresholds[channelStart + 1];
             auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[1], 2, threshold, mPre, mPost);
             mCallback(packerCurrentTime, 2, wave);
         }
         if ((cameraNo == 2 || mCameraIndex == 0) && ch[2].size() > 0) {
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[2]);
-            DataAnalysisWorker::adjustDataWithBaseline(ch[2], baseline_ch, deviceIndex, 3);
+            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[2].data(), ch[2].size());
+            //DataAnalysisWorker::adjustDataWithBaseline(ch[2], baseline_ch, deviceIndex, 3);
+            DataAnalysisWorker::adjustDataBaselineParallel(
+                ch[2].data(), ch[2].size(), baseline_ch, deviceIndex, cameraNo + 1);
             quint32 threshold = mThresholds[channelStart + 2];
             auto wave = DataAnalysisWorker::overThreshold(mJob.packerStartTime, ch[2], 3, threshold, mPre, mPost);
             mCallback(packerCurrentTime, 3, wave);

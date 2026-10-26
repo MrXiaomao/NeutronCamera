@@ -192,12 +192,31 @@ void OfflineWindow::initUi()
             ui->tableWidget_threshold->item(i-1, 1)->setFlags(ui->tableWidget_threshold->item(i-1, 1)->flags() & ~Qt::ItemIsEditable);
         }
 
+        // 保存阈值
+        GlobalSettings settings;
+        const QVariant v = settings.value("Global/Offline/Waveform/ThresHolds");
+        QVector<quint32> thresholds;
+
+        if (v.isValid()){
+            const QVariantList list = v.toList();
+            thresholds.reserve(list.size());
+            for (const QVariant& item : list) {
+                bool ok = false;
+                const quint32 val = item.toUInt(&ok);
+                if (ok)
+                    thresholds.append(val);
+                else
+                    qWarning() << "invalid threshold item:" << item;
+            }
+        }
+
         for (int row=0; row<ui->tableWidget_threshold->rowCount(); ++row){
             QSpinBox* spinBox = new QSpinBox(this);
             spinBox->setRange(0, 65535);
-            spinBox->setValue(200);
+            spinBox->setValue(row<thresholds.size() ? thresholds.at(row) : 200);
             ui->tableWidget_threshold->setCellWidget(row, 2, spinBox);
         }
+
     }
     {
         ui->tableWidget_channel->horizontalHeader()->setSectionResizeMode(0,QHeaderView::Fixed);//方向
@@ -372,12 +391,13 @@ void OfflineWindow::initUi()
     ui->tableWidget_threshold->hide();
     ui->checkBox_threshold->setChecked(false);
     ui->checkBox_threshold->hide();
+    ui->spinBox_threshold_2->setEnabled(true);
     // n-γ甄别
     ui->groupBox_13->hide();
     ui->spectroMeter_verCamera_PSD->hide();
     ui->spectroMeter_verCamera_FOM->hide();
     ui->spectroMeter_neutronSpectrum->hide();
-
+    ui->toolBar->removeAction(ui->action_ngamma);
     // 能谱分析 只显示计数能谱
 
 #endif //SINGLE_BOARD_MODE
@@ -661,15 +681,15 @@ void OfflineWindow::loadRelatedFiles(const QString& dirPath)
         emit writeLog("实验炮号：" + settings.value("Global/ShotNum", "00000").toString());
         if (mCurrentDetectorType == dtLBD){
             ui->action_ngamma->setVisible(false);
-            emit writeLog("探测器类型：LBD探测器");
+            emit writeLog("探测器类型：溴化镧探测器");
         }
         else if (mCurrentDetectorType == dtLSD){
             ui->action_ngamma->setVisible(true);
-            emit writeLog("探测器类型：LSD探测器");
+            emit writeLog("探测器类型：液闪探测器");
         }
         else if (mCurrentDetectorType == dtPSD){
             ui->action_ngamma->setVisible(false);
-            emit writeLog("探测器类型：PSD探测器");
+            emit writeLog("探测器类型：塑闪探测器");
         }
         else{
             ui->action_ngamma->setVisible(false);
@@ -1474,7 +1494,43 @@ void OfflineWindow::initCpsPage()
     });
 
     // 能谱曲线
-    QCPAxisRect *spectrumAxisRect = nullptr;
+    QCPAxisRect *spectrumAxisRect = new QCPAxisRect(customPlot);
+    spectrumAxisRect->setObjectName("spectrumAxisRect");
+    {
+        spectrumAxisRect->setupFullAxesBox();
+        spectrumAxisRect->setMinimumMargins(QMargins(0,0,0,0));
+        spectrumAxisRect->setMargins(QMargins(0,0,0,0));
+        spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setPadding(0);
+        spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setLabel(tr("幅度"));
+        spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setLabel(tr("道址"));
+        spectrumAxisRect->axis(QCPAxis::AxisType::atBottom)->setRange(0, 2000);
+        spectrumAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(0, 16384);
+
+        // 左上角添加图例
+        // QCPLegend *legend = new QCPLegend();
+        // legend->setWrap(9);
+        // legend->setCheckable(true);
+        // spectrumAxisRect->insetLayout()->addElement(legend, Qt::AlignLeft | Qt::AlignTop); // 清空默认布局
+
+        QCPAxis *keyAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atBottom);
+        QCPAxis *valueAxis = spectrumAxisRect->axis(QCPAxis::AxisType::atLeft);
+
+        for (int i=1; i<=channelCount; ++i){
+            QCPGraph *graph = customPlot->addGraph(keyAxis, valueAxis);
+            graph->setLineStyle(QCPGraph::lsLine);
+            // graph->addToLegend(legend);
+            if (i<12){
+                graph->setName(QStringLiteral("水平相机 #%1").arg(i));
+                graph->setPen(QPen(mGraphisColor[i-1], 1, Qt::PenStyle::SolidLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, mGraphisColor[i-1], 5));//显示散点图
+            }
+            else{
+                graph->setName(QStringLiteral("垂直相机 #%1").arg(i));
+                graph->setPen(QPen(mGraphisColor[i-1], 1, Qt::PenStyle::DashLine));
+                graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCross, mGraphisColor[i-1], 5));//显示散点图
+            }
+        }
+    }
 
     // 时间计数曲线
     QCPAxisRect *timeCountsAxisRect = new QCPAxisRect(customPlot);
@@ -1537,7 +1593,8 @@ void OfflineWindow::initCpsPage()
     // 布局
     QCPLayoutGrid *rightLayout = new QCPLayoutGrid;
     {
-        rightLayout->addElement(0, 0, timeCountsAxisRect);//上面
+        rightLayout->addElement(0, 0, spectrumAxisRect);//上面
+        rightLayout->addElement(1, 0, timeCountsAxisRect);//下面
     }
 
     //customPlotHelper->setGraphCheckBoxList(customPlot, spectrumAxisRect);
@@ -1958,7 +2015,7 @@ void OfflineWindow::initCpsPage()
             }           
 
             // 时间+计数率曲线
-            QCPGraph *graph = nullptr;
+            QCPGraph *graph = customPlot->graph(0);
             if (group < 11)
                 graph = customPlot->graph(timeCountsAxisRect, QStringLiteral("水平相机 #%1").arg(group+1));
             else
@@ -2233,10 +2290,14 @@ void OfflineWindow::onSpectrumPlot(QMap<quint8/*通道号*/, QMap<quint16/*道�
 
         // 时间+计数率曲线
         QCPGraph *graph = nullptr;
+#ifdef SINGLE_BOARD_MODE
+        graph = mCpsPlot->graph(spectrumAxisRect);
+#else
         if (channel <= 11)
             graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("水平相机 #%1").arg(channel));
         else
             graph = mCpsPlot->graph(spectrumAxisRect, QStringLiteral("垂直相机 #%1").arg(channel));
+#endif //SINGLE_BOARD_MODE
         graph->setData(xData, yData);
     }
 
@@ -2255,8 +2316,9 @@ void OfflineWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,q
         QCPAxis *valueAxis = timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft);
         keyAxis->setRange(QCPRange(ui->spinBox_startT_3->value(), ui->spinBox_endT_3->value()));
     }
+#ifndef SINGLE_BOARD_MODE
     QCPAxisRect *timeChannelCountsAxisRect = mCpsPlot->findChild<QCPAxisRect*>("timeChannelCountsAxisRect");
-    {
+    if (timeChannelCountsAxisRect){
         // 设置坐标轴范围
         QCPAxis *keyAxis = timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atBottom);
         QCPAxis *valueAxis = timeChannelCountsAxisRect->axis(QCPAxis::AxisType::atLeft);
@@ -2271,6 +2333,8 @@ void OfflineWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,q
     int keySize = ui->spinBox_endT_3->value() - ui->spinBox_startT_3->value();
     colorMap->data()->setSize(keySize+1, channels);// 范围不要超出坐标轴范围，否则坐标轴会被覆盖
     colorMap->data()->setRange(QCPRange(ui->spinBox_startT_3->value()/* + 1*/, ui->spinBox_endT_3->value()), QCPRange(0, channels));
+
+#endif //SINGLE_BOARD_MODE
 
     QVector<double> keys;
     QVector<double> values;
@@ -2296,6 +2360,7 @@ void OfflineWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,q
             yData.append(iterSub.value());
             yMax = qMax((double)yMax, (double)iterSub.value());
 
+#ifndef SINGLE_BOARD_MODE
             int keyIndex = iterSub.key()-ui->spinBox_startT_3->value();
             int valueIndex = channel - 0.5;
             double x, y, z;
@@ -2305,19 +2370,25 @@ void OfflineWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,q
 
             values[index] += iterSub.value();
             yMax2 = qMax((double)yMax2, (double)values[index]);
+#endif //SINGLE_BOARD_MODE
         }
 
         // 时间+计数率曲线
         QCPGraph *graph = nullptr;
+#ifdef SINGLE_BOARD_MODE
+        graph = mCpsPlot->graph(timeCountsAxisRect);
+#else
         if (channel <= 11)
             graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("水平相机 #%1").arg(channel));
         else
             graph = mCpsPlot->graph(timeCountsAxisRect, QStringLiteral("垂直相机 #%1").arg(channel));
+#endif
         graph->setData(xData, yData);
 
         ++index;
     }
 
+#ifndef SINGLE_BOARD_MODE
     colorMap->setInterpolate(true);// 颜色平滑过度
     colorMap->setTightBoundary(true);//设置最外层的数据行和列是否被裁剪到指定的键值范围
 
@@ -2333,8 +2404,10 @@ void OfflineWindow::onCpsPlot(QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,q
     cpBars->setData(keys, values, barPen, barBrush);
 
     // 队列刷新
-    timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(QCPRange(0,  yMax * 1.1));
     cpBars->valueAxis()->setRange(QCPRange(0,  yMax2 * 1.1));
+#endif //SINGLE_BOARD_MODE
+
+    timeCountsAxisRect->axis(QCPAxis::AxisType::atLeft)->setRange(QCPRange(0,  yMax * 1.1));
     mCpsPlot->replot(QCustomPlot::rpQueuedReplot);
 }
 
@@ -2480,9 +2553,11 @@ void OfflineWindow::onWaveform()
         quint8 ChannelNo = settings.value("Global/ChannelNo").toUInt();
         bool UsedDDR1 = settings.value("Global/UsedDDR1").toBool();
         quint8 cameraIndex = (PhysicalNo-1) * DETNUMBER_PCIE_PER + (UsedDDR1 ? 0 : 1) * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + ChannelNo + 1;
-        mPCIeCommSdk.analyzeHistoryWaveformData(cameraIndex, startTime, endTime, dataDir, [&](const QMap<quint64/*时刻(ns)*/,qint16/*波形值*/>& mapPair){
+        mPCIeCommSdk.analyzeHistoryWaveformData(cameraIndex, startTime, endTime, dataDir,
+                                                [&](quint64 keyBase, const std::vector<qint16>& values){
 
-            onWaveformPlot(cameraIndex, mapPair);
+            onWaveformPlot(cameraIndex, keyBase, values);
+
             QMetaObject::invokeMethod(this, [=](){
                 if (mWaveformPlot)
                     mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
@@ -2649,6 +2724,9 @@ void OfflineWindow::onDataProcess()
     }
 
     QVector<quint32> thresholds;
+#ifdef SINGLE_BOARD_MODE
+    thresholds << threshold;
+#else
     if (ui->checkBox_threshold->isChecked()){
         for (int i=1; i<=18; ++i)
             thresholds << threshold;
@@ -2659,6 +2737,18 @@ void OfflineWindow::onDataProcess()
             thresholds << spinBox->value();
         }
     }
+#endif//SINGLE_BOARD_MODE
+
+    // 保存阈值
+    GlobalSettings settings;
+    QVariantList list;
+    list.reserve(thresholds.size());
+    for (quint32 v : thresholds) {
+        list.append(QVariant::fromValue(v));   // 存为 quint
+    }
+    settings.setValue("Global/Offline/Waveform/ThresHolds", list);
+    settings.sync();
+
     mAnalysisThread = new QThread(this);
     mAnalysisWorker = new DataAnalysisWorker();
     mAnalysisWorker->setParameters(dataDir, mfileList, outfileName, thresholds,
@@ -3227,7 +3317,12 @@ void OfflineWindow::onCpsStatistics(int minPeak, int maxPeak)
     int timeWidth = ui->spinBox_time1->value(); // 默认值 1ms
     int timeStart = ui->spinBox_startT_3->value(); // 开始时刻
     int timeStop = ui->spinBox_endT_3->value();
+#ifdef SINGLE_BOARD_MODE
+    int channels = 1;
+#else
     int channels = ui->comboBox_channels->currentText().toInt();
+#endif //SINGLE_BOARD_MODE
+
     if (timeStop == ui->line_waveform_endT_3->text().toInt())
         timeStop--; // 截止时刻(区间，所以这里-1)
 

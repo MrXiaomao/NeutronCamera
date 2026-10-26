@@ -274,8 +274,8 @@ void PCIeCommSdk::stopCapture(quint32 deviceIndex)
 void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMillisecond,  QString shotNum/*炮号*/)
 {
 #ifdef SINGLE_BOARD_MODE
-    quint8 channelAurora = AppConfig::instance().channelAurora();
-    quint8 channelIndex = AppConfig::instance().channelIndex();
+    const quint8 channelAurora = AppConfig::instance().channelAurora();
+    const quint8 channelIndex = AppConfig::instance().channelIndex();
     qInfo().nospace() << "卡[" << mActivePhysicalNo << "] " << "采集链路：" << "Aurora" << (channelAurora+1)<< "，通道：CH" << (channelIndex+1);
 
     for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
@@ -938,9 +938,16 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(
 {
     constexpr qint64 POINTS_PER_MS   = 500000LL;   // 1ms = 50万点
     constexpr qint64 NS_PER_POINT    = 2LL;        // 1点 = 2ns
+#ifdef SINGLE_BOARD_MODE
+    constexpr qint64 HEAD_BYTES      = 16LL;
+    constexpr qint64 TAIL_BYTES      = 16LL;
+    constexpr qint64 BYTES_PER_GROUP = 1LL;        // 1通道 × 2字节
+#else
     constexpr qint64 HEAD_BYTES      = 12LL;
     constexpr qint64 TAIL_BYTES      = 12LL;
     constexpr qint64 BYTES_PER_GROUP = 6LL;        // 3通道 × 2字节
+#endif //SINGLE_BOARD_MODE
+
 
     // ---- 文件范围（按名义 40ms 编号）----
     const int startFileId = timeStart / PACKET_TIMELENGTH + 1;
@@ -989,8 +996,13 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(
         if (to <= from) continue;
 
         // ③ 只读所需区间
+#ifdef SINGLE_BOARD_MODE
+        if (!DataAnalysisWorker::readBin1Ch_range_fast(filePath, from, to, ch))
+            continue;
+#else
         if (!DataAnalysisWorker::readBin1Ch_range_fast(filePath, cameraNo, from, to, ch))
             continue;
+#endif //SINGLE_BOARD_MODE
 
         const int n = ch.size();
         if (n == 0) continue;
@@ -1024,115 +1036,6 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(
     return true;
 }
 
-bool PCIeCommSdk::analyzeHistoryWaveformData_old(const quint8& cameraIndex,
-                                        const quint32& timeStart/*开始时刻ms*/,
-                                        const quint32& timeStop/*结束时刻ms*/,
-                                        const QString& fileDir/*文件存储路径*/,
-                                        std::function<void(const QMap<quint64/*时刻（ns）*/,qint16/*扣基线后的数值*/>&)> callback
-                                        )
-{
-    QMap<quint64/*时刻*/,qint16/*数值*/> waveformPair;
-
-    //根据开始时间和结束时间，过滤掉不在时间范围内的文件
-    int startFileId = timeStart / PACKET_TIMELENGTH + 1;
-    int endFileId = startFileId + (timeStop - timeStart) / PACKET_TIMELENGTH;
-    //根据通道号判断是采集卡的A面还是B面
-    QString sideFile = "B";
-    if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
-        sideFile = "A";
-    //根据通道号计算采集卡的索引
-    int boardIndex = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;
-    int deviceIndex = (cameraIndex - 1) / CAMNUMBER_DDR_PER + 1;
-    //根据通道号计算对应采集卡的第几通道
-    quint8 cameraNo = (cameraIndex - 1) % CAMNUMBER_DDR_PER;
-    for (int id = startFileId; id <= endFileId; ++id){
-        QString filePath = QString("%1/%2%3data%4.bin").arg(fileDir).arg(boardIndex).arg(sideFile).arg(id);
-#ifdef SINGLE_BOARD_MODE
-        QVector<quint16> ch[1];
-        cameraNo = 0;
-        if (DataAnalysisWorker::readBinAllCh_fast(filePath, ch[0], true)) {
-
-            //计算出是当前文件波形的第几个数据点
-            quint32 timeFrom;
-            quint32 timeTo;
-
-            if (id == startFileId)
-                timeFrom = (timeStart % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
-            else
-                timeFrom = 1;
-
-            if (id == endFileId){
-                if ((timeStop % PACKET_TIMELENGTH) == 0)
-                    timeTo  = ch[cameraNo].size();
-                else
-                    timeTo = (timeStop % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
-            }
-            else
-                timeTo  = ch[cameraNo].size();
-
-            //计算出是当前文件波形的第几个数据点
-            int packPos = timeFrom - 1;
-            int point_num = timeTo - timeFrom;
-
-            //扣基线，调整数据
-            qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(ch[cameraNo]);
-            QVector<qint16> baselineAdjustData = DataAnalysisWorker::adjustDataWithBaseline(ch[cameraNo], baseline_ch, deviceIndex, cameraNo + 1);
-
-            //提取通道号的数据cameraNo
-            QVector<qint16> waveform = baselineAdjustData.mid(packPos, point_num);
-
-            for (int i=0;i<waveform.size();++i)
-                waveformPair.insert((quint64)((id-startFileId)* PACKET_TIMELENGTH + timeStart) * 1000 * 1000  + i*2, waveform[i]);
-        }
-#else
-        QVector<qint16> ch;
-        if (!DataAnalysisWorker::readBin1Ch_fast(filePath, cameraNo, ch, true)) continue;
-
-        const int totalSample = ch.size();
-        if (totalSample == 0) continue;
-
-        // 区间计算
-        const qint64 packetHalf = static_cast<qint64>(PACKET_TIMELENGTH) * 1000 * 1000 / 2;
-
-        qint64 timeFrom = 0;
-        qint64 timeTo   = totalSample;
-        if (id == startFileId)
-            timeFrom = static_cast<qint64>(timeStart % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
-        if (id == endFileId && (timeStop % PACKET_TIMELENGTH) != 0)
-            timeTo = static_cast<qint64>(timeStop % PACKET_TIMELENGTH) * 1000 * 1000 / 2;
-
-        timeFrom = qBound<qint64>(0, timeFrom, totalSample);
-        timeTo   = qBound<qint64>(timeFrom, timeTo, totalSample);
-
-        const int packPos  = static_cast<int>(timeFrom);
-        const int pointNum = static_cast<int>(timeTo - timeFrom);
-        if (pointNum <= 0) continue;
-
-        // 基线：只对有效区间计算，精度更高
-        QVector<qint16> seg(ch.constBegin() + packPos, ch.constBegin() + packPos + pointNum);
-        const qint16 baseline_ch = DataAnalysisWorker::calculateBaseline(seg);
-        seg.clear();
-
-        // 就地扣基线：零额外分配
-        DataAnalysisWorker::adjustDataWithBaseline(ch, baseline_ch, deviceIndex, cameraNo + 1);
-
-        // 以指针方式遍历有效区间，不再做 mid 拷贝
-        const qint16* wavePtr = ch.constData() + packPos;
-
-        const quint64 keyBase =
-            (static_cast<quint64>(id - startFileId) * PACKET_TIMELENGTH
-             + static_cast<quint64>(timeStart)) * 1000ULL * 1000ULL;
-
-        for (int i = 0; i < pointNum; ++i) {
-            waveformPair.insert(keyBase + static_cast<quint64>(i) * 2, wavePtr[i]);
-        }
-#endif //SINGLE_BOARD_MODE
-    }
-
-    callback(waveformPair);
-    return true;
-}
-
 #include <QTextCodec>
 bool PCIeCommSdk::analyzeHistoryCpsData(
                                         const quint32 channels/*多道道数*/,
@@ -1150,8 +1053,12 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
     QByteArray filePathBytes = gbk_codec->fromUnicode(filePath);
     try {
         H5::H5File file(filePathBytes.toStdString(), H5F_ACC_RDONLY);
-
-        for (int deviceIndex=1; deviceIndex<=6; ++deviceIndex){
+#ifdef SINGLE_BOARD_MODE
+        const int deviceIndex = 1;
+#else
+        for (int deviceIndex=1; deviceIndex<=6; ++deviceIndex)
+#endif //#ifdef SINGLE_BOARD_MODE
+        {
             // 创建或打开采集卡组
             QString boardGroupName = "Waveform";//QString("Board%1").arg(deviceIndex);
 
@@ -1206,13 +1113,21 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
 
                 // 写入3个通道的数据
                 QVector<qint16> timeTrigger_ch[3], timePeak_ch[3];
-                readChannel(QString("data_ch%1").arg(deviceIndex*3-2),  timeTrigger_ch[0], timePeak_ch[0]);
+#ifdef SINGLE_BOARD_MODE
+                readChannel(QString("data_ch%1").arg(1),  timeTrigger_ch[0], timePeak_ch[0]);
+#else
                 readChannel(QString("data_ch%1").arg(deviceIndex*3-1), timeTrigger_ch[1], timePeak_ch[1]);
                 readChannel(QString("data_ch%1").arg(deviceIndex*3), timeTrigger_ch[2], timePeak_ch[2]);
+#endif  //SINGLE_BOARD_MODE
 
                 //根据时间段统计计数率
                 QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPair;
-                for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
+#ifdef SINGLE_BOARD_MODE
+                quint8 cameraNo = 0;
+#else
+                for (quint8 cameraNo=0; cameraNo<3; ++cameraNo)
+#endif
+                {
                     quint8 cameraIndex = (deviceIndex-1)*3 + cameraNo + 1;
 
                     // 1.按照时间段和点位时间间隔分配计数点数组长度
@@ -1243,7 +1158,11 @@ bool PCIeCommSdk::analyzeHistoryCpsData(
 
                 //根据时间段统计能谱
                 QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPair;
-                for (quint8 cameraNo=0; cameraNo<3; ++cameraNo){
+#ifdef SINGLE_BOARD_MODE
+#else
+                for (quint8 cameraNo=0; cameraNo<3; ++cameraNo)
+#endif
+                {
                     quint8 cameraIndex = (deviceIndex-1)*3 + cameraNo + 1;
 
                     //初始化每个道址默认能量值为0
