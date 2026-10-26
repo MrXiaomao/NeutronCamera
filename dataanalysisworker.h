@@ -67,7 +67,7 @@ public:
         quint8         cameraNo,
         qint64         from,
         qint64         to,
-        QVector<qint16>& out);
+        std::vector<qint16>& out);
 
 #ifdef SINGLE_BOARD_MODE
     static bool readBinAllCh_fast(const QString& filePath,
@@ -83,6 +83,7 @@ public:
     // 计算基线值：使用直方图方法，找到出现频率最高的值作为基线
     // 当波形信号过多时，该方法明显会出现问题（暂时采用该方法）
     static qint16 calculateBaseline(const QVector<qint16>& data_ch);
+    static qint16 calculateBaseline(qint16* data, int n);
 
     // 根据基线调整数据：根据采集卡编号和通道号对数据进行不同的调整
     // boardNum: 采集卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数采集卡，2,4,6为偶数采集卡）
@@ -91,6 +92,11 @@ public:
     //     ch3：data - baseline（与采集卡编号无关）
     //     ch4：baseline - data（与采集卡编号无关）
     static void adjustDataWithBaseline(QVector<qint16>& data_ch, qint16 baseline_ch, int boardNum = -1, int ch = -1);
+    static void adjustDataWithBaseline(qint16* data, int n, qint16 baseline_ch, int boardNum = -1, int ch = -1);
+    // 新增：并行版（逐点独立的加速包装）
+    static void adjustDataBaselineParallel(
+        qint16* data, int n, qint16 baseline_ch,
+        int deviceIndex, int cameraIndex);
 
     // 提取超过阈值的有效波形数据
     // data: 输入数据（已扣基线）

@@ -957,8 +957,7 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(
     const quint8 cameraNo    = (cameraIndex - 1) % CAMNUMBER_DDR_PER;   // 0/1/2
 
     // 复用缓冲，避免每文件重新分配
-    QVector<qint16> ch;
-
+    std::vector<qint16> ch;
     for (int id = startFileId; id <= endFileId; ++id) {
         const QString filePath =
             QString("%1/%2%3data%4.bin").arg(fileDir).arg(boardIndex).arg(sideFile).arg(id);
@@ -996,13 +995,19 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(
         const int n = ch.size();
         if (n == 0) continue;
 
-        // ④ 基线（A方案：static + 锁）
+        // ④ 基线（裸指针 + 长度）
+        // // ④ 基线（A方案：static + 锁）
+        // const qint16 baseline_ch =
+        //     DataAnalysisWorker::calculateBaseline(ch);
         const qint16 baseline_ch =
-            DataAnalysisWorker::calculateBaseline(ch);
+            DataAnalysisWorker::calculateBaseline(ch.data(), n);
 
-        // ⑤ 就地扣基线
-        DataAnalysisWorker::adjustDataWithBaseline(
-            ch, baseline_ch, deviceIndex, cameraNo + 1);
+        // ⑤ 并行扣基线（替换原来的单线程调用）
+        // // ⑤ 就地扣基线
+        // DataAnalysisWorker::adjustDataWithBaseline(
+        //     ch, baseline_ch, deviceIndex, cameraNo + 1);
+        DataAnalysisWorker::adjustDataBaselineParallel(
+            ch.data(), n, baseline_ch, deviceIndex, cameraNo + 1);
 
         // ⑥ 起始时刻（keyBase）：第 from 个点在整条时间轴上的时刻
         //    名义 40ms/文件推进（与文件编号规则一致）
@@ -1013,13 +1018,8 @@ bool PCIeCommSdk::analyzeHistoryWaveformData(
         const quint64 keyBase =
             baseNs + fileStartNs + static_cast<quint64>(from) * NS_PER_POINT;
 
-        // ⑦ 构造连续数值数组（qint16 就是 POD，直接搬）
-        std::vector<qint16> values;
-        values.reserve(static_cast<size_t>(n));
-        values.insert(values.end(), ch.constData(), ch.constData() + n);
-
-        // ⑧ 交付：起始时刻 + 连续数组
-        callback(keyBase, values);
+        // ⑦ 交付：起始时刻 + 连续数组
+        callback(keyBase, ch);
     }
     return true;
 }

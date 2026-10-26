@@ -1999,16 +1999,17 @@ void OfflineWindow::initCpsPage()
 #include <QtMath>
 void OfflineWindow::onWaveformPlot(quint8 channel/*通道号*/, const quint64& keyBase/*时刻 ns*/, const std::vector<qint16>& values/*扣基线后的波形值*/)
 {
-    double yMax = 0;
+    const int n = static_cast<int>(values.size());
+    if (n <= 0) return;
 
-    // 计算当前组的x和y数据
-    QVector<double> xData, yData;
-    for (size_t i = 0; i < values.size(); ++i) {
-        quint64 t = keyBase + static_cast<quint64>(i) * 2;  // 时刻 ns
-        qint16  v = values[i];                               // 值
-        xData.append(t);
-        yData.append(v);
-        yMax = qMax((double)yMax, (double)v);
+    // ① 预分配（关键）：一次到位，绝不 append
+    QVector<double> xData(n), yData(n);
+    double yMax = 0;
+    for (int i = 0; i < n; ++i) {
+        xData[i] = static_cast<double>(keyBase + static_cast<quint64>(i) * 2);
+        const double v = static_cast<double>(values[i]);
+        yData[i] = v;
+        if (v > yMax) yMax = v;
     }
 
     // 时间+计数率曲线
@@ -2426,6 +2427,23 @@ void OfflineWindow::onWaveform()
         return;
     }
 
+    // 单次分析允许的最长时间段：120ms
+    static constexpr qint64 POINTS_PER_MS = 500000LL;
+    static constexpr qint64 MAX_RANGE_MS  = 100LL;                        // 120ms
+    static constexpr qint64 MAX_POINTS    = MAX_RANGE_MS * POINTS_PER_MS; // 50,000,000
+
+    const qint64 rangeMs = static_cast<qint64>(endTime - startTime);
+    if (rangeMs > MAX_RANGE_MS) {
+        QMessageBox::warning(
+            this, "时间段过长",
+            QString("当前选择的时间段为 %1 ms，超过单次显示上限 %2 ms。\n\n"
+                    "请缩短时间段后重试（建议不超过 %2 ms，约 %3 万点）。")
+                .arg(rangeMs)
+                .arg(MAX_RANGE_MS)
+                .arg(MAX_POINTS / 10000));
+        return;   // 直接拦住，不读数据、不进 QCP
+    }
+
     // 获取数据目录路径
     QString dataDir = ui->textBrowser_filepath->toPlainText();
     if (dataDir.isEmpty()) {
@@ -2483,18 +2501,19 @@ void OfflineWindow::onWaveform()
                                                     [&](quint64 keyBase, const std::vector<qint16>& values){
 
                 onWaveformPlot(horCameraIndex, keyBase, values);
-                if (!ui->checkBox_ver->isChecked())
-                {
-                    QMetaObject::invokeMethod(this, [=](){
-                        if (mWaveformPlot)
-                            mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
-                        else
-                            mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
-                        mWaitingSpinnerWidget->stop();
-                    }, Qt::QueuedConnection);
-                }
 
             });
+
+            if (!ui->checkBox_ver->isChecked())
+            {
+                QMetaObject::invokeMethod(this, [=](){
+                    if (mWaveformPlot)
+                        mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
+                    else
+                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+                    mWaitingSpinnerWidget->stop();
+                }, Qt::QueuedConnection);
+            }
         }
 
         if (ui->checkBox_ver->isChecked()){
@@ -2504,20 +2523,21 @@ void OfflineWindow::onWaveform()
             mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, startTime, endTime , dataDir,
                                                     [&](quint64 keyBase, const std::vector<qint16>& values){
 
-                onWaveformPlot(horCameraIndex, keyBase, values);
-                QMetaObject::invokeMethod(this, [=](){
-                    if (mWaveformPlot){
-                        mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
-                    }
-                    else{
-                        mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
-                        if (ui->checkBox_hor->isChecked())
-                            mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
-                    }
-                    mWaitingSpinnerWidget->stop();
-                }, Qt::QueuedConnection);
+                onWaveformPlot(verCameraIndex, keyBase, values);
 
             });
+
+            QMetaObject::invokeMethod(this, [=](){
+                if (mWaveformPlot){
+                    mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
+                }
+                else{
+                    mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
+                    if (ui->checkBox_hor->isChecked())
+                        mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+                }
+                mWaitingSpinnerWidget->stop();
+            }, Qt::QueuedConnection);
         }
 #endif // SINGLE_BOARD_MODE
     });

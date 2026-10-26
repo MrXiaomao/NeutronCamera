@@ -347,7 +347,7 @@ bool DataAnalysisWorker::readBin1Ch_range_fast(
     quint8         cameraNo,     // 0 / 1 / 2
     qint64         from,         // 起始点（含）
     qint64         to,           // 结束点（不含）
-    QVector<qint16>& out)
+    std::vector<qint16>& out)
 {
     QFile f(filePath);
     if (!f.open(QIODevice::ReadOnly)) return false;
@@ -369,6 +369,7 @@ bool DataAnalysisWorker::readBin1Ch_range_fast(
     const qint64 byteOffset = HEAD_BYTES + from * BYTES_PER_GROUP;
     const qint64 byteLength = count * BYTES_PER_GROUP;
 
+    // 只映射所需字节区间：跳过头12字节，按6字节/组定位
     uchar* buf = f.map(byteOffset, byteLength);
     if (!buf) { f.close(); return false; }
 
@@ -502,6 +503,32 @@ qint16 DataAnalysisWorker::calculateBaseline(const QVector<qint16>& data_ch)
     return static_cast<qint16>(bestIdx);
 }
 
+qint16 DataAnalysisWorker::calculateBaseline(qint16* data, int n)
+{
+    if (n <= 0) return 0;
+
+    // 普通静态对象，不用 thread_local，彻底避开 MinGW TLS 坑
+    static std::array<int, 65536> hist;
+    static std::mutex mtx;
+
+    std::lock_guard<std::mutex> lock(mtx);
+    std::memset(hist.data(), 0, sizeof(hist));
+
+    for (int i = 0; i < n; ++i) {
+        ++hist[static_cast<uint16_t>(data[i])];
+    }
+
+    int maxCount = -1;
+    uint16_t bestIdx = 0;
+    for (size_t i = 0; i < hist.size(); ++i) {
+        if (hist[i] > maxCount) {
+            maxCount = hist[i];
+            bestIdx = static_cast<uint16_t>(i);
+        }
+    }
+    return static_cast<qint16>(bestIdx);
+}
+
 // 根据基线调整数据：根据采集卡编号和通道号对数据进行不同的调整
 // boardNum: 采集卡编号 1-6，根据编号的奇偶性判断（1,3,5为奇数采集卡，2,4,6为偶数采集卡）
 // ch: 1-4 (通道号)
@@ -542,6 +569,76 @@ void DataAnalysisWorker::adjustDataWithBaseline(QVector<qint16>& data_ch,
     }
 }
 
+void DataAnalysisWorker::adjustDataWithBaseline(qint16* data, int n,
+                                                qint16 baseline_ch,
+                                                int boardNum,
+                                                int ch)
+{
+    const int sampleCount = n;
+    if (sampleCount == 0) return;
+
+    bool isPositive = true;
+#if 0
+    if (ch < 1 || ch > 4) {
+        isPositive = true;
+    } else if (ch == 3) {
+        isPositive = true;
+    } else if (ch == 4) {
+        isPositive = false;
+    } else {
+        const bool isOddBoard = (boardNum % 2 == 1);
+        isPositive = isOddBoard ? (ch == 2) : (ch == 1);
+    }
+#endif
+
+    qint16* ptr = data;
+    const int32_t base = static_cast<int32_t>(baseline_ch);
+
+    if (isPositive) {
+        for (int i = 0; i < sampleCount; ++i) {
+            // 单指针原地读写，消除别名冲突；32位中间值防回绕
+            ptr[i] = static_cast<qint16>(static_cast<int32_t>(ptr[i]) - base);
+        }
+    } else {
+        for (int i = 0; i < sampleCount; ++i) {
+            ptr[i] = static_cast<qint16>(base - static_cast<int32_t>(ptr[i]));
+        }
+    }
+}
+
+#include <QtConcurrent>
+void DataAnalysisWorker::adjustDataBaselineParallel(
+    qint16* data, int n,
+    qint16  baseline_ch,
+    int     deviceIndex,
+    int     cameraIndex)
+{
+    if (n <= 0) return;
+
+    const int K = qMax(1, QThread::idealThreadCount());
+
+    // 数据量太小：并行调度开销 > 收益，直接串行
+    if (K == 1 || n < 100000) {
+        adjustDataWithBaseline(data, n, baseline_ch, deviceIndex, cameraIndex);
+        return;
+    }
+
+    // 块大小向上取整，确保覆盖全部 n 个点
+    const int block = (n + K - 1) / K;
+
+    QVector<int> blocks(K);
+    std::iota(blocks.begin(), blocks.end(), 0);
+
+    QtConcurrent::blockingMap(blocks, [&](int b) {
+        const int start = b * block;
+        const int len   = qMin(block, n - start);
+        if (len <= 0) return;
+
+        // 各块写互不重叠的内存区，无锁无竞争
+        DataAnalysisWorker::adjustDataWithBaseline(
+            data + start, len, baseline_ch, deviceIndex, cameraIndex);
+    });
+}
 
 // 提取超过阈值的有效波形数据
 QVector<std::array<qint16, H5_DATA_COLS>> DataAnalysisWorker::overThreshold(quint16 packerStartTime, const QVector<qint16>& data, int ch, int threshold, int pre_points, int post_points)
