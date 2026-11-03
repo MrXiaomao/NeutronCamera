@@ -238,7 +238,7 @@ bool PCIeCommSdk::boardExists(const quint8& physicalNo/*采集卡序号1-3*/)
 #ifdef _WIN32
 #include <processtopologyapi.h> //SetThreadGroupAffinity
 #endif
-void PCIeCommSdk::startCapture(quint32 deviceIndex, QString fileSavePath, quint32 captureTimeMillisecond, QString shotNum/*炮号*/, bool testMode)
+void PCIeCommSdk::startCapture(quint32 deviceIndex, QString fileSavePath, quint32 captureTimeMillisecond, QString shotNum/*炮号*/, bool testMode, bool prepareMode)
 {
     auto iter = mMapDeviceCaptureThread.find(deviceIndex);
     if (iter != mMapDeviceCaptureThread.end()){
@@ -250,7 +250,7 @@ void PCIeCommSdk::startCapture(quint32 deviceIndex, QString fileSavePath, quint3
         // else if (i==2)
         //     devicePath = "\\\\?\\PCI#VEN_10EE&DEV_9038&SUBSYS_000710EE&REV_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}\\c2h_3";
 
-        mMapDeviceCaptureThread[deviceIndex]->setParamter(fileSavePath, captureTimeMillisecond, testMode);
+        mMapDeviceCaptureThread[deviceIndex]->setParamter(fileSavePath, captureTimeMillisecond, testMode, prepareMode);
 
         //启动写文件线程
         mDeviceThreadRunning[deviceIndex] = true;
@@ -285,7 +285,7 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMilli
         quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
         quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
         if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1)){
-            startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest);
+            startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest, mMeasureMode & mmPreMeasure);
             mActiveDeviceIndex = deviceIndex;
             break;
         }
@@ -310,7 +310,7 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMilli
         quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
         quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
         if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
-            startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest);
+            startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest, mMeasureMode & mmPreMeasure);
         else
             mDeviceThreadRunning[deviceIndex] = false;
     }
@@ -652,6 +652,7 @@ void PCIeCommSdk::setTriggerThreshold()
 /* 设置采集时长 */
 void PCIeCommSdk::setCaptureTimelength(qint32 timeLength)
 {
+    mMeasureTimelength = timeLength;
     /* 初始化，设置测量时间
         32位指令	帧数N	总测量时间	写入字节
         0x1234FA16	4	640ms	16 FA 34 12
@@ -673,31 +674,45 @@ void PCIeCommSdk::setCaptureTimelength(qint32 timeLength)
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
+        if (mMeasureMode & mmPreMeasure){
+            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));
+        }
+        else{
 #ifdef SINGLE_BOARD_MODE
-        if (timeLength>=10000)
-            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("21 FA 34 12"));
-        else if (timeLength>=9600)
-            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("20 FA 34 12"));
-        else if (timeLength>=6400)
-            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("19 FA 34 12"));
-        else if (timeLength>=3200)
-            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("18 FA 34 12"));
-        else if (timeLength>=1280)
-            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("17 FA 34 12"));
-        else if (timeLength>=640)
-            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));
-        else
-            writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));
+            if (timeLength>=10000)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("21 FA 34 12"));
+            else if (timeLength>=9600)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("20 FA 34 12"));
+            else if (timeLength>=6400)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("19 FA 34 12"));
+            else if (timeLength>=3200)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("18 FA 34 12"));
+            else if (timeLength>=1280)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("17 FA 34 12"));
+            else if (timeLength>=640)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));
+            else
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));
 #else
-        writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));//16-160ms 18-800ms 20-4000ms 30-12000ms
+            if (timeLength>4000)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("30 FA 34 12"));//16-160ms 18-800ms 20-4000ms 30-12000ms
+            else if (timeLength>800)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("20 FA 34 12"));//16-160ms 18-800ms 20-4000ms 30-12000ms
+            else if (timeLength>160)
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("18 FA 34 12"));//16-160ms 18-800ms 20-4000ms 30-12000ms
+            else
+                writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));//16-160ms 18-800ms 20-4000ms 30-12000ms
+
+            qInfo().nospace() << "卡[" << physicalNo << "] " << "设置测量时长：" << timeLength << "ms";
 #endif
+        }
+
         ::QThread::msleep(100);
         writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("00 00 00 00"));
         ::QThread::msleep(100);
 
         CloseHandle(fUserHandle);
 
-        qInfo().nospace() << "卡[" << physicalNo << "] " << "设置测量时长：" << timeLength << "ms";
     }
 }
 
@@ -1783,7 +1798,7 @@ CaptureThread::~CaptureThread()
 #endif //ENABLE_IOCP
 }
 
-void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTimeMillisecond, bool testMode)
+void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTimeMillisecond, bool testMode, bool prepareMode)
 {
     this->mSaveFilePath = saveFilePath;
 #ifdef SINGLE_BOARD_MODE
@@ -1792,6 +1807,7 @@ void CaptureThread::setParamter(const QString &saveFilePath, quint32 captureTime
     this->mCaptureCount = quint32((double)captureTimeMillisecond / 40.0 + 0.4);
 #endif // SINGLE_BOARD_MODE
     this->mEnableTestMode = testMode;
+    this->mPrepareMode = prepareMode;
 }
 
 bool CaptureThread::startMeasure()
@@ -2262,15 +2278,71 @@ void CaptureThread::run()
         }
 #endif // SINGLE_BOARD_MODE
 
-        // pause();
-        // continue;
-
         elapsedTimer.start();
         qDebug().nospace() << "卡[" << mPhysicalNo << "] "
                            << ddrName
                            << " 开始测量>>>>>>>>>>>>>>>>>>>>>>>>"
                            << elapsedTimer.elapsed();
 
+        if (mPrepareMode){// 空采模式
+
+            while (1){
+                // 读取寄存器，进行判断是否进入正式采集阶段
+                readBuf[0] = 0u;
+                if (PCIeCommSdk::readData(fUserHandle, offsetRegister, readBuf))
+                {
+                    quint8 step = 0;
+                    quint8 capturedRef = 1;
+                    quint32 tm1 = elapsedTimer.elapsed();
+                    readWaveformData(step, mDDRWaveformDatas.at(capturedRef-1), memOffet + step * WAVEFORM_FRAMEPOS_STEP_PER);
+                    quint32 tm2 = elapsedTimer.elapsed();
+                    if ((tm2 - tm1) <= 70/*ms*/){
+                        // 前后采集时长小于一定阈值，表示设备工作正常
+
+                    }
+
+                    if ((quint8)readBuf[0] == 0xFF)
+                    {
+                        // 发送通知：正式测量开始
+
+                        // 设置采集时长
+                        //emit setCaptureTimelength();
+                        break;
+                    }
+                }
+
+                {
+                    // 判断空采是否超时
+                    if (elapsedTimer.elapsed() > 10000){
+                        isOver = true;
+                        break;
+                    }
+                }
+
+                delay(1000);//精度1us
+            }
+
+        }
+
+        if (isOver){
+            // 如果空采超过了10s，这发炮号就取消正式采集
+            emit captureFinished(mPhysicalNo, mIsDDR1);
+
+            pause();
+            // 暂停逻辑
+            {
+                qDebug().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
+                                   << "卡[" << mPhysicalNo << "] "
+                                   << ddrName
+                                   << " 休眠";
+            }
+
+            CloseHandle(fUserHandle);
+            continue;
+        }
+
+        // 采集正式开始，重新开始计时
+        elapsedTimer.start();
         for (;mCapturedRef <= this->mCaptureCount/* && !isTimeout*//*超时是否继续*/; ++mCapturedRef)
         {
             quint32 failCount = 0;
@@ -2426,12 +2498,6 @@ void CaptureThread::run()
             mCapturedRef--;
 
         {
-            // if (mIsDDR1){
-            //     this->clear();
-            // }
-
-            //emit captureFinished(mDeviceIndex, mIsDDR1);
-
             threadPool->waitForDone();
             qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 采集结束，共采集：" << mCapturedRef << "帧/160ms";
 

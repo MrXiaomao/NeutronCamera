@@ -57,6 +57,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     connect(this, SIGNAL(showNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
     connect(this, SIGNAL(showGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
     connect(this, SIGNAL(startMeasure()), this, SLOT(onStartMeasure()));
+    connect(this, SIGNAL(onPrepareMeasure()), this, SLOT(prepareMeasure()));
 
     ui->toolButton_startMeasure->setDefaultAction(ui->action_startMeasure);
     ui->toolButton_stopMeasure->setDefaultAction(ui->action_stopMeasure);
@@ -525,19 +526,6 @@ void MainWindow::initUi()
             }
         }
 
-        // 检测外触发
-        {
-            if (mExternalTriggerMode && mExternalSignalTriggered && !mIsMeasuring)
-            {
-                // 检测外触发开始时刻
-                if (currentDateTime >= ui->dateTimeEdit_startTime->dateTime())
-                {
-                    emit startMeasure();
-                }
-            }
-        }
-
-
     });
     systemClockTimer->start(900);
 
@@ -762,22 +750,35 @@ void MainWindow::initUi()
     }
 
     connect(mCommHelper, &CommHelper::shotnumValueChanged, this, [=](const QString& shotnum){
+        qInfo().noquote() << "接收指令，发射炮号：" << shotnum;
         if (mExternalTriggerMode && !mExternalSignalTriggered){ // 只有启动了外触发模式，且测量还没开始，炮号接收才有效
-            qInfo().noquote() << "接收指令，发射炮号：" << shotnum;
             ui->lineEdit_shotNum->setText(shotnum);
+        }
+
+        if (mExternalTriggerMode && !mExternalSignalTriggered){ // 只有启动了外触发模式，且测量还没开始，炮号接收才有效
+            ui->dateTime_shotTime->setDateTime(QDateTime::currentDateTime());
+            //ui->dateTimeEdit_startTime->setDateTime(tm);
+            ui->lineEdit_triggerflag->setText(QStringLiteral("等待测量"));
+            mExternalSignalTriggered = true;
+        }
+
+        // 检测外触发
+        {
+            if (mExternalTriggerMode && mExternalSignalTriggered && !mIsMeasuring)
+            {
+                // 检测外触发开始时刻
+                //if (currentDateTime >= ui->dateTimeEdit_startTime->dateTime())
+                {
+                    emit prepareMeasure();
+                }
+            }
         }
 
         // 记录指令
         recordExternalCommand(QString("炮号：%1").arg(shotnum));
     });
     connect(mCommHelper, &CommHelper::systemTimeValueChanged, this, [=](const QDateTime& tm){
-        if (mExternalTriggerMode && !mExternalSignalTriggered){ // 只有启动了外触发模式，且测量还没开始，炮号接收才有效
-            qInfo().noquote() << "接收指令，同步时钟：" << tm.toString("yyyy-MM-dd hh:mm:ss.zzz");
-            ui->dateTime_shotTime->setDateTime(QDateTime::currentDateTime());
-            ui->dateTimeEdit_startTime->setDateTime(tm);
-            ui->lineEdit_triggerflag->setText(QStringLiteral("等待测量"));
-            mExternalSignalTriggered = true;
-        }
+        qInfo().noquote() << "接收指令，同步时钟：" << tm.toString("yyyy-MM-dd hh:mm:ss.zzz");
 
         // 修改系统时间需要管理员权限
         QDateTime utc = tm.toUTC();
@@ -2000,6 +2001,74 @@ void MainWindow::onStartMeasure()
     if (ui->action_test->isChecked())
         measureMode |= PCIeCommSdk::mmTest;
     mPCIeCommSdk.setMeasureMode((PCIeCommSdk::MeasureMode)measureMode);
+
+    qint32 timeLength = ui->spinBox_timeLength->value();
+    mPCIeCommSdk.setCaptureTimelength(timeLength);
+    mPCIeCommSdk.setTriggerThreshold();
+    // 先发送PSD甄别阈值
+    if (ui->action_typeLSD->isChecked())
+        mPCIeCommSdk.setPSDThreshold();
+    mPCIeCommSdk.startAllCapture(fileSaveDir,
+                                 ui->spinBox_timeLength->value(),
+                                 ui->lineEdit_shotNum->text());
+
+    ui->action_startMeasure->setEnabled(false);
+    ui->action_stopMeasure->setEnabled(true);
+    ui->lineEdit_savePath->setEnabled(false);
+    ui->spinBox_timeLength->setEnabled(false);
+
+#ifdef SINGLE_BOARD_MODE
+    mCurrentAuroraNo = AppConfig::instance().channelAurora();
+    mCurrentChannelNo = AppConfig::instance().channelIndex();
+#endif // SINGLE_BOARD_MODE
+
+    GlobalSettings settings(DEVICE_CONFIG_FILE);
+    settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
+    settings.setValue("Global/ShotNumIsAutoIncrease", ui->checkBox_autoIncrease->isChecked());
+    settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
+    settings.setValue("Global/DetectType", mCurrentDetectorType);
+#ifdef SINGLE_BOARD_MODE
+    settings.setValue("Global/PhysicalNo", mPCIeCommSdk.activePhysicalNo());
+    settings.setValue("Global/AuroraNo", mCurrentAuroraNo);
+    settings.setValue("Global/ChannelNo", mCurrentChannelNo);
+    settings.setValue("Global/UsedDDR1", mPCIeCommSdk.isUsedDDR1());
+#endif // SINGLE_BOARD_MODE
+    QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
+}
+
+void MainWindow::onPrepareMeasure()
+{
+    QDateTime now = QDateTime::currentDateTime();
+    ui->lineEdit_triggerflag->setText(QStringLiteral("等待外触发信号..."));
+    ui->dateTimeEdit_startTime->setDateTime(now);
+
+    //QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
+    QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyyMMddHHmmss"));
+    QDir dir(fileSaveDir);
+    if (!dir.exists()) {
+        if (!dir.mkpath(".")){
+            qInfo().noquote() << tr("本次实验数据存储路径无效！！！") << fileSaveDir;
+            return;
+        }
+    }
+
+    qInfo().noquote() << tr("本次实验数据存储路径：") << fileSaveDir;
+    this->mCurrentSavePath = fileSaveDir;
+    this->mIsMeasuring = true;
+    ::SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+
+    // 保存本地测量参数信息
+    if (ui->action_typeLSD->isChecked())
+        mCurrentDetectorType = dtLSD;
+    else if (ui->action_typePSD->isChecked())
+        mCurrentDetectorType = dtPSD;
+    else if (ui->action_typeLBD->isChecked())
+        mCurrentDetectorType = dtLBD;
+
+    int measureMode = mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle;//mMeasureMode
+    if (ui->action_test->isChecked())
+        measureMode |= PCIeCommSdk::mmTest;
+    mPCIeCommSdk.setMeasureMode((PCIeCommSdk::MeasureMode)(measureMode|PCIeCommSdk::mmPreMeasure));
 
     qint32 timeLength = ui->spinBox_timeLength->value();
     mPCIeCommSdk.setCaptureTimelength(timeLength);

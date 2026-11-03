@@ -75,7 +75,7 @@ public:
     bool dataExistError();
     bool writeFileWithNoBuffering(const QString &filePath, const char *data, qint64 size);
 
-    void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds, bool testMode);
+    void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds, bool testMode, bool prepareMode);
 
     void pause(){
         QMutexLocker locker(&mMutex);
@@ -142,6 +142,7 @@ private:
     quint16 mCapturedRef = 1;//已经采集的包数
     quint32 mTimeout = 5000;//超时微秒
     bool mEnableTestMode = false;//启用测试模式
+    bool mPrepareMode = false; //测量准备阶段
     bool mInterruptSave = false;//是否终止
     bool mIsException = false;//数据是否出现异常
     QVector<QByteArray> mDDRWaveformDatas;
@@ -229,6 +230,15 @@ public:
         FOM = 0x2
     };
 
+    enum MeasureMode{
+        mmTest          = 0x01,// 测试模式
+        mmSingle        = 0x02,// 单次测量
+        mmContinue      = 0x04,// 连续测量
+        mmPreMeasure    = 0x08,// 预测量/空采
+        mmSingleTest    = mmTest | mmSingle,// 单次测量
+        mmContinueTest  = mmTest | mmContinue,// 连续测量
+    };
+
     const QString CARD1_NAME = "\\\\?\\pci#ven_10ee&dev_9038&subsys_000710ee&rev_00#4&b189e7&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
     const QString CARD2_NAME = "\\\\?\\pci#ven_10ee&dev_9038&subsys_000710ee&rev_00#4&10d89b97&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
     const QString CARD3_NAME = "\\\\?\\pci#ven_10ee&dev_9038&subsys_000710ee&rev_00#4&18ec5e6b&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
@@ -242,7 +252,7 @@ public:
 
     Q_SLOT void onSettingFinished();
 
-    void startCapture(quint32 deviceIndex, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeMillisecond/*保存时长*/, QString shotNum/*炮号*/, bool testMode = false/*测试模式*/);
+    void startCapture(quint32 deviceIndex, QString fileSavePath/*文件存储大路径*/, quint32 captureTimeMillisecond/*保存时长*/, QString shotNum/*炮号*/, bool testMode/*测试模式*/, bool prepareMode/*空采模式*/);
     void startAllCapture(QString fileSavePath/*文件存储大路径*/, quint32 captureTimeMillisecond/*保存时长*/, QString shotNum/*炮号*/);
     void stopCapture(quint32 deviceIndex);
     void stopAllCapture();
@@ -375,13 +385,6 @@ public:
     HANDLE getHandle(quint8 physicalNo, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
     static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_FLAG_NO_BUFFERING);//O_RDWR
 
-    enum MeasureMode{
-        mmTest          = 0x01,// 测试模式
-        mmSingle        = 0x02,// 单次测量
-        mmContinue      = 0x04,// 连续测量
-        mmSingleTest    = mmTest | mmSingle,// 单次测量
-        mmContinueTest  = mmTest | mmContinue,// 连续测量
-    };
     void setMeasureMode(MeasureMode mm = mmSingle){mMeasureMode = mm;};
 
 #ifdef SINGLE_BOARD_MODE
@@ -404,6 +407,7 @@ private:
     quint8 mActiveDeviceIndex = 1; //
 #endif // SINGLE_BOARD_MODE
     MeasureMode mMeasureMode = mmSingle;
+    qint32 mMeasureTimelength = 10000;//默认10s
 };
 
 #endif // PCIECOMMSDK_H

@@ -61,13 +61,15 @@ public slots:
     void onWriteLog(const QString &msg, QtMsgType msgType = QtDebugMsg);//操作日志
     void onNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);//中子能谱
     void onGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);//伽马能谱
-    void onStartMeasure();//开始测量
+    void onStartMeasure();//开始测量(软触发)
+    void onPrepareMeasure();//开始测量
 
 signals:
     void writeLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
     void showNeutronSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
     void showGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);
     void startMeasure();//开始测量
+    void prepareMeasure();//开始空采
     void rebootAsAdmin();
 
 private slots:

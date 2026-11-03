@@ -424,7 +424,7 @@ bool DataAnalysisWorker::readBin1Ch_range_fast(const QString& filePath,
     qint16* dst = out.data();
 
     // 小端文件 + 小端环境：直接取
-    memcpy(dst, src, sizeof(count) * sizeof(quint16));
+    memcpy(dst, src, (count) * sizeof(quint16));
 
     f.unmap(buf);
     f.close();
@@ -461,7 +461,7 @@ bool DataAnalysisWorker::readBin1Ch_all_fast(const QString& filePath,
     qint16* dst = out.data();
 
     // 小端文件 + 小端环境：直接取
-    memcpy(dst, src, sizeof(count) * sizeof(quint16));
+    memcpy(dst, src, (count) * sizeof(quint16));
 
     f.unmap(buf);
     f.close();
@@ -502,7 +502,7 @@ bool DataAnalysisWorker::readBin1Ch_all_fast(const QByteArray& fileData,
 
     // 将映射的内存区域转换为16位无符号整数数组指针，方便后续读取
     const quint16* src = reinterpret_cast<const quint16*>(p);
-    memcpy(ch0.data(), src, sizeof(samplesPerChannel) * sizeof(quint16));
+    memcpy(ch0.data(), src, (samplesPerChannel) * sizeof(quint16));
 
     return true;
 }

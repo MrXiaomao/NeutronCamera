@@ -3316,12 +3316,8 @@ void OfflineWindow::onCpsStatistics(int minPeak, int maxPeak)
     //提取有效波形参数
     int timeWidth = ui->spinBox_time1->value(); // 默认值 1ms
     int timeStart = ui->spinBox_startT_3->value(); // 开始时刻
-    int timeStop = ui->spinBox_endT_3->value();
-#ifdef SINGLE_BOARD_MODE
-    int channels = 1;
-#else
-    int channels = ui->comboBox_channels->currentText().toInt();
-#endif //SINGLE_BOARD_MODE
+    int timeStop = ui->spinBox_endT_3->value(); // 结束时刻
+    int channels = ui->comboBox_channels->currentText().toInt(); // 道址
 
     if (timeStop == ui->line_waveform_endT_3->text().toInt())
         timeStop--; // 截止时刻(区间，所以这里-1)
@@ -3341,7 +3337,7 @@ void OfflineWindow::onCpsStatistics(int minPeak, int maxPeak)
 	            for (auto iter = cpsMapPair.begin(); iter!=cpsMapPair.end(); ++iter){
 	                cpsMapPairs[iter.key()] = iter.value();
 	            }
-	
+
 	            for (auto iter = spectrumMapPair.begin(); iter!=spectrumMapPair.end(); ++iter){
 	                spectrumMapPairs[iter.key()] = iter.value();
 	            }
