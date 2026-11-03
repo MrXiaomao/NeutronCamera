@@ -57,7 +57,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     connect(this, SIGNAL(showNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onNeutronSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
     connect(this, SIGNAL(showGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)), this, SLOT(onGammaSpectrum(quint8,QPair<QVector<double>,QVector<double>>&)));
     connect(this, SIGNAL(startMeasure()), this, SLOT(onStartMeasure()));
-    connect(this, SIGNAL(onPrepareMeasure()), this, SLOT(prepareMeasure()));
+    connect(this, SIGNAL(prepareMeasure()), this, SLOT(onPrepareMeasure()));
 
     ui->toolButton_startMeasure->setDefaultAction(ui->action_startMeasure);
     ui->toolButton_stopMeasure->setDefaultAction(ui->action_stopMeasure);
@@ -94,6 +94,21 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     });
 
     connect(&mPCIeCommSdk, &PCIeCommSdk::captureFinished, this, [=](){
+#ifdef SMART_INVALID_COMMAND
+        if (mExternalTriggerMode){
+            QTimer::singleShot(200, this, [=](){
+                emit startMeasure();
+            });
+
+            emit ui->pushButton_preview->clicked();
+            if (ui->checkBox_autoIncrease->isChecked()){
+                ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
+            }
+
+            return;
+        }
+#endif
+
         SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
@@ -123,6 +138,20 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
             mIsMeasuring = false;
             emit ui->action_stopMeasure->trigger();
         }
+    });
+
+    connect(&mPCIeCommSdk, &PCIeCommSdk::externalSignalTriggered, this, [=](){
+        qInfo().noquote() << QStringLiteral("接收外触发信号,准备数据接收");
+        ui->lineEdit_triggerflag->setText(QStringLiteral("正在测量"));
+    });
+
+    connect(&mPCIeCommSdk, &PCIeCommSdk::timeoutOccurred, this, [=](){
+        qInfo().noquote() << QStringLiteral("接收外触发信号超时");
+        ui->lineEdit_triggerflag->setText(QStringLiteral("接收外触发信号超时"));
+        ui->action_startMeasure->setEnabled(true);
+        ui->action_stopMeasure->setEnabled(false);
+        mIsMeasuring = false;
+        emit ui->action_stopMeasure->trigger();
     });
 
     QTimer::singleShot(0, this, [&](){
@@ -751,14 +780,12 @@ void MainWindow::initUi()
 
     connect(mCommHelper, &CommHelper::shotnumValueChanged, this, [=](const QString& shotnum){
         qInfo().noquote() << "接收指令，发射炮号：" << shotnum;
-        if (mExternalTriggerMode && !mExternalSignalTriggered){ // 只有启动了外触发模式，且测量还没开始，炮号接收才有效
+        if (mExternalTriggerMode/* && !mExternalSignalTriggered*/){ // 只有启动了外触发模式，且测量还没开始，炮号接收才有效
             ui->lineEdit_shotNum->setText(shotnum);
-        }
-
-        if (mExternalTriggerMode && !mExternalSignalTriggered){ // 只有启动了外触发模式，且测量还没开始，炮号接收才有效
             ui->dateTime_shotTime->setDateTime(QDateTime::currentDateTime());
             //ui->dateTimeEdit_startTime->setDateTime(tm);
-            ui->lineEdit_triggerflag->setText(QStringLiteral("等待测量"));
+            ui->lineEdit_triggerflag->setText(QStringLiteral("等待测量..."));
+            qInfo().noquote() << QStringLiteral("等待测量...");
             mExternalSignalTriggered = true;
         }
 
@@ -1488,11 +1515,11 @@ void MainWindow::on_action_data_compress_triggered()
 
 void MainWindow::on_action_startMeasure_triggered()
 {
-    QList<QCustomPlot *> customPlots = this->findChildren<QCustomPlot*>("");
+    QList<QCustomPlot *> customPlots = this->findChildren<QCustomPlot*>();
     for (auto spectroMeter : customPlots){
         for (int j=0; j<spectroMeter->graphCount(); ++j)
             spectroMeter->graph(j)->data()->clear();
-        spectroMeter->replot();
+        spectroMeter->replot(QCustomPlot::rpQueuedReplot);
     }
 
     if (1 == ui->cbb_triggerModel->currentIndex())
@@ -1500,32 +1527,21 @@ void MainWindow::on_action_startMeasure_triggered()
         // 外触发模式
         mExternalTriggerMode = true;
         mExternalSignalTriggered = false;
-        ui->lineEdit_triggerflag->setText(QStringLiteral("等待触发"));
-        ui->action_startMeasure->setEnabled(false);
-        ui->action_stopMeasure->setEnabled(true);
-        ui->lineEdit_savePath->setEnabled(false);
-        ui->spinBox_timeLength->setEnabled(false);
     }
     else
     {
         mExternalTriggerMode = false;
-        //根据实验时长判断磁盘空间是否足够
-        {
-            qint32 timeBase = 40;//打包时长基数40ms
-            qint32 onePacketSize = 120*1000*1000;//打包大小基数
-            QString cacheDir = ui->lineEdit_savePath->text();
-            QDir dir(cacheDir);
-            qint64 diskFreeSpace = getDiskFreeSpace(dir.absoluteFilePath(cacheDir).left(2));
-            qint64 validDiskSpace = ui->spinBox_timeLength->value() / timeBase * onePacketSize;
-            if (diskFreeSpace <= validDiskSpace){
-                QMessageBox::information(this, tr("提示"), tr("磁盘空间不足！"));
-                return;
-            }
-        }
-
-        onStartMeasure();
     }
 
+    // 保存本地测量参数信息
+    if (ui->action_typeLSD->isChecked())
+        mCurrentDetectorType = dtLSD;
+    else if (ui->action_typePSD->isChecked())
+        mCurrentDetectorType = dtPSD;
+    else if (ui->action_typeLBD->isChecked())
+        mCurrentDetectorType = dtLBD;
+
+    onStartMeasure();
     ui->spinBox_timeStop->setMaximum(ui->spinBox_timeLength->value());
 }
 
@@ -1971,10 +1987,9 @@ void MainWindow::onGammaSpectrum(quint8 cameraIndex , QPair<QVector<double>,QVec
 void MainWindow::onStartMeasure()
 {
     QDateTime now = QDateTime::currentDateTime();
-    ui->lineEdit_triggerflag->setText(QStringLiteral("正在测量"));
     ui->dateTimeEdit_startTime->setDateTime(now);
+    ::SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
-    //QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
     QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyyMMddHHmmss"));
     QDir dir(fileSaveDir);
     if (!dir.exists()) {
@@ -1984,23 +1999,9 @@ void MainWindow::onStartMeasure()
         }
     }
 
-    qInfo().noquote() << tr("本次实验数据存储路径：") << fileSaveDir;
-    this->mCurrentSavePath = fileSaveDir;
-    this->mIsMeasuring = true;
-    ::SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
-
-    // 保存本地测量参数信息
-    if (ui->action_typeLSD->isChecked())
-        mCurrentDetectorType = dtLSD;
-    else if (ui->action_typePSD->isChecked())
-        mCurrentDetectorType = dtPSD;
-    else if (ui->action_typeLBD->isChecked())
-        mCurrentDetectorType = dtLBD;
-
-    int measureMode = mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle;//mMeasureMode
+    PCIeCommSdk::MeasureModes measureModes = mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle;//mMeasureMode
     if (ui->action_test->isChecked())
-        measureMode |= PCIeCommSdk::mmTest;
-    mPCIeCommSdk.setMeasureMode((PCIeCommSdk::MeasureMode)measureMode);
+        measureModes |= PCIeCommSdk::mmTest;
 
     qint32 timeLength = ui->spinBox_timeLength->value();
     mPCIeCommSdk.setCaptureTimelength(timeLength);
@@ -2008,9 +2009,26 @@ void MainWindow::onStartMeasure()
     // 先发送PSD甄别阈值
     if (ui->action_typeLSD->isChecked())
         mPCIeCommSdk.setPSDThreshold();
-    mPCIeCommSdk.startAllCapture(fileSaveDir,
-                                 ui->spinBox_timeLength->value(),
-                                 ui->lineEdit_shotNum->text());
+    mPCIeCommSdk.setTriggerMode(!mExternalTriggerMode);
+
+    if (mExternalTriggerMode)
+    {
+        // 外触发模式
+        this->mIsMeasuring = false;
+        ui->lineEdit_triggerflag->setText(QStringLiteral("等待炮号..."));
+        qInfo().noquote() << QStringLiteral("等待炮号...");
+        mPCIeCommSdk.setMeasureModes((PCIeCommSdk::MeasureModes)(measureModes | PCIeCommSdk::mmPreMeasure));
+    }
+    else{
+        qInfo().noquote() << tr("本次实验数据存储路径：") << fileSaveDir;
+        this->mCurrentSavePath = fileSaveDir;
+        this->mIsMeasuring = true;
+        ui->lineEdit_triggerflag->setText(QStringLiteral("正在测量"));
+        mPCIeCommSdk.setMeasureModes(measureModes);
+        mPCIeCommSdk.startAllCapture(mCurrentSavePath,
+                                     ui->spinBox_timeLength->value(),
+                                     ui->lineEdit_shotNum->text());
+    }
 
     ui->action_startMeasure->setEnabled(false);
     ui->action_stopMeasure->setEnabled(true);
@@ -2022,27 +2040,36 @@ void MainWindow::onStartMeasure()
     mCurrentChannelNo = AppConfig::instance().channelIndex();
 #endif // SINGLE_BOARD_MODE
 
-    GlobalSettings settings(DEVICE_CONFIG_FILE);
-    settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
-    settings.setValue("Global/ShotNumIsAutoIncrease", ui->checkBox_autoIncrease->isChecked());
-    settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
-    settings.setValue("Global/DetectType", mCurrentDetectorType);
-#ifdef SINGLE_BOARD_MODE
-    settings.setValue("Global/PhysicalNo", mPCIeCommSdk.activePhysicalNo());
-    settings.setValue("Global/AuroraNo", mCurrentAuroraNo);
-    settings.setValue("Global/ChannelNo", mCurrentChannelNo);
-    settings.setValue("Global/UsedDDR1", mPCIeCommSdk.isUsedDDR1());
-#endif // SINGLE_BOARD_MODE
-    QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
+    if (!mExternalTriggerMode){
+        GlobalSettings settings(DEVICE_CONFIG_FILE);
+        settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
+        settings.setValue("Global/ShotNumIsAutoIncrease", ui->checkBox_autoIncrease->isChecked());
+        settings.setValue("Global/CacheDir", ui->lineEdit_savePath->text());
+        settings.setValue("Global/DetectType", mCurrentDetectorType);
+    #ifdef SINGLE_BOARD_MODE
+        settings.setValue("Global/PhysicalNo", mPCIeCommSdk.activePhysicalNo());
+        settings.setValue("Global/AuroraNo", mCurrentAuroraNo);
+        settings.setValue("Global/ChannelNo", mCurrentChannelNo);
+        settings.setValue("Global/UsedDDR1", mPCIeCommSdk.isUsedDDR1());
+    #endif // SINGLE_BOARD_MODE
+        QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
+    }
 }
 
 void MainWindow::onPrepareMeasure()
 {
-    QDateTime now = QDateTime::currentDateTime();
-    ui->lineEdit_triggerflag->setText(QStringLiteral("等待外触发信号..."));
-    ui->dateTimeEdit_startTime->setDateTime(now);
+    QList<QCustomPlot *> customPlots = this->findChildren<QCustomPlot*>();
+    for (auto spectroMeter : customPlots){
+        for (int j=0; j<spectroMeter->graphCount(); ++j)
+            spectroMeter->graph(j)->data()->clear();
+        spectroMeter->replot(QCustomPlot::rpQueuedReplot);
+    }
 
-    //QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyy-MM-dd_HH-mm-ss"));
+    QDateTime now = QDateTime::currentDateTime();
+    ui->dateTime_shotTime->setDateTime(now);
+    ui->lineEdit_triggerflag->setText(QStringLiteral("等待外触发信号..."));
+    qInfo().noquote() << QStringLiteral("等待外触发信号...");
+
     QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyyMMddHHmmss"));
     QDir dir(fileSaveDir);
     if (!dir.exists()) {
@@ -2054,41 +2081,25 @@ void MainWindow::onPrepareMeasure()
 
     qInfo().noquote() << tr("本次实验数据存储路径：") << fileSaveDir;
     this->mCurrentSavePath = fileSaveDir;
-    this->mIsMeasuring = true;
     ::SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 
-    // 保存本地测量参数信息
-    if (ui->action_typeLSD->isChecked())
-        mCurrentDetectorType = dtLSD;
-    else if (ui->action_typePSD->isChecked())
-        mCurrentDetectorType = dtPSD;
-    else if (ui->action_typeLBD->isChecked())
-        mCurrentDetectorType = dtLBD;
+    // mPCIeCommSdk.reset();
+    // PCIeCommSdk::MeasureModes measureModes = mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle;//mMeasureMode
+    // if (ui->action_test->isChecked())
+    //     measureModes |= PCIeCommSdk::mmTest;
 
-    int measureMode = mEnableContinueMeasuer ? PCIeCommSdk::mmContinue : PCIeCommSdk::mmSingle;//mMeasureMode
-    if (ui->action_test->isChecked())
-        measureMode |= PCIeCommSdk::mmTest;
-    mPCIeCommSdk.setMeasureMode((PCIeCommSdk::MeasureMode)(measureMode|PCIeCommSdk::mmPreMeasure));
+    // qint32 timeLength = ui->spinBox_timeLength->value();
+    // mPCIeCommSdk.setCaptureTimelength(timeLength);
+    // mPCIeCommSdk.setTriggerThreshold();
+    // // 先发送PSD甄别阈值
+    // if (ui->action_typeLSD->isChecked())
+    //     mPCIeCommSdk.setPSDThreshold();
+    // mPCIeCommSdk.setTriggerMode(!mExternalTriggerMode);
 
-    qint32 timeLength = ui->spinBox_timeLength->value();
-    mPCIeCommSdk.setCaptureTimelength(timeLength);
-    mPCIeCommSdk.setTriggerThreshold();
-    // 先发送PSD甄别阈值
-    if (ui->action_typeLSD->isChecked())
-        mPCIeCommSdk.setPSDThreshold();
-    mPCIeCommSdk.startAllCapture(fileSaveDir,
+    this->mIsMeasuring = true;
+    mPCIeCommSdk.startAllCapture(mCurrentSavePath,
                                  ui->spinBox_timeLength->value(),
                                  ui->lineEdit_shotNum->text());
-
-    ui->action_startMeasure->setEnabled(false);
-    ui->action_stopMeasure->setEnabled(true);
-    ui->lineEdit_savePath->setEnabled(false);
-    ui->spinBox_timeLength->setEnabled(false);
-
-#ifdef SINGLE_BOARD_MODE
-    mCurrentAuroraNo = AppConfig::instance().channelAurora();
-    mCurrentChannelNo = AppConfig::instance().channelIndex();
-#endif // SINGLE_BOARD_MODE
 
     GlobalSettings settings(DEVICE_CONFIG_FILE);
     settings.setValue("Global/ShotNumStr", ui->lineEdit_shotNum->text());
@@ -2273,7 +2284,7 @@ void MainWindow::on_action_reset_triggered()
 void MainWindow::on_pushButton_clicked()
 {
     //mPCIeCommSdk.test();
-    mPCIeCommSdk.setMeasureMode(PCIeCommSdk::mmContinue);
+    mPCIeCommSdk.setMeasureModes(PCIeCommSdk::mmContinue);
     mContinueMeasuerFailCount = 0;
     mEnableContinueMeasuer = true;
     ui->pushButton->setEnabled(false);

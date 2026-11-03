@@ -285,7 +285,7 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMilli
         quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
         quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
         if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1)){
-            startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureMode & mmTest, mMeasureMode & mmPreMeasure);
+            startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureModes & mmTest, mMeasureModes & mmPreMeasure);
             mActiveDeviceIndex = deviceIndex;
             break;
         }
@@ -566,6 +566,65 @@ void PCIeCommSdk::setPSDThreshold()
 }
 
 #include <QScopeGuard>
+void PCIeCommSdk::setTriggerMode(bool isSoftTriggerMode)
+{
+    /* 设置触发阈值 */
+    qDebug() << "设置触发模式";
+    for (quint8 physicalNo = 1; physicalNo <= 3; ++physicalNo){
+        quint8 boardIndex = boardIndexFromName(mPhysicalNames[physicalNo - 1]);
+
+        // 判断采集卡是否启用
+        if (!boardIsEnable(boardIndex))
+            continue;
+
+        // 判断通道是否启用
+        if (!AppConfig::instance().isEnableCapture(physicalNo, true) && !AppConfig::instance().isEnableCapture(physicalNo, false))
+            continue;
+
+        HANDLE fUserHandle = PCIeCommSdk::getHandle(mPhysicalNames[physicalNo-1] + XDMA_FILE_USER,
+                                                    GENERIC_READ | GENERIC_WRITE,
+                                                    FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
+        if (fUserHandle == INVALID_HANDLE_VALUE)
+            continue;
+
+        qDebug() << "设置触发模式指令";
+
+        // 保证句柄一定会被释放，避免泄漏
+        QScopeGuard handleGuard([fUserHandle](){ CloseHandle(fUserHandle); });
+
+        using namespace XdmaRegDef;
+        if (isSoftTriggerMode)
+            writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, 0x1234FA10);/* 软件触发模式 */
+        else
+            writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, 0x1234FA11); /* 外触发模式 */
+
+        // quint64 address = 0x20000;
+
+        // QByteArray command = QByteArray::fromHex("00 F7 34 12");
+        // command[0] = threshold & 0x00FF; // 低位
+        // writeData(physicalNo, fUserHandle, address, command);//触发阈值低位
+        // ::QThread::msleep(10);
+
+        // writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
+        // ::QThread::msleep(10);
+
+        // command = QByteArray::fromHex("00 F8 34 12");
+        // command[0] = threshold >> 8; // 高位
+        // writeData(physicalNo, fUserHandle, address, command);//触发阈值低位
+        // ::QThread::msleep(10);
+
+        // writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
+        // ::QThread::msleep(10);
+
+        qInfo().nospace() << "卡[" << physicalNo << "] " << "设置触发模式：" << (isSoftTriggerMode ? "软件触发模式" : "外触发模式");
+
+#ifdef SINGLE_BOARD_MODE
+        break; // 单张采集卡只需要设置一张卡参数配置
+#endif // SINGLE_BOARD_MODE
+    }
+
+}
+
 void PCIeCommSdk::setTriggerThreshold()
 {
     /* 设置触发阈值 */
@@ -587,31 +646,9 @@ void PCIeCommSdk::setTriggerThreshold()
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
+        qDebug() << "设置触发阈值指令";
         // 保证句柄一定会被释放，避免泄漏
         QScopeGuard handleGuard([fUserHandle](){ CloseHandle(fUserHandle); });
-#ifdef SINGLE_BOARD_MODE
-        using namespace XdmaRegDef;
-
-        // 选择通道
-        qDebug() << "选择通道指令";
-        quint8 channelAurora = AppConfig::instance().channelAurora();
-        quint8 channelIndex = AppConfig::instance().channelIndex();
-        quint16 highCmd = 0xFB00;
-        quint8 lowCmd = channelIndex;
-        if (channelAurora==0)
-            highCmd = 0xFB00;
-        else
-            highCmd = 0xFC00;
-        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, REG_CMD_BASE | highCmd | lowCmd);
-
-        // 触发阈值
-        qDebug() << "设置触发阈值指令";
-        quint16 threshold = AppConfig::instance().triggerThreshold();
-        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, 0x1234000F);
-        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, 0xFA120000);
-        writeRegAndClear(physicalNo, fUserHandle, USER_CTRL_ADDR, (threshold << 16) | 0xABCD);
-#else
-        qDebug() << "设置触发阈值指令";
         quint16 threshold = AppConfig::instance().triggerThreshold();
         using namespace XdmaRegDef;
         // 拆分高低位寄存器配置
@@ -638,7 +675,6 @@ void PCIeCommSdk::setTriggerThreshold()
 
         // writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
         // ::QThread::msleep(10);
-#endif //SINGLE_BOARD_MODE
 
         qInfo().nospace() << "卡[" << physicalNo << "] " << "设置触发阈值：" << threshold;
 
@@ -674,7 +710,7 @@ void PCIeCommSdk::setCaptureTimelength(qint32 timeLength)
         if (fUserHandle == INVALID_HANDLE_VALUE)
             continue;
 
-        if (mMeasureMode & mmPreMeasure){
+        if (mMeasureModes & mmPreMeasure){
             writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));
         }
         else{
@@ -1575,6 +1611,12 @@ void PCIeCommSdk::initCaptureThreads()
                 qInfo() << "数据采集完毕！";
             }
         }, Qt::DirectConnection);
+        connect(captureThread, &CaptureThread::externalSignalTriggered, this, [=](quint32 /*index*/){
+            emit externalSignalTriggered();
+        }, Qt::DirectConnection);
+        connect(captureThread, &CaptureThread::timeoutOccurred, this, [=](quint32 /*index*/){
+            emit timeoutOccurred();
+        }, Qt::DirectConnection);
 
     // 设置线程亲和性(小于64核)
 #ifdef _WIN32
@@ -1883,7 +1925,7 @@ bool CaptureThread::checkDataError()
     if (mInterruptSave)
         return false;
 
-    QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
+    const QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
     bool waveformError = false;
     bool spectrumError = false;
     int waveformErrorIndex = 0;
@@ -1961,47 +2003,47 @@ bool CaptureThread::checkDataError()
 
     if (!mEnableTestMode/*测试模式*/ || mDataError/*数据出现错误*/){
 
-        qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 数据正在存储到硬盘中，请等待...";
+        saveAllData();
 
-        for (int i = 0; i < mCapturedRef; ++i)
-        {
-            if (mInterruptSave)
-                break;
+        // for (int i = 0; i < mCapturedRef; ++i)
+        // {
+        //     if (mInterruptSave)
+        //         break;
 
-            {
-                QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mPhysicalNo).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
-                QFile file(filename);
-                if (!file.open(QIODevice::WriteOnly)) {
-                    qDebug() << "Cannot open file for writing";
-                }
-                else{
-                    uchar *mappedBuffer = file.map(0, mRAMSpectrumDatas.at(i).size());
-                    if (mappedBuffer){
-                        memcpy(mappedBuffer, mRAMSpectrumDatas.at(i).data(), mRAMSpectrumDatas.at(i).size());
-                        file.unmap(mappedBuffer);
-                    }
-                    else {
-                        file.write(mDDRWaveformDatas.at(i));
-                    }
-                    file.close();
-                }
-            }
+        //     {
+        //         QString filename = QString("%1/%2%3data%4.bin").arg(mSaveFilePath).arg(mPhysicalNo).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
+        //         QFile file(filename);
+        //         if (!file.open(QIODevice::WriteOnly)) {
+        //             qDebug() << "Cannot open file for writing";
+        //         }
+        //         else{
+        //             uchar *mappedBuffer = file.map(0, mDDRWaveformDatas.at(i).size());
+        //             if (mappedBuffer){
+        //                 memcpy(mappedBuffer, mDDRWaveformDatas.at(i).data(), mDDRWaveformDatas.at(i).size());
+        //                 file.unmap(mappedBuffer);
+        //             }
+        //             else {
+        //                 file.write(mDDRWaveformDatas.at(i));
+        //             }
+        //             file.close();
+        //         }
+        //     }
 
-            {
-                QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mPhysicalNo).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
-                QFile file(filename);
-                if (!file.open(QIODevice::WriteOnly)) {
-                    qDebug() << "Cannot open file for writing";
-                }
-                else{
-                    file.write(mRAMSpectrumDatas.at(i));
-                    file.close();
-                }
-            }
+        //     {
+        //         QString filename = QString("%1/%2%3spec%4.bin").arg(mSaveFilePath).arg(mPhysicalNo).arg(mIsDDR1 ? 'A' : 'B').arg(i+1);
+        //         QFile file(filename);
+        //         if (!file.open(QIODevice::WriteOnly)) {
+        //             qDebug() << "Cannot open file for writing";
+        //         }
+        //         else{
+        //             file.write(mRAMSpectrumDatas.at(i));
+        //             file.close();
+        //         }
+        //     }
 
-        }
+        // }
 
-        qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 数据已经全部存储到硬盘中";
+        // qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 数据已经全部存储到硬盘中";
     }
 
     // 清空内存耗时，暂时屏蔽
@@ -2011,6 +2053,57 @@ bool CaptureThread::checkDataError()
     // }
 
     return mDataError;
+}
+
+#include <QtConcurrent>
+#include <QFuture>
+void CaptureThread::saveAllData()
+{
+    if (mCapturedRef <= 0) return;
+
+    QDir().mkpath(mSaveFilePath);   // 确保目录存在
+    const QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
+
+    struct SaveTask { QString fileName; QByteArray data; };
+    QVector<SaveTask> tasks;
+    tasks.reserve(mCapturedRef * 2);
+
+    const QString base = QString("%1/%2%3")
+                             .arg(mSaveFilePath).arg(mPhysicalNo)
+                             .arg(mIsDDR1 ? QStringLiteral("A") : QStringLiteral("B"));
+
+    for (int i = 0; i < mCapturedRef; ++i) {
+        // data 文件 ← 波形数据（修正：原来错用了 mRAMSpectrumDatas 的长度）
+        tasks.append({ QString("%1data%2.bin").arg(base).arg(i + 1),
+                      mDDRWaveformDatas.at(i) });
+        // spec 文件 ← 能谱数据
+        tasks.append({ QString("%1spec%2.bin").arg(base).arg(i + 1),
+                      mRAMSpectrumDatas.at(i) });
+    }
+
+    QAtomicInt failed(0);
+
+    int oldMax = QThreadPool::globalInstance()->maxThreadCount();
+    QThreadPool::globalInstance()->setMaxThreadCount(
+        qBound(4, QThread::idealThreadCount() * 2, 16));
+
+    QtConcurrent::blockingMap(tasks, [&](const SaveTask& t) {
+        if (mInterruptSave.load()) return;   // std::atomic<bool>
+
+        QFile file(t.fileName);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            qWarning() << "打开失败:" << t.fileName << file.errorString();
+            failed.fetchAndAddRelaxed(1);
+            return;
+        }
+        if (file.write(t.data) != t.data.size()) {
+            qWarning() << "写入失败:" << t.fileName;
+            failed.fetchAndAddRelaxed(1);
+        }
+    });
+
+    QThreadPool::globalInstance()->setMaxThreadCount(oldMax);
+    qInfo().nospace() << "卡[" << mPhysicalNo << "] " << ddrName << " 数据已经全部存储到硬盘中";
 }
 
 void CaptureThread::printDebugInfo()
@@ -2050,14 +2143,14 @@ void CaptureThread::printDebugInfo()
         if (((headSeq != tailSeq) || ((currentSeq - lastSeq) != 1)) && headSeq!=0){
             index = i+1;
             ok = false;
-            out << "卡[" << mPhysicalNo << "] "
+            out << QStringLiteral("卡[") << mPhysicalNo << "] "
                 << ddrName << " [" << i+1 << "] "
                 << pkgHead.toHex(' ')
                 << " ... "
                 << pkgTail.toHex(' ')
                 << "    xxxxxx"  << "\n";
         } else{
-            out << "卡[" << mPhysicalNo << "] "
+            out << QStringLiteral("卡[") << mPhysicalNo << "] "
                 << ddrName << " [" << i+1 << "] "
                 << pkgHead.toHex(' ')
                 << " ... "
@@ -2073,7 +2166,7 @@ void CaptureThread::printDebugInfo()
     // 寄存器0值出现的时间段
     out << QStringLiteral("数据来到之前寄存器0值出现的时间段\n");
     for (int i = 0; i < zeroTime.size(); ++i){
-        out << "卡[" << mPhysicalNo << "] " << ddrName << " " << zeroTime[i] << "\n";
+        out << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << " " << zeroTime[i] << "\n";
     }
 
     // 读寄存器时间
@@ -2082,7 +2175,7 @@ void CaptureThread::printDebugInfo()
         const auto& pairVec = outerPair.second;
         for (int idx=0; idx<pairVec.size(); ++idx){
             const auto& pair = pairVec[idx];
-            out << "卡[" << mPhysicalNo << "] " << ddrName << " " << outerKey << " " <<
+            out << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << " " << outerKey << " " <<
                 QStringLiteral(" 读寄存器时刻：") << pair.first << "-" << pair.second.first <<
                 QStringLiteral(" 返回值：0x") << QString::number(pair.second.second, 16) << "\n";
         }
@@ -2091,7 +2184,7 @@ void CaptureThread::printDebugInfo()
     out << "================================================================================================\n\n";
     // 读数据时间
     for (int i=1; i<=this->mCapturedRef; ++i){
-        out << "卡[" << mPhysicalNo << "] " << ddrName << " " << i <<
+        out << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << " " << i <<
             QStringLiteral(" 寄存器值变化时刻：") << mRamChangedTime[i] <<
             QStringLiteral(" 创建读线程时刻：") << mCreateThreadTime[i] << "-" << mAfterCreateThreadTime[i] <<
             QStringLiteral(" 开始读数据时刻：") << mBeforeReadTime[i] <<
@@ -2103,11 +2196,11 @@ void CaptureThread::printDebugInfo()
 
     out << "================================================================================================\n\n";
     if (!ok){
-        out << "卡[" << mPhysicalNo << "] " << ddrName << " frames sequence exception, index = " << index;
+        out << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << " frames sequence exception, index = " << index;
     }
 
     if (mIsRegisterInvalid){
-        out << "卡[" << mPhysicalNo << "] " << ddrName << " frames ramvalue exception, index = " << mRegisterInvalidPosition;
+        out << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << " frames ramvalue exception, index = " << mRegisterInvalidPosition;
     }
 
     logFile.close();
@@ -2286,7 +2379,7 @@ void CaptureThread::run()
 
         if (mPrepareMode){// 空采模式
 
-            while (1){
+            while (!mInterruptSave){
                 // 读取寄存器，进行判断是否进入正式采集阶段
                 readBuf[0] = 0u;
                 if (PCIeCommSdk::readData(fUserHandle, offsetRegister, readBuf))
@@ -2301,23 +2394,22 @@ void CaptureThread::run()
 
                     }
 
-                    if ((quint8)readBuf[0] == 0xFF)
+                    if ((quint8)readBuf[0] == 0x10)
                     {
                         // 发送通知：正式测量开始
-
-                        // 设置采集时长
-                        //emit setCaptureTimelength();
+                        emit externalSignalTriggered(mPhysicalNo);
                         break;
                     }
                 }
 
-                {
-                    // 判断空采是否超时
-                    if (elapsedTimer.elapsed() > 10000){
-                        isOver = true;
-                        break;
-                    }
-                }
+                // 没收到信号长期等待
+                // {
+                //     // 判断空采是否超时
+                //     if (elapsedTimer.elapsed() > 10000){
+                //         isOver = true;
+                //         break;
+                //     }
+                // }
 
                 delay(1000);//精度1us
             }
@@ -2326,7 +2418,7 @@ void CaptureThread::run()
 
         if (isOver){
             // 如果空采超过了10s，这发炮号就取消正式采集
-            emit captureFinished(mPhysicalNo, mIsDDR1);
+            emit timeoutOccurred(mPhysicalNo);
 
             pause();
             // 暂停逻辑

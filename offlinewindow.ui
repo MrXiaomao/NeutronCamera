@@ -2029,6 +2029,11 @@
                 </property>
                 <item>
                  <property name="text">
+                  <string>512</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
                   <string>1024</string>
                  </property>
                 </item>

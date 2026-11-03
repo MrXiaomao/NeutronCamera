@@ -73,6 +73,7 @@ public:
     bool checkDataError();
     void printDebugInfo();
     bool dataExistError();
+    void saveAllData();
     bool writeFileWithNoBuffering(const QString &filePath, const char *data, qint64 size);
 
     void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds, bool testMode, bool prepareMode);
@@ -124,6 +125,8 @@ public:
     Q_SIGNAL void captureWaveformDataChanged(quint8,quint32,const QByteArray& data);
     Q_SIGNAL void captureSpectrumDataChanged(quint8,bool,quint32,const QByteArray& data);
     Q_SIGNAL void captureFinished(quint32, bool);
+    Q_SIGNAL void externalSignalTriggered(quint32);
+    Q_SIGNAL void timeoutOccurred(quint32);
 
 private:
     quint32 mIsDDR1 = true;//
@@ -143,7 +146,7 @@ private:
     quint32 mTimeout = 5000;//超时微秒
     bool mEnableTestMode = false;//启用测试模式
     bool mPrepareMode = false; //测量准备阶段
-    bool mInterruptSave = false;//是否终止
+    std::atomic<bool> mInterruptSave = false;//是否终止
     bool mIsException = false;//数据是否出现异常
     QVector<QByteArray> mDDRWaveformDatas;
     QVector<QByteArray> mRAMSpectrumDatas;
@@ -235,9 +238,8 @@ public:
         mmSingle        = 0x02,// 单次测量
         mmContinue      = 0x04,// 连续测量
         mmPreMeasure    = 0x08,// 预测量/空采
-        mmSingleTest    = mmTest | mmSingle,// 单次测量
-        mmContinueTest  = mmTest | mmContinue,// 连续测量
     };
+    Q_DECLARE_FLAGS(MeasureModes, MeasureMode)
 
     const QString CARD1_NAME = "\\\\?\\pci#ven_10ee&dev_9038&subsys_000710ee&rev_00#4&b189e7&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
     const QString CARD2_NAME = "\\\\?\\pci#ven_10ee&dev_9038&subsys_000710ee&rev_00#4&10d89b97&0&0020#{74c7e4a9-6d5d-4a70-bc0d-20691dff9e9d}";
@@ -247,6 +249,8 @@ public:
     Q_SIGNAL void reportOpenDeviceFail(quint8);
     Q_SIGNAL void captureFailOccurred(quint32, quint32);
     Q_SIGNAL void captureFinished();
+    Q_SIGNAL void externalSignalTriggered();
+    Q_SIGNAL void timeoutOccurred();
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
 
@@ -385,7 +389,8 @@ public:
     HANDLE getHandle(quint8 physicalNo, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
     static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_FLAG_NO_BUFFERING);//O_RDWR
 
-    void setMeasureMode(MeasureMode mm = mmSingle){mMeasureMode = mm;};
+    void setMeasureModes(MeasureModes mm = mmSingle){mMeasureModes = mm;};
+    void setTriggerMode(bool isSoftTriggerMode = true);
 
 #ifdef SINGLE_BOARD_MODE
     quint8 activePhysicalNo() const{return mActivePhysicalNo;}
@@ -406,8 +411,10 @@ private:
     quint8 mActivePhysicalNo = 1; // 当前激活的卡号
     quint8 mActiveDeviceIndex = 1; //
 #endif // SINGLE_BOARD_MODE
-    MeasureMode mMeasureMode = mmSingle;
+    MeasureModes mMeasureModes = mmSingle;
     qint32 mMeasureTimelength = 10000;//默认10s
 };
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(PCIeCommSdk::MeasureModes)
 
 #endif // PCIECOMMSDK_H
