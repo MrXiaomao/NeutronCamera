@@ -42,10 +42,6 @@ public:
     QtnPropertyQString* channelAurora;// 采集链路/区域
     QtnPropertyQString* channelIndex;// 采集通道
 
-    //小板卡
-    QtnPropertySet* propSetBoard;
-    QtnPropertyQString* BoardIpAddress;// 设备地址
-
 #endif
     QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
     QtnPropertyInt* triggerThreshold;// 触发阈值
@@ -183,15 +179,15 @@ AppConfig::AppConfig(QObject* parent)
                 });
 #endif // SINGLE_BOARD_MODE
 
-        // d->propSetBoard1->setState(QtnPropertyStateNone);
-        // d->propSetBoard2->setState(QtnPropertyStateImmutable, false);
-        // d->propSetBoard3->setState(QtnPropertyStateImmutable, false);
-        // d->propBoard1EnableDDR1->setState(QtnPropertyStateImmutable, false);
-        // d->propBoard1EnableDDR2->setState(QtnPropertyStateImmutable, false);
-        // d->propBoard2EnableDDR1->setState(QtnPropertyStateImmutable, false);
-        // d->propBoard2EnableDDR2->setState(QtnPropertyStateImmutable, false);
-        // d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
-        // d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
+        d->propSetBoard1->setState(QtnPropertyStateImmutable, false);
+        d->propSetBoard2->setState(QtnPropertyStateImmutable, false);
+        d->propSetBoard3->setState(QtnPropertyStateImmutable, false);
+        d->propBoard1EnableDDR1->setState(QtnPropertyStateImmutable, false);
+        d->propBoard1EnableDDR2->setState(QtnPropertyStateImmutable, false);
+        d->propBoard2EnableDDR1->setState(QtnPropertyStateImmutable, false);
+        d->propBoard2EnableDDR2->setState(QtnPropertyStateImmutable, false);
+        d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
+        d->propBoard3EnableDDR1->setState(QtnPropertyStateImmutable, false);
 
         propSet->collapse();
     }
@@ -298,15 +294,25 @@ AppConfig::AppConfig(QObject* parent)
     {
         QtnPropertySet* propSet = new QtnPropertySet(d->propSetRoot);
         d->propSetState = propSet;
+#ifdef SINGLE_BOARD_MODE
+        propSet->setName("本机网络信息");
+#else
         propSet->setName("状态监测模块");
+#endif //
         propSet->setId(ID_STATEDEV_SET);
 
         // 设备地址
         d->devIpAddress = new QtnPropertyQString(propSet);
         d->devIpAddress->setId(++baseId);
+#ifdef SINGLE_BOARD_MODE
+        d->devIpAddress->setName("本机IP");
+        d->devIpAddress->setDescription("如：172.18.14.90");
+        d->devIpAddress->setValue("172.18.14.90");
+#else
         d->devIpAddress->setName("设备地址");
         d->devIpAddress->setDescription("如：192.168.1.212");
         d->devIpAddress->setValue("192.168.1.212");
+#endif // SINGLE_BOARD_MODE
 
         // 远程端口
         d->devRemotePort = new QtnPropertyUInt(propSet);
@@ -326,12 +332,15 @@ AppConfig::AppConfig(QObject* parent)
         d->devLocalPort->setMinValue(0);
         d->devLocalPort->setValue(1000);
 
-#ifndef SINGLE_BOARD_MODE
+#ifdef SINGLE_BOARD_MODE
+        propSet->addChildProperty(d->devIpAddress);
+        propSet->addChildProperty(d->devLocalPort);
+#else
         propSet->addChildProperty(d->devIpAddress);
         propSet->addChildProperty(d->devRemotePort);
         propSet->addChildProperty(d->devLocalPort);
-        d->propSetRoot->addChildProperty(propSet);
 #endif // SINGLE_BOARD_MODE
+        d->propSetRoot->addChildProperty(propSet);
     }
 
     // 数据中心网络
@@ -658,7 +667,7 @@ bool AppConfig::isEnableCapture(quint8 physicalIndex, bool isDDR1)
     }
 
     if (propBoardEnableDDR)
-        return propSetBoard->isWritable() && propBoardEnableDDR->value();
+        return propSetBoard->isWritable() && propBoardEnableDDR->isWritable() && propBoardEnableDDR->value();
     else
         return false;
 }

@@ -4,8 +4,7 @@
 #include <QObject>
 #include <QDebug>
 #include <QVector>
-#include "pcieiocpreader.h"
-#include "globalsettings.h"
+#include "n_gamma.h"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -74,6 +73,7 @@ public:
     void printDebugInfo();
     bool dataExistError();
     void saveAllData();
+    void resumePreHeat();
     bool writeFileWithNoBuffering(const QString &filePath, const char *data, qint64 size);
 
     void setParamter(const QString &saveFilePath, quint32 captureTimeSeconds, bool testMode, bool prepareMode);
@@ -133,10 +133,7 @@ private:
     quint32 mDeviceIndex;//采集卡索引 1~6
     quint32 mPhysicalNo;//采集卡编号 1~3
     QString mDeviceName;//采集卡设备名称
-#if ENABLE_IOCP
-    PcieIocpReader* mPcieReader = nullptr;
-#else
-#endif // ENABLE_IOCP
+
     bool mIsRegisterInvalid = false;
     int mRegisterInvalidPosition = 0;
 
@@ -148,6 +145,11 @@ private:
     bool mPrepareMode = false; //测量准备阶段
     std::atomic<bool> mInterruptSave = false;//是否终止
     bool mIsException = false;//数据是否出现异常
+#ifdef SINGLE_BOARD_MODE
+    quint8 mBlockCapacity = 320;// 40ms/帧，12.8s共320帧
+#else
+    quint8 mBlockCapacity = 250;// 40ms/帧, 4s共100帧，10s共250帧
+#endif
     QVector<QByteArray> mDDRWaveformDatas;
     QVector<QByteArray> mRAMSpectrumDatas;
 

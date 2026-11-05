@@ -16,9 +16,11 @@ SOURCES += \
     AppConfig.cpp \
     QSnmpClient.cpp \
     ToastNotification.cpp \
+    commandadapter.cpp \
     commhelper.cpp \
     dataanalysisworker.cpp \
     datacompresswindow.cpp \
+    dataprocessor.cpp \
     devicemanagerwindow.cpp \
     globalsettings.cpp \
     hdadataupload.cpp \
@@ -38,9 +40,11 @@ HEADERS += \
     AppConfig.h \
     QSnmpClient.h \
     ToastNotification.h \
+    commandadapter.h \
     commhelper.h \
     dataanalysisworker.h \
     datacompresswindow.h \
+    dataprocessor.h \
     devicemanagerwindow.h \
     hdadataupload.h \
     n_gamma.h \
@@ -53,6 +57,7 @@ HEADERS += \
     globalsettings.h \
     mainwindow.h \
     settingwindow.h \
+    spectypes.h \
     switchbutton.h \
     waitingspinnerwidget.h
 
@@ -209,6 +214,33 @@ include($$PWD/../3rdParty/hdf5/C++/hdf5Wrapper.pri)
 include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
 include($$PWD/../3rdParty/QtnProperty-2.0.3/QtnProperty/QtnProperty.pri)
 
+# 启用 libhv（MinGW 用 libhv.dll.a；MSVC 需 3rdParty/libhv/lib/hv.lib，否则回退 TcpAgentServer）
+DEFINES += ENABLE_LIBHV=1
+win32 {
+    *-msvc*:!exists($$PWD/../3rdParty/libhv/lib/hv.lib) {
+        DEFINES -= ENABLE_LIBHV=1
+        !build_pass:message("MSVC: 未找到 hv.lib，ENABLE_LIBHV 已关闭，使用 Qt TcpAgentServer")
+    }
+
+    contains(DEFINES, ENABLE_LIBHV=1) {
+        message("Including libhv library")
+        INCLUDEPATH += $$PWD/../3rdParty/libhv/include
+        LIBS += -L$$PWD/../3rdParty/libhv/lib -lhv
+        *-g++* {
+            # MinGW 导入库名 libhv.dll.a，-lhv 可解析
+        }
+        *-msvc* {
+            LIBS += $$PWD/../3rdParty/libhv/lib/hv.lib
+        }
+        LIBS += -lws2_32
+    }
+
+    contains(DEFINES, USE_QTELNET=1) {
+        message("Including telnet library")
+        # include($$PWD/../3rdParty/QNtpClient/QNtpClient.pri) /*时钟同步服务器*/
+        include($$PWD/../3rdParty/QTelnet/QTelnet.pri)
+    }
+}
 ################################################################################################
 # 添加预编译头文件
 # 添加config配置

@@ -12,6 +12,9 @@
 #include <QDateTime>
 #include <QEventLoop>
 #include "qlitethread.h"
+#include <hv/TcpServer.h>
+#include <hv/htime.h>
+#include "dataprocessor.h"
 
 class UdpDataProcessor : public QObject
 {
@@ -62,6 +65,16 @@ public:
      关闭服务
     */
     void disconnectServer();
+    /*
+     开始测量
+    */
+    void startMeasure(QString fileSavePath, CommandAdapter::MeasureMode measureMode,
+                      CommandAdapter::WorkMode workMode);
+
+    /*
+     停止测量
+    */
+    void stopMeasure();
 
     bool switchPower(quint8, bool);
     bool switchVoltage(quint8, bool);
@@ -87,12 +100,22 @@ public:
     Q_SIGNAL void connected();
     Q_SIGNAL void disconnected();
 
+    Q_SIGNAL void detectorOnline();  //数采板
+    Q_SIGNAL void detectorOffline();
+    Q_SIGNAL void reportDetectorTemperature(quint8, float temperature, const QDateTime& trTime); //探测器温度报告
+    Q_SIGNAL void reportWaveCurve(quint8, const QVector<quint16>& data); // 发送解析后的波形曲线
+    Q_SIGNAL void reportFullSpectrum(quint8 index, const FullSpectrum& fullSpectrum); // 发送完整的能谱数据
+    Q_SIGNAL void reportTimestampe(const QDateTime triggerTime);
+
     Q_SLOT void error(QAbstractSocket::SocketError);
     Q_SLOT void readyRead();
     Q_SLOT void startReconnect();
     Q_SLOT void stopReconnect();
 
     Q_SLOT void onReadyRead(QByteArray&);
+
+    //网口原始数据（解析线程）
+    Q_SLOT void onRawNetData_Thread(quint8 index, const QByteArray& data);
 
 private:
     QUdpSocket *mUdpShotReceiver = nullptr;// 炮号接收器
@@ -111,6 +134,11 @@ private:
     QMap<quint8, bool> mMapBackupPower;//探测器的2#电源开关
     QMap<quint8, bool> mMapBackupVoltage;//探测器的2#电压开关
     QMap<quint8, bool> mMapChannel;//选通开关,false-1#,true-2#
+
+    hv::TcpServer *mTcpServer = nullptr; // libhv服务器实例
+    DataProcessor* mDetectorDataProcessor = nullptr;
+    QFile* mDetectFileProcessor = nullptr;
+    void initDataProcessor();
 
     /*
      初始化网络

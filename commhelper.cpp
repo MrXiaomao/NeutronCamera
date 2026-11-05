@@ -1,5 +1,4 @@
 ﻿#include "commhelper.h"
-#include "globalsettings.h"
 #include "AppConfig.h"
 
 #include <bitset>
@@ -297,6 +296,7 @@ CommHelper::CommHelper(QObject *parent)
 {
     /*初始化网络*/
     initSocket();
+    initDataProcessor();
 
     // mRequestCmdThread = new QLiteThread(this);
     // mRequestCmdThread->setObjectName("mRequestCmdThread");
@@ -380,75 +380,203 @@ CommHelper::~CommHelper()
     }
 }
 
+#include <winsock2.h>   // WSAIoctl函数定义
+#include <mstcpip.h>    // 包含 TCP_KEEPALIVE 结构体定义
+#include <ws2ipdef.h>
+struct TCP_KEEPLIVE {
+    u_long onoff;
+    u_long keepalivetime;
+    u_long keepaliveinterval;
+};
+// 补充SDK缺失的宏，引用自C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared\ws2ipdef.h
+#if !defined(TCP_KEEPIDLE) && defined(_WIN32)
+#define TCP_KEEPALIVE       	 3
+#define TCP_KEEPCNT              16
+#define TCP_KEEPIDLE             TCP_KEEPALIVE
+#define TCP_KEEPINTVL            17
+#endif
 void CommHelper::initSocket()
 {
     // 初始化UDP
-    this->mUdpPerformanceMonitorReceiver = new QUdpSocket();
-    connect(mUdpPerformanceMonitorReceiver, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
-    mTimerout = new QTimer(this);
-    mTimerout->setSingleShot(true);
-    connect(mTimerout, &QTimer::timeout, this, [=](){
-        if (!mReconnectTimer->isActive())
-            qCritical() << "设备连接失败";
-    });
+#ifdef SINGLE_BOARD_MODE
+    mTcpServer = new hv::TcpServer();
+    mTcpServer->setThreadNum(32);
+    mTcpServer->onConnection = [&](const hv::SocketChannelPtr& channel)
+    {
+        if (channel->isConnected()){// isOpened()){// ->status == hv::SocketChannel::CONNECTED){
+            channel->setKeepaliveTimeout(60000);// 60s没有数据交互就断开(这种方式用的是通过判断最后一次网络数据的读/写时间与系统时钟的时间差来判断)
 
-    mReconnectTimer = new QTimer(this);
-    connect(mReconnectTimer, &QTimer::timeout, this, [=](){
-        this->connectServer();
-    });
+            // 禁用Nagle算法，降低数据包的传输延迟
+            tcp_nodelay(channel->fd());
+            // 设置接收缓冲区大小
+            int rcvbuf = 4 * 1024 * 1024;  // 4MB
+            setsockopt(channel->fd(), SOL_SOCKET, SO_RCVBUF, (char*)&rcvbuf, sizeof(rcvbuf));
+
+            // 1. 开启基础保活开关,缺省值:0(关闭)
+            //tcp_keepalive(channel->fd());
+            BOOL keepAliveEnable = TRUE;
+            setsockopt(channel->fd(), SOL_SOCKET, SO_KEEPALIVE, (const char*)&keepAliveEnable, sizeof(keepAliveEnable));
+
+            // 2. 设置最大探测次数为3次，仅对当前socket生效,缺省值:9(次)
+            int keepcnt = 3;
+            setsockopt(channel->fd(), IPPROTO_TCP, TCP_KEEPCNT, (char*)&keepcnt, sizeof(keepcnt));
+
+            // 修改空闲等待时间和探测间隔
+            // int idle = 5;  // 空闲5秒后开始探测（单位：秒），缺省值:7200(s)
+            // int interval = 3; // 探测间隔3秒（单位：秒）,缺省值:75(s)
+            // setsockopt(channel->fd(), IPPROTO_TCP, TCP_KEEPIDLE, (char*)&idle, sizeof(idle));
+            // setsockopt(channel->fd(), IPPROTO_TCP, TCP_KEEPINTVL, (char*)&interval, sizeof(interval));
+
+            // 3. 配置自定义保活参数（Windows参数单位为毫秒）
+            TCP_KEEPLIVE keepCfg = {0};
+            keepCfg.onoff = true;//开启keepalive属性
+            keepCfg.keepalivetime = 70*1000;  //如果该连接在30秒内没有任何数据往来，则执行TCP层的探测，缺省值:7200(s)
+            keepCfg.keepaliveinterval = 10*1000;//探测发包间隔是10秒,缺省值:75(s)
+
+            DWORD retBytes = 0;
+            WSAIoctl(
+                channel->fd(),
+                SIO_KEEPALIVE_VALS,
+                &keepCfg,
+                sizeof(keepCfg),
+                nullptr,
+                0,
+                &retBytes,
+                nullptr,
+                nullptr
+                );
+
+            QString peerAddress = QString::fromStdString(channel->peerip());
+            quint16 peerPort = channel->peerport();
+            qDebug().nospace() << "数采板上线，地址：" << peerAddress << ", 端口：" << peerPort;
+
+            //给新上线客户端分配数据处理器
+            mDetectorDataProcessor->reallocSocket(channel);
+            QMetaObject::invokeMethod(this, "detectorOnline", Qt::QueuedConnection);
+        }
+        else if (channel->isClosed()){//status == hv::SocketChannel::CLOSED){
+            QString peerAddress = QString::fromStdString(channel->peerip());
+            quint16 peerPort = channel->peerport();
+            qDebug().nospace() << "数采板下线，地址：" << peerAddress << ", 端口：" << peerPort;
+
+            QMetaObject::invokeMethod(this, "detectorOffline", Qt::QueuedConnection);
+        }
+        else {
+            return;
+        }
+    };
+#else
+    if (mUdpPerformanceMonitorReceiver == nullptr){
+        this->mUdpPerformanceMonitorReceiver = new QUdpSocket();
+        connect(mUdpPerformanceMonitorReceiver, &QUdpSocket::readyRead, this, &CommHelper::readyRead);
+        mTimerout = new QTimer(this);
+        mTimerout->setSingleShot(true);
+        connect(mTimerout, &QTimer::timeout, this, [=](){
+            if (!mReconnectTimer->isActive())
+                qCritical() << "设备连接失败";
+        });
+
+        mReconnectTimer = new QTimer(this);
+        connect(mReconnectTimer, &QTimer::timeout, this, [=](){
+            this->connectServer();
+        });
+    }
+#endif //
 
     //炮号接收器
-    this->mUdpShotReceiver = new QUdpSocket();
-    this->mUdpShotReceiver->setSocketOption(QAbstractSocket::MulticastLoopbackOption, true);
-    connect (mUdpShotReceiver, &QUdpSocket::readyRead, this, [=](){
-        while (mUdpShotReceiver->hasPendingDatagrams()) {
-            QByteArray datagram;
-            datagram.resize(int(mUdpShotReceiver->pendingDatagramSize()));
-            QHostAddress sender;
-            quint16 senderPort;
-            mUdpShotReceiver->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
-            //+PLS_12345
+    if (mUdpShotReceiver == nullptr){
+        this->mUdpShotReceiver = new QUdpSocket();
+        this->mUdpShotReceiver->setSocketOption(QAbstractSocket::MulticastLoopbackOption, true);
+        connect (mUdpShotReceiver, &QUdpSocket::readyRead, this, [=](){
+            while (mUdpShotReceiver->hasPendingDatagrams()) {
+                QByteArray datagram;
+                datagram.resize(int(mUdpShotReceiver->pendingDatagramSize()));
+                QHostAddress sender;
+                quint16 senderPort;
+                mUdpShotReceiver->readDatagram(datagram.data(), datagram.size(), &sender, &senderPort);
+                //+PLS_12345
 
-            qInfo().noquote() << "接收广播消息：" << datagram;
-            if (datagram.startsWith("+PLS_")){
-                //解析炮号
-                QRegularExpression regex("\\d+");
-                QRegularExpressionMatchIterator iterator = regex.globalMatch(datagram);
-                if (iterator.hasNext()) {
-                    QRegularExpressionMatch match = iterator.next();
-                    QString shotNum = match.captured(0);
-                    emit shotnumValueChanged(shotNum);
+                qInfo().noquote() << "接收广播消息：" << datagram;
+                if (datagram.startsWith("+PLS_")){
+                    //解析炮号
+                    QRegularExpression regex("\\d+");
+                    QRegularExpressionMatchIterator iterator = regex.globalMatch(datagram);
+                    if (iterator.hasNext()) {
+                        QRegularExpressionMatch match = iterator.next();
+                        QString shotNum = match.captured(0);
+                        emit shotnumValueChanged(shotNum);
+                    }
+                }
+                else if (datagram.startsWith("TIME_")){
+                    QRegularExpression regex("TIME_(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})\\.(\\d{3})");
+                    if (!datagram.contains('.'))
+                        datagram.append(".000");
+                        //regex.setPattern("TIME_(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})");
+                    QRegularExpressionMatchIterator iterator = regex.globalMatch(datagram);
+                    if (iterator.hasNext()) {
+                        QRegularExpressionMatch match = iterator.next();
+                        // 提取各个时间组件
+                        QString year = match.captured(1);    // 年
+                        QString month = match.captured(2);   // 月
+                        QString day = match.captured(3);     // 日
+                        QString hour = match.captured(4);    // 时
+                        QString minute = match.captured(5);  // 分
+                        QString second = match.captured(6);  // 秒
+                        QString millisecond = match.captured(7); // 毫秒
+                        QDateTime tm(QDate(year.toUInt(),month.toUInt(),day.toUInt()),
+                                     QTime(hour.toUInt(),minute.toUInt(),second.toUInt(),millisecond.toUInt()));
+                        emit systemTimeValueChanged(tm);
+                    }
+                }
+                else if (datagram.startsWith("EMERGENCE_STOP")){
+                    emit energenceStopSignalTriggered();
                 }
             }
-            else if (datagram.startsWith("TIME_")){
-                QRegularExpression regex("TIME_(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})\\.(\\d{3})");
-                if (!datagram.contains('.'))
-                    datagram.append(".000");
-                    //regex.setPattern("TIME_(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2}):(\\d{2})");
-                QRegularExpressionMatchIterator iterator = regex.globalMatch(datagram);
-                if (iterator.hasNext()) {
-                    QRegularExpressionMatch match = iterator.next();
-                    // 提取各个时间组件
-                    QString year = match.captured(1);    // 年
-                    QString month = match.captured(2);   // 月
-                    QString day = match.captured(3);     // 日
-                    QString hour = match.captured(4);    // 时
-                    QString minute = match.captured(5);  // 分
-                    QString second = match.captured(6);  // 秒
-                    QString millisecond = match.captured(7); // 毫秒
-                    QDateTime tm(QDate(year.toUInt(),month.toUInt(),day.toUInt()),
-                                 QTime(hour.toUInt(),minute.toUInt(),second.toUInt(),millisecond.toUInt()));
-                    emit systemTimeValueChanged(tm);
-                }
-            }
-            else if (datagram.startsWith("EMERGENCE_STOP")){
-                emit energenceStopSignalTriggered();
-            }
+        });
+        if (this->mUdpShotReceiver->bind(QHostAddress::Any, 12100, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)){
+            this->mUdpShotReceiver->joinMulticastGroup(QHostAddress::LocalHost);
         }
-    });
-    if (this->mUdpShotReceiver->bind(QHostAddress::Any, 12100, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)){
-        this->mUdpShotReceiver->joinMulticastGroup(QHostAddress::LocalHost);
     }
+}
+
+void CommHelper::initDataProcessor()
+{
+    // 这里必须是从0开始，0对应的是时间同步模块，1-32对应探测器索引，这样可以通过索引直接访问对应的处理器
+    DataProcessor* processor = new DataProcessor(1, nullptr, this);
+    mDetectorDataProcessor = processor;
+
+    // 更新温度数据
+    connect(processor, &DataProcessor::reportTemperatureData, this, [=](double temperature, const QDateTime& trTime){
+        emit reportDetectorTemperature(processor->getIndex(), temperature, trTime);
+    }, Qt::DirectConnection);
+
+    // 能谱数据（解析后的完整能谱数据）
+    connect(processor, &DataProcessor::reportFullSpectrum, this, [=](quint8 detID, const FullSpectrum& fullSpectrum){
+        emit reportFullSpectrum(detID, fullSpectrum); // 通知界面更新能谱数据
+
+        // H5Spectrum h5Spectrum = FullSpectoH5Spec(fullSpectrum);
+        // QMutexLocker lock(&mSpectrumH5MutexByDetector[detID]);
+        // mPendingH5ByDetector[detID].append(h5Spectrum);
+    }, Qt::DirectConnection);
+
+    // 波形数据（解析后的数据）
+    connect(processor, &DataProcessor::reportWaveCurveInfo, this, [=](quint8 detID, const QVector<quint16>& wave){
+        emit reportWaveCurve(detID, wave); //通知界面更新波形数据
+    }, Qt::QueuedConnection);
+
+    // 触发信号时间戳(解析后的数据)
+    connect(processor, &DataProcessor::reportTriggerTimeInfo, this, [=](quint8 detID, const QDateTime triggerTime){
+        emit reportTimestampe(triggerTime); //通知界面更新触发时间戳
+    }, Qt::DirectConnection);
+
+    // 原始OTA升级数据
+    // connect(processor, &DataProcessor::reportOTAUpgradeData, this, [=](quint8 detID, const QByteArray& data){
+    //     emit reportOTAUpgradeData(detID, data);
+    // }, Qt::DirectConnection);
+
+    // 原始网络数据
+    connect(processor, &DataProcessor::reportRawNetData, this,
+            &CommHelper::onRawNetData_Thread, Qt::DirectConnection);
 }
 
 void CommHelper::error(QAbstractSocket::SocketError error)
@@ -667,6 +795,18 @@ bool CommHelper::connectServer()
     quint32 port = AppConfig::instance().remotePort();
     quint32 portLocal = AppConfig::instance().localPort();
 
+#ifdef SINGLE_BOARD_MODE
+    initSocket();
+    int ret = this->mTcpServer->createsocket(portLocal/*8151*/, ip.toStdString().c_str());
+    if (ret >= 0 ){
+        this->mTcpServer->start();
+        return true;
+    }
+    else{
+        disconnectServer();
+        return false;
+    }
+#else
     this->mUdpPerformanceMonitorReceiver->close();
     if (this->mUdpPerformanceMonitorReceiver->bind(QHostAddress::AnyIPv4, portLocal, QUdpSocket::ShareAddress)){
         mTimerout->start(1000);
@@ -678,6 +818,7 @@ bool CommHelper::connectServer()
     }
 
     return false;
+#endif // SINGLE_BOARD_MODE
 }
 
 /*
@@ -685,6 +826,14 @@ bool CommHelper::connectServer()
 */
 void CommHelper::disconnectServer()
 {
+#ifdef SINGLE_BOARD_MODE
+    if (this->mTcpServer)
+    {
+        this->mTcpServer->stop();
+        delete mTcpServer;
+        mTcpServer = nullptr;
+    }
+#else
     QString ip = AppConfig::instance().ipAddress();
     quint32 port = AppConfig::instance().remotePort();
 
@@ -694,6 +843,7 @@ void CommHelper::disconnectServer()
 
         mUdpPerformanceMonitorReceiver->close();
     }
+#endif // SINGLE_BOARD_MODE
 }
 
 bool CommHelper::switchPower(quint8 channel, bool on)
@@ -811,4 +961,136 @@ void CommHelper::startReconnect()
 void CommHelper::stopReconnect()
 {
     mReconnectTimer->stop();
+}
+
+//网口原始数据（解析线程）
+void CommHelper::onRawNetData_Thread(quint8 /*index*/, const QByteArray& data)
+{
+    QFile* file = mDetectFileProcessor;
+    if (!file || !file->isOpen())
+        return;
+
+    file->write(data.constData(), data.size());
+}
+
+/*
+ 开始测量
+*/
+#include <QFileInfo>
+void CommHelper::startMeasure(QString fileSavePath, CommandAdapter::MeasureMode measureMode,
+                  CommandAdapter::WorkMode workMode)
+{
+    constexpr int kReserveH5PerDetector = 60; // 每路探测器预留60个能谱数据
+    constexpr int kReserveRawBytesPerDetector = 1024 * 1024; // 每路探测器预留1MB网口原始数据，50ms能谱刷新频率下0.625MB/s
+
+    // mMeasureStartTime = tmStart.toString("yyyy-MM-dd_HHmmss");// QDateTime::currentDateTime().toString("yyyy-MM-dd_HHmmss");
+    // mCurrentWorkMode = workMode;
+    // const bool wasMeasuring = mMeasuring;
+    // mMeasuring = true;
+
+
+   if (mDetectFileProcessor->isOpen()){
+        mDetectFileProcessor->close();
+        mDetectFileProcessor->deleteLater();
+        mDetectFileProcessor = nullptr;
+    }
+
+    // 清理flush信息
+    // {
+    //     QMutexLocker flushLocker(&mMutexFileFlush);
+    //     mFileFlushInfo.remove(index);
+    // }
+
+    // // 测量中单通道重测（掉线重上线）：先冲刷共用文件缓冲，再为该通道新建独立 H5
+    // if (workMode == CommandAdapter::WorkMode::wmSpectrum) {
+    //     QVector<H5Spectrum> pending;
+    //     {
+    //         QMutexLocker lock(&mSpectrumH5MutexByDetector[index]);
+    //         mPendingH5ByDetector[index].swap(pending);
+    //         mPendingH5ByDetector[index].reserve(kReserveH5PerDetector);
+    //     }
+    //     if (!pending.isEmpty())
+    //         HDF5Settings::instance()->writeH5SpectrumBatch(1, pending);
+
+    //     const QString channelStartTime = mMeasureStartTime;
+    //     QString h5Path = QString("%1/能谱.H5").arg(fileSavePath);
+    //     const QString createdPath = HDF5Settings::instance()->createChannelH5Spectrum(
+    //         1, h5Path, channelStartTime, mShotTime.isEmpty() ? shotTime : mShotTime);
+    //     if (!createdPath.isEmpty() && !mDataFileList.contains(createdPath))
+    //         mDataFileList.push_back(createdPath);
+    // }
+
+    if (!mDetectorDataProcessor->isFreeSocket()){
+        //创建有效网络数据文件存储
+
+        QString filePath = QString("%1/能谱.dat").arg(fileSavePath);
+        if (CommandAdapter::WorkMode::wmWaveform == workMode)
+            filePath = QString("%1/波形.dat").arg(fileSavePath);
+
+        mDetectFileProcessor = new QFile(filePath);
+        if (mDetectFileProcessor->open(QIODevice::WriteOnly)){
+            // 初始化flush信息
+            // {
+            //     QMutexLocker flushLocker(&mMutexFileFlush);
+            //     mFileFlushInfo[index] = FileFlushInfo();
+            // }
+
+            QFileInfo info(filePath);
+            QString absolutePath = info.absoluteFilePath();
+            qDebug().nospace() << "小数采创建存储文件：" << absolutePath;
+        }
+
+        mDetectorDataProcessor->startMeasure(workMode, measureMode);
+    }
+}
+
+/*
+ 停止测量
+*/
+void CommHelper::stopMeasure()
+{
+    // // 停止前先将 H5 缓存落盘，避免累计在内存中
+    // flushSpectrumH5BuffersOnWorkerThread(true);
+    // // 停止前先将网口原始数据缓存落盘，避免尾包丢失
+    // flushNetRawBuffersOnWorkerThread(true);
+
+    //默认情况所有通道直接一次性停止测量
+    // {
+    //     QMutexLocker lock(&mSpectrumRawMutexByDetector[index]);
+    //     if (index < mPendingNetRawByDetector.size())
+    //         mPendingNetRawByDetector[index].clear();
+    // }
+    if (!mDetectorDataProcessor->isFreeSocket()){
+        mDetectorDataProcessor->stopMeasure();
+    }
+
+    //延迟关闭文件，确保尾包数据能够正常存储
+    if (mDetectFileProcessor){
+        QFile* file = mDetectFileProcessor;
+        if (file && file->isOpen()){
+            //先刷新缓冲区，确保已写入的数据被保存
+            file->flush();
+        }
+
+        //关闭文件
+        {
+            QFile* fileToClose = mDetectFileProcessor;
+            if (fileToClose && fileToClose->isOpen()){
+                fileToClose->flush(); //再次刷新，确保尾包数据写入
+                fileToClose->close();
+            }
+            fileToClose->deleteLater();
+            mDetectFileProcessor = nullptr;
+        }
+
+        // // 清理flush信息
+        // {
+        //     QMutexLocker flushLocker(&mMutexFileFlush);
+        //     mFileFlushInfo.remove(detIndex);
+        // }
+
+        //关闭能谱文件
+        // HDF5Settings::instance()->closeChannelH5Spectrum(index);
+        // HDF5Settings::instance()->closeH5Spectrum();
+    }
 }

@@ -69,7 +69,7 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     ui->pushButton_selChannel1->setEnabled(false);
     ui->pushButton_selChannel2->setEnabled(false);
 #ifdef SINGLE_BOARD_MODE
-    ui->toolBar->removeAction(ui->action_init);
+    ui->action_init->setText("开启服务");
 #else
     ui->action_startMeasure->setEnabled(false);
     ui->action_stopMeasure->setEnabled(false);
@@ -2025,6 +2025,11 @@ void MainWindow::onStartMeasure()
         this->mIsMeasuring = true;
         ui->lineEdit_triggerflag->setText(QStringLiteral("正在测量"));
         mPCIeCommSdk.setMeasureModes(measureModes);
+#ifdef SINGLE_BOARD_MODE
+        CommandAdapter::MeasureMode measureMode = mExternalTriggerMode ? \
+                                                      CommandAdapter::MeasureMode::mmAuto : CommandAdapter::MeasureMode::mmManual;
+        mCommHelper->startMeasure(mCurrentSavePath, measureMode, CommandAdapter::WorkMode::wmWaveform);
+#endif
         mPCIeCommSdk.startAllCapture(mCurrentSavePath,
                                      ui->spinBox_timeLength->value(),
                                      ui->lineEdit_shotNum->text());
@@ -2239,6 +2244,28 @@ void MainWindow::on_pushButton_preview_clicked()
 
 void MainWindow::on_action_init_triggered()
 {
+#ifdef SINGLE_BOARD_MODE
+    if (ui->action_init->text() == QStringLiteral("开启服务")){
+        if (mCommHelper->connectServer()){
+            QLabel* label_LocalServer = this->findChild<QLabel*>("label_LocalServer");
+            if (label_LocalServer){
+                label_LocalServer->setStyleSheet("color:#00ff00;");
+                label_LocalServer->setText(tr("本地网络服务：已开启"));
+            }
+            ui->action_init->setText("停止服务");
+            ui->statusbar->showMessage(QStringLiteral("开启本地网络服务，等待探测器连接"));
+        }
+        else{
+            qInfo().noquote() << tr("连接设备失败");
+            QMessageBox::information(this, tr("提示"), tr("服务开启失败，请检测本地主机地址！"));
+        }
+    }
+    else{
+        mCommHelper->disconnectServer();
+        ui->action_init->setText("开启服务");
+        ui->statusbar->showMessage(QStringLiteral("本地网络服务已关闭"));
+    }
+#else
     mReconnecting = false;
     mCommHelper->stopReconnect();
     if (ui->action_init->text() == QStringLiteral("连接设备")){
@@ -2252,7 +2279,7 @@ void MainWindow::on_action_init_triggered()
     else{
         mCommHelper->disconnectServer();
     }
-    //emit mPCIeCommSdk.onSettingFinished();
+#endif // SINGLE_BOARD_MODE
 }
 
 void MainWindow::on_action_status_triggered(bool checked)

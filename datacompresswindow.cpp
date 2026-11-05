@@ -7,7 +7,7 @@
 #include <QFileInfo>
 #include <QFile>
 #include <QDir>
-#include "globalsettings.h"
+#include "n_gamma.h"
 
 #include <QVector>
 #include <cstring>
