@@ -25,6 +25,11 @@ public:
 
         // 数据中心网络
         ID_CONTROLCENTER_SET = 4000,
+
+#ifdef SINGLE_BOARD_MODE
+        // DAQb
+        ID_DAQb_SET = 5000,
+#endif // SINGLE_BOARD_MODE
     };
 
     static AppConfig& instance();
@@ -43,6 +48,13 @@ public:
 #ifdef SINGLE_BOARD_MODE
     quint8 channelAurora() const;
     quint8 channelIndex() const;
+
+    // 波形测量
+    quint8 workMode() const;
+    quint8 waveTriggerMode() const;
+    quint32 waveformLength() const;
+    quint32 highVoltage() const; //650、700、750、850 V
+    quint32 spectrumRefreshTimelength() const;
 #endif // SINGLE_BOARD_MODE
 
     int psdThreshold(quint8 channelNo = 0/*通道号*/) const;

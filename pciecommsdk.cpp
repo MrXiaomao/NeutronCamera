@@ -270,12 +270,13 @@ void PCIeCommSdk::stopCapture(quint32 deviceIndex)
 void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMillisecond,  QString shotNum/*炮号*/)
 {
 #ifdef SINGLE_BOARD_MODE
-    // 启动小数采
+    if (numberOfDevices() <= 0)
+        return;
 
     // 启动采集卡
     const quint8 channelAurora = AppConfig::instance().channelAurora();
     const quint8 channelIndex = AppConfig::instance().channelIndex();
-    qInfo().nospace() << QStringLiteral("卡[") << mActivePhysicalNo << "] " << QStringLiteral("采集链路：") << "Aurora" << (channelAurora+1)<< "，通道：CH" << (channelIndex+1);
+    qInfo().nospace().noquote() << QStringLiteral("卡[") << mActivePhysicalNo << "] " << QStringLiteral("采集链路：") << "Aurora" << (channelAurora+1)<< "，通道：CH" << (channelIndex+1);
 
     for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
     {
@@ -615,7 +616,7 @@ void PCIeCommSdk::setTriggerMode(bool isSoftTriggerMode)
         // writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
         // ::QThread::msleep(10);
 
-        qInfo().nospace() << QStringLiteral("卡[") << physicalNo << "] " << QStringLiteral("设置触发模式：") << (isSoftTriggerMode ? QStringLiteral("软件触发模式") : QStringLiteral("外触发模式"));
+        qInfo().nospace().noquote() << QStringLiteral("卡[") << physicalNo << "] " << QStringLiteral("设置触发模式：") << (isSoftTriggerMode ? QStringLiteral("软件触发模式") : QStringLiteral("外触发模式"));
 
 #ifdef SINGLE_BOARD_MODE
         break; // 单张采集卡只需要设置一张卡参数配置
@@ -675,7 +676,7 @@ void PCIeCommSdk::setTriggerThreshold()
         // writeData(physicalNo, fUserHandle, address, QByteArray::fromHex("00 00 00 00"));
         // ::QThread::msleep(10);
 
-        qInfo().nospace() << "卡[" << physicalNo << "] " << QStringLiteral("设置触发阈值：") << threshold;
+        qInfo().nospace().noquote() << "卡[" << physicalNo << "] " << QStringLiteral("设置触发阈值：") << threshold;
 
 #ifdef SINGLE_BOARD_MODE
         break; // 单张采集卡只需要设置一张卡参数配置
@@ -738,7 +739,7 @@ void PCIeCommSdk::setCaptureTimelength(qint32 timeLength)
             else
                 writeData(physicalNo, fUserHandle, 0x20000, QByteArray::fromHex("16 FA 34 12"));//16-160ms 18-800ms 20-4000ms 30-12000ms
 
-            qInfo().nospace() << "卡[" << physicalNo << "] " << QStringLiteral("设置测量时长：") << timeLength << "ms";
+            qInfo().nospace().noquote() << "卡[" << physicalNo << "] " << QStringLiteral("设置测量时长：") << timeLength << "ms";
 #endif
         }
 
@@ -1469,7 +1470,7 @@ bool PCIeCommSdk::writeData(quint8 physicalNo, HANDLE fd, quint64 offset, const 
     write(fd, data.data(), data.size());
 #endif
 
-    qDebug().nospace() << QStringLiteral("卡[") << physicalNo << "] writeData" << QString("0x%1").arg((quint64)offset, 8, 16, QLatin1Char('0')) << data.toHex(' ');
+    qDebug().nospace().noquote() << QStringLiteral("卡[") << physicalNo << "] writeData" << QString("0x%1").arg((quint64)offset, 8, 16, QLatin1Char('0')) << data.toHex(' ');
     return true;
 }
 
@@ -1843,7 +1844,7 @@ bool CaptureThread::startMeasure()
 
     CloseHandle(fHandle);
 
-    qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << QStringLiteral("发送开始测量指令");
+    qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << QStringLiteral("发送开始测量指令");
     return true;
 }
 
@@ -1952,27 +1953,27 @@ bool CaptureThread::checkDataError()
     printDebugInfo();
 
     if (!waveformError && !mIsRegisterInvalid){
-        qDebug().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形正常") << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
-        qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形正常");
+        qDebug().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形正常") << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+        qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形正常");
     }
     else{
         if (waveformError){
-            qDebug().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形帧序号异常, 索引 = ") << waveformErrorIndex << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
-            qCritical().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形帧序号异常, 索引 = ") << waveformErrorIndex;
+            qDebug().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形帧序号异常, 索引 = ") << waveformErrorIndex << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+            qCritical().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形帧序号异常, 索引 = ") << waveformErrorIndex;
         }
         else if (mIsRegisterInvalid){
-            qDebug().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形寄存器值异常, 索引 = ") << mRegisterInvalidPosition << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
-            qCritical().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形寄存器值异常, 索引 = ") << mRegisterInvalidPosition;
+            qDebug().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形寄存器值异常, 索引 = ") << mRegisterInvalidPosition << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+            qCritical().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 波形寄存器值异常, 索引 = ") << mRegisterInvalidPosition;
         }
     }
 
     if (!spectrumError){
-        qDebug().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱正常") << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ";
-        qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱正常");
+        qDebug().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱正常") << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ";
+        qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱正常");
     }
     else{
-        qDebug().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱帧序号异常, 索引 = ") << spectrumErrorIndex << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
-        qCritical().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱帧序号异常, 索引 = ") << spectrumErrorIndex;
+        qDebug().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱帧序号异常, 索引 = ") << spectrumErrorIndex << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>";
+        qCritical().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱帧序号异常, 索引 = ") << spectrumErrorIndex;
     }
 
     saveAllData();
@@ -2133,7 +2134,7 @@ void CaptureThread::saveAllData()
     QDir().mkpath(mSaveFilePath);   // 确保目录存在
     const QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
 
-    qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 数据正在存储到硬盘中，请等待...");
+    qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 数据正在存储到硬盘中，请等待...");
 
     struct SaveTask { QString fileName; const QByteArray* data; };
     QVector<SaveTask> tasks;
@@ -2174,7 +2175,7 @@ void CaptureThread::saveAllData()
     });
 
     QThreadPool::globalInstance()->setMaxThreadCount(oldMax);
-    qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 数据已经全部存储到硬盘中");
+    qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 数据已经全部存储到硬盘中");
 }
 
 bool CaptureThread::dataExistError()
@@ -2235,7 +2236,7 @@ bool CaptureThread::writeFileWithNoBuffering(const QString &filePath, const char
 void CaptureThread::resumePreHeat()
 {
     const QString ddrName = (mIsDDR1 ? QStringLiteral("DDR1") : QStringLiteral("DDR2"));
-    qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] "
+    qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] "
                       << ddrName << QStringLiteral(" 内存预热中...");
     QElapsedTimer t; t.start();
     QStringList st;
@@ -2280,7 +2281,7 @@ void CaptureThread::run()
     QMutex timeMutex;
     quint8 lastRegisterValue = 0x00;// 最后寄存器值
 
-    qDebug().nospace() << QStringLiteral("卡[") << mPhysicalNo << (mIsDDR1 ? QStringLiteral("] DDR1") : QStringLiteral("] DDR2")) << QStringLiteral(" 数据采集线程 id:") << (quint64)this->currentThreadId();
+    qDebug().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << (mIsDDR1 ? QStringLiteral("] DDR1") : QStringLiteral("] DDR2")) << QStringLiteral(" 数据采集线程 id:") << (quint64)this->currentThreadId();
 
     // 创建线程池
     QThreadPool* threadPool = new QThreadPool(this);
@@ -2352,7 +2353,7 @@ void CaptureThread::run()
                                                 FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE);
         if (fUserHandle == INVALID_HANDLE_VALUE)
         {
-            qCritical().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
+            qCritical().nospace().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
                                << QStringLiteral("卡[") << mPhysicalNo << "] "
                                << ddrName
                                << QStringLiteral(" 设备打开失败");
@@ -2383,7 +2384,7 @@ void CaptureThread::run()
 
         this->mInterruptSave = false;
 
-        // qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] "
+        // qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] "
         //                   << ddrName << QStringLiteral(" 内存预热中...");
         // QElapsedTimer t; t.start();
         // while (1){
@@ -2399,7 +2400,7 @@ void CaptureThread::run()
         //     if (t.elapsed() >= 30000)
         //         break;
         // }
-        // qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] "
+        // qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] "
         //         << ddrName << QStringLiteral(" 预热内存耗时:") << t.elapsed() << "ms";
 
 #ifdef SINGLE_BOARD_MODE
@@ -2415,7 +2416,7 @@ void CaptureThread::run()
 #endif // SINGLE_BOARD_MODE
 
         elapsedTimer.start();
-        qDebug().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] "
+        qDebug().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] "
                            << ddrName
                            << QStringLiteral(" 开始测量>>>>>>>>>>>>>>>>>>>>>>>>")
                            << elapsedTimer.elapsed();
@@ -2466,7 +2467,7 @@ void CaptureThread::run()
             pause();
             // 暂停逻辑
             {
-                qDebug().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
+                qDebug().nospace().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
                                    << QStringLiteral("卡[") << mPhysicalNo << "] "
                                    << ddrName
                                    << QStringLiteral(" 休眠");
@@ -2554,7 +2555,7 @@ void CaptureThread::run()
                     isOver = true;
 
                     // 读数失败了(从未进入到这里，如果进入到这里，肯定是硬件出问题了)
-                    qCritical().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] "
+                    qCritical().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] "
                                           << ddrName << QStringLiteral("读寄存器失败，测量时刻：") << elapsedTimer.elapsed();
                     break;
                 }
@@ -2562,7 +2563,7 @@ void CaptureThread::run()
 #ifdef SINGLE_BOARD_MODE
                 if (++failCount>=200)//50ms
 #else
-                if (++failCount>=50)//50ms
+                if (++failCount>=60)//50ms
 #endif
                 {
                     isTimeout = true;
@@ -2633,7 +2634,7 @@ void CaptureThread::run()
                     if(locked)
                         ::VirtualUnlock(const_cast<char*>(p), sz);         // ← 读完立刻解！
 
-                    // qDebug() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << "fIndex" << capturedRef << "lockMs" << lockMs
+                    // qDebug()nospace().noquote << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << "fIndex" << capturedRef << "lockMs" << lockMs
                     //         << "readMs" << readMs;
                 }
 
@@ -2666,9 +2667,9 @@ void CaptureThread::run()
         {
             threadPool->waitForDone();
 #ifdef SINGLE_BOARD_MODE
-            qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 采集结束，共采集：") << mCapturedRef << "帧/160ms";
+            qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 采集结束，共采集：") << mCapturedRef << "帧/160ms";
 #else
-            qInfo().nospace() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 采集结束，共采集：") << mCapturedRef << "帧/40ms";
+            qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 采集结束，共采集：") << mCapturedRef << "帧/40ms";
 #endif
             checkDataError();
             emit captureFinished(mPhysicalNo, mIsDDR1);
@@ -2676,7 +2677,7 @@ void CaptureThread::run()
             pause();
             // 暂停逻辑
             {
-                qDebug().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
+                qDebug().nospace().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
                                    << QStringLiteral("卡[") << mPhysicalNo << "] "
                                    << ddrName
                                    << QStringLiteral(" 休眠");

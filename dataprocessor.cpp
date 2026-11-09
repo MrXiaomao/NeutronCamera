@@ -1,10 +1,12 @@
 ﻿#include "dataprocessor.h"
 #include "globalsettings.h"
+#include "AppConfig.h"
+
 #include <QTimer>
 #include <QThread>
 
-DataProcessor::DataProcessor(quint8 index, QTcpSocket* socket, QObject *parent)
-    : CommandAdapter(index, parent)
+DataProcessor::DataProcessor(QTcpSocket* socket, QObject *parent)
+    : CommandAdapter(parent)
 {
     mDataProcessThread = new QLiteThread(this);
     mDataProcessThread->setWorkThreadProc([=](){
@@ -62,10 +64,10 @@ DataProcessor::DataProcessor(quint8 index, QTcpSocket* socket, QObject *parent)
             return ;// 升级过程中不做温度心跳检测
 
         if (this->mTcpSocket && this->mTcpSocket->isConnected()){// 正常情况下，这个条件应该为true，加上这个条件就当当是双保险吧（^-^）
-            qWarning().noquote().nospace() << tr("谱仪[#%1]超过%2秒未收到温度数据，触发报警！").arg(mIndex).arg(mTempTimeoutTimer.interval() / 1000);
+            qWarning().noquote().nospace() << tr("DAQb超过%2秒未收到温度数据，触发报警！").arg(mTempTimeoutTimer.interval() / 1000);
 
             // 给CommHelper模块上报温度超时报警
-            emit reportTemperatureTimeout(mIndex);
+            emit reportTemperatureTimeout();
         }
     });
 
@@ -86,13 +88,7 @@ DataProcessor::~DataProcessor()
     }
 }
 
-void DataProcessor::reallocIndex(quint8 index)
-{
-    mIndex = index;
-}
-
-#if ENABLE_LIBHV
-void DataProcessor::reallocSocket(const hv::SocketChannelPtr& tcpSocket, DetParameter* detParameter)
+void DataProcessor::reallocSocket(const hv::SocketChannelPtr& tcpSocket)
 {
     requestParserResetOnDataThread();
     isFirstError = true;
@@ -106,10 +102,10 @@ void DataProcessor::reallocSocket(const hv::SocketChannelPtr& tcpSocket, DetPara
 
             // 上报原始网络数据
             if (mIsUpgrading)
-                emit reportOTAUpgradeData(mIndex, rawData);
+                emit reportOTAUpgradeData(rawData);
             else
             {
-                emit reportRawNetData(mIndex, rawData);
+                emit reportRawNetData(rawData);
 
                 this->appendRawTcpData(rawData);
             }
@@ -123,50 +119,12 @@ void DataProcessor::reallocSocket(const hv::SocketChannelPtr& tcpSocket, DetPara
             }
         };
 
-        // 关联端口，自动修改配置地址信息，方便打开探测器设计页面，就知道关联的是哪个ip地址
-        if (detParameter){
-            QString peerAddress = QString::fromStdString(tcpSocket->peerip());
-            memset(detParameter->det_Ip_port, 0, IP_LENGTH);
-            strcpy(detParameter->det_Ip_port, peerAddress.toStdString().c_str());
-            updateSetting(detParameter);
-        }
-
         // 启动温度超时检测
         restartTempTimeout();
     } else {
         stopTempTimeout();
     }
 }
-#else
-#include <QHostAddress>
-void DataProcessor::reallocSocket(QTcpSocket *tcpSocket, DetParameter* detParameter)
-{
-    QMutexLocker locker(&mSocketLocker);
-    if (mTcpSocket){
-        disconnect(mTcpSocket, SIGNAL(readyRead()), this, SLOT(readyRead()));
-    }
-
-    requestParserResetOnDataThread();
-    isFirstError = true;
-
-    mTcpSocket = tcpSocket;
-    if (mTcpSocket){
-        connect(mTcpSocket, SIGNAL(readyRead()), this, SLOT(readyRead()));
-
-        if (detParameter){
-            // 关联端口，自动修改配置地址信息，方便打开探测器设计页面，就知道关联的是哪个ip地址
-            QString peerAddress = tcpSocket->peerAddress().toString();
-            memset(detParameter->det_Ip_port, 0, IP_LENGTH);
-            strcpy(detParameter->det_Ip_port, peerAddress.toStdString().c_str());
-            updateSetting(detParameter);
-        }
-
-        restartTempTimeout();
-    } else {
-        stopTempTimeout();
-    }
-}
-#endif //ENABLE_LIBHV
 
 void DataProcessor::updateSetting(DetParameter* detParameter, bool isRead/* = false*/)
 {
@@ -184,7 +142,7 @@ void DataProcessor::updateSetting(DetParameter* detParameter, bool isRead/* = fa
         //#04 触发模式=1|0|7|1234000FFC1000000003ABCD
         this->sendWaveformMode(isRead, (TriggerMode)detParameter->waveformTriggerMode, detParameter->waveformLength);
         //#05 能谱刷新时间=1|0|9|1234000FFD1000000000ABCD
-        this->sendSprectnumRefreshTimelength(isRead, detParameter->spectrumRefreshTime);
+        this->sendSpectrumRefreshTimelength(isRead, detParameter->spectrumRefreshTime);
 
         //梯形成型相关配置，其中时间常熟在FPGA内部有默认参数，不需要设置
          if (detParameter->trapShapeEnable || isRead){
@@ -217,7 +175,7 @@ bool DataProcessor::isFreeSocket()
     return mTcpSocket == nullptr;
 }
 
-void DataProcessor::startMeasure(CommandAdapter::WorkMode workMode, CommandAdapter::MeasureMode measureMode, bool sendAlphaGammaThold)
+void DataProcessor::startMeasure(CommandAdapter::WorkMode workMode, CommandAdapter::MeasureMode measureMode)
 {
     /*开始测量之前清空解析缓存，防止野数据存在*/
     requestParserResetOnDataThread();
@@ -229,14 +187,11 @@ void DataProcessor::startMeasure(CommandAdapter::WorkMode workMode, CommandAdapt
 
     //#12 波形工作模式=1|0|22|1234000FFF1000000000ABCD
     //#13 能谱工作模式=1|0|23|1234000FFF1000000001ABCD
-    //#14 粒子工作模式=1|0|24|1234000FFF1000000002ABCD
     this->sendWorkMode(false, workMode);
-
-    if (sendAlphaGammaThold && workMode == WorkMode::wmParticle) {
-        const DetParameter *detParameter = HDF5Settings::instance()->getDetParameters().value(mIndex);
-        if (detParameter)
-            this->sendAlphaGammaThold(false, detParameter->alphaGammaUpperThold, detParameter->alphaGammaLowerThold);
-    }
+    this->sendHighVolgateOutLevel(false, AppConfig::instance().highVoltage());
+    this->sendTriggerThold(false, AppConfig::instance().triggerThreshold());
+    this->sendSpectrumRefreshTimelength(false, AppConfig::instance().spectrumRefreshTimelength());
+    this->sendWaveformMode(false, (TriggerMode)AppConfig::instance().waveTriggerMode(), AppConfig::instance().waveformLength());
 
     //#15 开始测量=1|0|25|1234000FEA1000000001ABCD
     this->sendStartMeasure(measureMode);
@@ -255,26 +210,13 @@ void DataProcessor::stopMeasure()
 
 void DataProcessor::sendCmdToSocket(CommandItem cmdItem, bool delayflag) const
 {
-#if ENABLE_LIBHV
     if (mTcpSocket && mTcpSocket->isConnected()){
         mTcpSocket->write(cmdItem.data.constData(), cmdItem.data.size());
-        qDebug().noquote()<< QString("[%1]Send HEX: %2 [%3]")
-                                  .arg(mIndex)
+        qDebug().noquote()<< QString("Send HEX: %1 [%2]")
                                   .arg(QString(cmdItem.data.toHex(' ')))
                                   .arg(cmdItem.name);
         if(delayflag) ::QThread::msleep(10);// 每条指令发送完成暂停10毫秒
     }
-#else
-    if (mTcpSocket && mTcpSocket->isOpen()){
-        mTcpSocket->write(cmdItem.data);
-        qDebug().noquote()<< QString("[%1]Send HEX: %2 [%3]")
-                                  .arg(mIndex)
-                                  .arg(QString(cmdItem.data.toHex(' ')))
-                                  .arg(cmdItem.name);
-        mTcpSocket->waitForBytesWritten();
-        if(delayflag) ::QThread::msleep(10);// 每条指令发送完成暂停10毫秒
-    }
-#endif //ENABLE_LIBHV
 }
 
 void DataProcessor::readyRead()
@@ -287,9 +229,9 @@ void DataProcessor::readyRead()
 
     // 上报原始网络数据
     if (mIsUpgrading)
-        emit reportOTAUpgradeData(mIndex,rawData);
+        emit reportOTAUpgradeData(rawData);
     else
-        emit reportRawNetData(mIndex, rawData);
+        emit reportRawNetData(rawData);
 
     this->appendRawTcpData(rawData);
 }
@@ -333,9 +275,7 @@ void DataProcessor::restartTempTimeout()
     // 这里对探测器在线状态进行判断，只有设备在线了才重启心跳检测
     if (mTcpSocket && mTcpSocket->isConnected())
     {
-        //从HDF5加载配置信息
-        HDF5Settings *settings = HDF5Settings::instance();
-        mTempTimeoutTimer.start(settings->pluseTime()*1000);
+        mTempTimeoutTimer.start(30000);
     }
 }
 
@@ -354,21 +294,20 @@ void DataProcessor::stopTempTimeout()
  * @param no 探测器通道编号
  * @param data 完整的能谱数据包，传入进来时已经验证了包的完整性
  */
-void DataProcessor::mergeSubSpec_Thread(quint8 no, const QByteArray& data){
+void DataProcessor::mergeSubSpec_Thread(const QByteArray& data){
     // 能谱数据：一个能谱数据包长度为256*32bit，但完整的能谱数据为8192*32bit。
     // 1. 提取数据包数据（256道 quint32 数据）
     quint32 spectrumSeq = 0;
     SubSpectrumPacket subSpecPackket;
     if (!extractSpectrumData(data, subSpecPackket)) {
-        qWarning() << "Extract sub-spectrum data failed, seq:" << spectrumSeq
-                   << ", DetID:" << static_cast<int>(no);
+        qWarning() << "Extract sub-spectrum data failed, seq:" << spectrumSeq;
         return;
     }
     spectrumSeq = subSpecPackket.spectrumSeq;
 
     // 跳过异常分包号，避免位运算和数组偏移越界
-    const quint8 part = subSpecPackket.spectrumSubNo; // 1..32
-    if (part < 1 || part > 32) {
+    const quint8 part = subSpecPackket.spectrumSubNo; // 1..2
+    if (part < 1 || part > 2) {
         qWarning() << "Invalid sub-spectrum part, seq:" << spectrumSeq
                    << ", part:" << static_cast<int>(part);
         return;
@@ -404,7 +343,7 @@ void DataProcessor::mergeSubSpec_Thread(quint8 no, const QByteArray& data){
         memcpy(fullSpectrum.spectrum + (part - 1) * 256, subSpecPackket.spectrum, 256 * 4);
         fullSpectrum.receivedMask |= bit;
 
-        if (fullSpectrum.receivedMask == 0xFFFFFFFFu) {
+        if (fullSpectrum.receivedMask == 0x03u) {
             fullSpectrum.isComplete = true;
 
             fullSpectrumCopy = fullSpectrum; // 拷贝数据，避免锁外访问共享对象
@@ -417,34 +356,29 @@ void DataProcessor::mergeSubSpec_Thread(quint8 no, const QByteArray& data){
     if (hasFullSpectrum) {
         // 锁外发送，降低锁持有时长
         fullSpectrumCopy.spectrum[8191]=0; //将最后一道置零
-        emit reportFullSpectrum(mIndex, fullSpectrumCopy);
+        emit reportFullSpectrum(fullSpectrumCopy);
     }
 }
 
 // 从波形数据包中提取波形数据
-void DataProcessor::extractWaveformData_Thread(quint8 no, const QByteArray& data)
+void DataProcessor::extractWaveformData_Thread(const QByteArray& data)
 {
     // 包结构：包头6字节 + 波形区 + 包尾8字节
-    if (data.size() < 14)
+    if (data.size() < 1038)
         return;
 
-    // 从 HDF5 加载配置信息
-    HDF5Settings *settings = HDF5Settings::instance();
-    const QMap<quint8, DetParameter*> detParameters = settings->getDetParameters();
-    const DetParameter *detParameter = detParameters.value(no);
-    quint32 waveLen = detParameter->waveformLength;
-
-    if (waveLen < 2)
+    quint32 waveLen = AppConfig::instance().waveformLength();
+    if (waveLen < 6)
         return;
 
     const char* raw = data.constData();
 
     // 跳过整个网络包头 6 字节，再跳过波形内部前 2 字节
-    const int payloadOffset = 6;
-    const int waveformDataOffset = payloadOffset + 2;
+    const int payloadOffset = 6; // FF FF AA B1 00 D1
+    const int waveformDataOffset = payloadOffset + 2; // FF AB
 
     // 需要读取 (waveLen - 2) 个 quint16
-    const int pointCount = static_cast<int>(waveLen) - 2;
+    const int pointCount = static_cast<int>(waveLen) - 6;
     const int bytesNeeded = waveformDataOffset + pointCount * 2;
 
     // 末尾还有 8 字节包尾，所以只要总长度足够即可
@@ -460,11 +394,11 @@ void DataProcessor::extractWaveformData_Thread(quint8 no, const QByteArray& data
         waveform.append(amplitude);
     }
 
-    emit reportWaveCurveInfo(no, waveform);
+    emit reportWaveCurveInfo(waveform);
 }
 
 // 从粒子数据包中提取粒子数据
-void DataProcessor::extractParticleData_Thread(quint8 no, const QByteArray& data)
+void DataProcessor::extractParticleData_Thread(const QByteArray& data)
 {
     // 至少要保证长度够
     if (data.size() < 6 + 130 * 8 + 8)  return;
@@ -509,11 +443,11 @@ void DataProcessor::extractParticleData_Thread(quint8 no, const QByteArray& data
         particles.push_back(particle);
     }
     
-    emit reportParticleInfo(mIndex, particles);
+    emit reportParticleInfo(particles);
 }
 
 // 解析时间戳数据包
-void DataProcessor::extractTimestampData_Thread(quint8 no, const QByteArray& packetData)
+void DataProcessor::extractTimestampData_Thread(const QByteArray& packetData)
 {
     bool ok;
     quint32 utc = packetData.mid(6, 4).toHex().toUInt(&ok, 16); // utc时间戳
@@ -525,7 +459,7 @@ void DataProcessor::extractTimestampData_Thread(quint8 no, const QByteArray& pac
     QDateTime tm = QDateTime::fromMSecsSinceEpoch(tmUnix*1000 + msecond);
 
     // 上报时间戳信息
-    emit reportTriggerTimeInfo(no, tm);
+    emit reportTriggerTimeInfo(tm);
 }
 
 /**

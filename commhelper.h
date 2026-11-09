@@ -102,10 +102,12 @@ public:
 
     Q_SIGNAL void detectorOnline();  //数采板
     Q_SIGNAL void detectorOffline();
-    Q_SIGNAL void reportDetectorTemperature(quint8, float temperature, const QDateTime& trTime); //探测器温度报告
-    Q_SIGNAL void reportWaveCurve(quint8, const QVector<quint16>& data); // 发送解析后的波形曲线
-    Q_SIGNAL void reportFullSpectrum(quint8 index, const FullSpectrum& fullSpectrum); // 发送完整的能谱数据
-    Q_SIGNAL void reportTimestampe(const QDateTime triggerTime);
+    Q_SIGNAL void measureStart(); //测量开始
+    Q_SIGNAL void measureStop(); //测量停止
+    Q_SIGNAL void reportDetectorTemperature(float temperature); //探测器温度报告
+    Q_SIGNAL void reportWaveCurve(const QVector<quint16>& data); // 发送解析后的波形曲线
+    Q_SIGNAL void reportFullSpectrum(const FullSpectrum& fullSpectrum); // 发送完整的能谱数据
+    Q_SIGNAL void externalSignalTriggered(const QDateTime triggerTime);
 
     Q_SLOT void error(QAbstractSocket::SocketError);
     Q_SLOT void readyRead();
@@ -115,7 +117,7 @@ public:
     Q_SLOT void onReadyRead(QByteArray&);
 
     //网口原始数据（解析线程）
-    Q_SLOT void onRawNetData_Thread(quint8 index, const QByteArray& data);
+    Q_SLOT void onRawNetData_Thread(const QByteArray& data);
 
 private:
     QUdpSocket *mUdpShotReceiver = nullptr;// 炮号接收器

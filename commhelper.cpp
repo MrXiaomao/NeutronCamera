@@ -378,6 +378,8 @@ CommHelper::~CommHelper()
         m_workThread->terminate();
         m_workThread->wait();
     }
+
+    mDetectorDataProcessor->deleteLater();
 }
 
 #include <winsock2.h>   // WSAIoctl函数定义
@@ -448,7 +450,7 @@ void CommHelper::initSocket()
 
             QString peerAddress = QString::fromStdString(channel->peerip());
             quint16 peerPort = channel->peerport();
-            qDebug().nospace() << "数采板上线，地址：" << peerAddress << ", 端口：" << peerPort;
+            qDebug().nospace() << "DAQb上线，地址：" << peerAddress << ", 端口：" << peerPort;
 
             //给新上线客户端分配数据处理器
             mDetectorDataProcessor->reallocSocket(channel);
@@ -457,7 +459,7 @@ void CommHelper::initSocket()
         else if (channel->isClosed()){//status == hv::SocketChannel::CLOSED){
             QString peerAddress = QString::fromStdString(channel->peerip());
             quint16 peerPort = channel->peerport();
-            qDebug().nospace() << "数采板下线，地址：" << peerAddress << ", 端口：" << peerPort;
+            qDebug().nospace() << "DAQb下线，地址：" << peerAddress << ", 端口：" << peerPort;
 
             QMetaObject::invokeMethod(this, "detectorOffline", Qt::QueuedConnection);
         }
@@ -542,36 +544,36 @@ void CommHelper::initSocket()
 void CommHelper::initDataProcessor()
 {
     // 这里必须是从0开始，0对应的是时间同步模块，1-32对应探测器索引，这样可以通过索引直接访问对应的处理器
-    DataProcessor* processor = new DataProcessor(1, nullptr, this);
+    DataProcessor* processor = new DataProcessor(nullptr, this);
     mDetectorDataProcessor = processor;
 
     // 更新温度数据
-    connect(processor, &DataProcessor::reportTemperatureData, this, [=](double temperature, const QDateTime& trTime){
-        emit reportDetectorTemperature(processor->getIndex(), temperature, trTime);
+    connect(processor, &DataProcessor::reportTemperatureData, this, [=](double temperature){
+        emit reportDetectorTemperature(temperature);
     }, Qt::DirectConnection);
 
     // 能谱数据（解析后的完整能谱数据）
-    connect(processor, &DataProcessor::reportFullSpectrum, this, [=](quint8 detID, const FullSpectrum& fullSpectrum){
-        emit reportFullSpectrum(detID, fullSpectrum); // 通知界面更新能谱数据
+    connect(processor, &DataProcessor::reportFullSpectrum, this, [=](const FullSpectrum& fullSpectrum){
+        emit reportFullSpectrum(fullSpectrum); // 通知界面更新能谱数据
 
         // H5Spectrum h5Spectrum = FullSpectoH5Spec(fullSpectrum);
-        // QMutexLocker lock(&mSpectrumH5MutexByDetector[detID]);
-        // mPendingH5ByDetector[detID].append(h5Spectrum);
+        // QMutexLocker lock(&mSpectrumH5MutexByDetector);
+        // mPendingH5ByDetector.append(h5Spectrum);
     }, Qt::DirectConnection);
 
     // 波形数据（解析后的数据）
-    connect(processor, &DataProcessor::reportWaveCurveInfo, this, [=](quint8 detID, const QVector<quint16>& wave){
-        emit reportWaveCurve(detID, wave); //通知界面更新波形数据
+    connect(processor, &DataProcessor::reportWaveCurveInfo, this, [=](const QVector<quint16>& wave){
+        emit reportWaveCurve(wave); //通知界面更新波形数据
     }, Qt::QueuedConnection);
 
     // 触发信号时间戳(解析后的数据)
-    connect(processor, &DataProcessor::reportTriggerTimeInfo, this, [=](quint8 detID, const QDateTime triggerTime){
-        emit reportTimestampe(triggerTime); //通知界面更新触发时间戳
+    connect(processor, &DataProcessor::reportTriggerTimeInfo, this, [=](const QDateTime triggerTime){
+        emit externalSignalTriggered(triggerTime); //通知界面更新触发时间戳
     }, Qt::DirectConnection);
 
     // 原始OTA升级数据
-    // connect(processor, &DataProcessor::reportOTAUpgradeData, this, [=](quint8 detID, const QByteArray& data){
-    //     emit reportOTAUpgradeData(detID, data);
+    // connect(processor, &DataProcessor::reportOTAUpgradeData, this, [=](const QByteArray& data){
+    //     emit reportOTAUpgradeData(data);
     // }, Qt::DirectConnection);
 
     // 原始网络数据
@@ -964,7 +966,7 @@ void CommHelper::stopReconnect()
 }
 
 //网口原始数据（解析线程）
-void CommHelper::onRawNetData_Thread(quint8 /*index*/, const QByteArray& data)
+void CommHelper::onRawNetData_Thread(const QByteArray& data)
 {
     QFile* file = mDetectFileProcessor;
     if (!file || !file->isOpen())
@@ -980,67 +982,28 @@ void CommHelper::onRawNetData_Thread(quint8 /*index*/, const QByteArray& data)
 void CommHelper::startMeasure(QString fileSavePath, CommandAdapter::MeasureMode measureMode,
                   CommandAdapter::WorkMode workMode)
 {
-    constexpr int kReserveH5PerDetector = 60; // 每路探测器预留60个能谱数据
-    constexpr int kReserveRawBytesPerDetector = 1024 * 1024; // 每路探测器预留1MB网口原始数据，50ms能谱刷新频率下0.625MB/s
-
-    // mMeasureStartTime = tmStart.toString("yyyy-MM-dd_HHmmss");// QDateTime::currentDateTime().toString("yyyy-MM-dd_HHmmss");
-    // mCurrentWorkMode = workMode;
-    // const bool wasMeasuring = mMeasuring;
-    // mMeasuring = true;
-
-
-   if (mDetectFileProcessor->isOpen()){
+   if (mDetectFileProcessor && mDetectFileProcessor->isOpen()){
         mDetectFileProcessor->close();
         mDetectFileProcessor->deleteLater();
         mDetectFileProcessor = nullptr;
     }
 
-    // 清理flush信息
-    // {
-    //     QMutexLocker flushLocker(&mMutexFileFlush);
-    //     mFileFlushInfo.remove(index);
-    // }
-
-    // // 测量中单通道重测（掉线重上线）：先冲刷共用文件缓冲，再为该通道新建独立 H5
-    // if (workMode == CommandAdapter::WorkMode::wmSpectrum) {
-    //     QVector<H5Spectrum> pending;
-    //     {
-    //         QMutexLocker lock(&mSpectrumH5MutexByDetector[index]);
-    //         mPendingH5ByDetector[index].swap(pending);
-    //         mPendingH5ByDetector[index].reserve(kReserveH5PerDetector);
-    //     }
-    //     if (!pending.isEmpty())
-    //         HDF5Settings::instance()->writeH5SpectrumBatch(1, pending);
-
-    //     const QString channelStartTime = mMeasureStartTime;
-    //     QString h5Path = QString("%1/能谱.H5").arg(fileSavePath);
-    //     const QString createdPath = HDF5Settings::instance()->createChannelH5Spectrum(
-    //         1, h5Path, channelStartTime, mShotTime.isEmpty() ? shotTime : mShotTime);
-    //     if (!createdPath.isEmpty() && !mDataFileList.contains(createdPath))
-    //         mDataFileList.push_back(createdPath);
-    // }
-
     if (!mDetectorDataProcessor->isFreeSocket()){
         //创建有效网络数据文件存储
 
-        QString filePath = QString("%1/能谱.dat").arg(fileSavePath);
+        QString filePath = QString("%1/DAQb-能谱.dat").arg(fileSavePath);
         if (CommandAdapter::WorkMode::wmWaveform == workMode)
-            filePath = QString("%1/波形.dat").arg(fileSavePath);
+            filePath = QString("%1/DAQb-波形.dat").arg(fileSavePath);
 
         mDetectFileProcessor = new QFile(filePath);
         if (mDetectFileProcessor->open(QIODevice::WriteOnly)){
-            // 初始化flush信息
-            // {
-            //     QMutexLocker flushLocker(&mMutexFileFlush);
-            //     mFileFlushInfo[index] = FileFlushInfo();
-            // }
-
             QFileInfo info(filePath);
             QString absolutePath = info.absoluteFilePath();
-            qDebug().nospace() << "小数采创建存储文件：" << absolutePath;
+            qDebug().nospace() << "DAQb创建存储文件：" << absolutePath;
         }
 
         mDetectorDataProcessor->startMeasure(workMode, measureMode);
+        emit measureStart();
     }
 }
 
@@ -1049,19 +1012,9 @@ void CommHelper::startMeasure(QString fileSavePath, CommandAdapter::MeasureMode 
 */
 void CommHelper::stopMeasure()
 {
-    // // 停止前先将 H5 缓存落盘，避免累计在内存中
-    // flushSpectrumH5BuffersOnWorkerThread(true);
-    // // 停止前先将网口原始数据缓存落盘，避免尾包丢失
-    // flushNetRawBuffersOnWorkerThread(true);
-
-    //默认情况所有通道直接一次性停止测量
-    // {
-    //     QMutexLocker lock(&mSpectrumRawMutexByDetector[index]);
-    //     if (index < mPendingNetRawByDetector.size())
-    //         mPendingNetRawByDetector[index].clear();
-    // }
     if (!mDetectorDataProcessor->isFreeSocket()){
         mDetectorDataProcessor->stopMeasure();
+        emit measureStop();
     }
 
     //延迟关闭文件，确保尾包数据能够正常存储
@@ -1082,15 +1035,5 @@ void CommHelper::stopMeasure()
             fileToClose->deleteLater();
             mDetectFileProcessor = nullptr;
         }
-
-        // // 清理flush信息
-        // {
-        //     QMutexLocker flushLocker(&mMutexFileFlush);
-        //     mFileFlushInfo.remove(detIndex);
-        // }
-
-        //关闭能谱文件
-        // HDF5Settings::instance()->closeChannelH5Spectrum(index);
-        // HDF5Settings::instance()->closeH5Spectrum();
     }
 }

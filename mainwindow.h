@@ -25,6 +25,35 @@ class OfflineDataAnalysisWindow;
 class PDUControlWidget;
 class ToastManager;
 
+// 探测器数据结构
+struct DetectorData {
+    // double countRate;                 // 当前计数率
+    QVector<double> countRateHistory;    // 计数率历史，cps，每秒钟更新一次
+    quint32 spectrum[8192];              // 累积能谱 (固定长度8192)
+    quint32 lastSpectrumID;              // 上次测量累积时间的能谱序号
+    quint32 lastAccumulateCount;         // 上次测量累积时间的计数率,暂时不考虑丢包带来的计数率修复
+    double lastAccuCountFixed;     // 上次测量累积时间的计数率，考虑死时间修复后的值
+    /** 计数率曲线已画到的最右 X（秒）；重测时叠墙钟缺口 deltaT 后再作为新段 offset */
+    double lastCountRatePlotTimeSec;
+    /** 当前测量段的时间偏置：plotTime = offset + sequence*measureTime/1000 */
+    double countRateTimeOffsetSec;
+    /** 掉线/停收时的墙钟 ms，用于计算重测缺口 */
+    qint64 disconnectWallMs;
+    // QDateTime lastUpdate;
+
+    DetectorData()
+        : lastSpectrumID(0)
+        , lastAccumulateCount(0)
+        , lastAccuCountFixed(0.0)
+        , lastCountRatePlotTimeSec(0.0)
+        , countRateTimeOffsetSec(0.0)
+        , disconnectWallMs(0)
+    {
+        countRateHistory.clear();
+        for(int i=0; i<8192; i++) spectrum[i] = 0;// 初始化能谱为全0
+    }
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -63,6 +92,10 @@ public slots:
     void onGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);//伽马能谱
     void onStartMeasure();//开始测量(软触发)
     void onPrepareMeasure();//开始测量
+    // 处理数据解析后的能谱数据（解析线程）：累积数据；绘图投递到主线程
+    void onFullSpectrum_Thread(const FullSpectrum& fullSpectrum);
+    // 解析线程上报温度，仅写缓存
+    void onReportDetectorTemperature(float temperature);
 
 signals:
     void writeLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
@@ -144,12 +177,15 @@ private:
 
     std::atomic<bool> mIsAlarm = false;// 性能监测是否出现异常
     QElapsedTimer mLastAlarmTime;// 模组最后一次报警时间
-    bool mIsMeasuring = false;// 测量是否正在进行
+    std::atomic<bool> mIsMeasuring = false;// 测量是否正在进行
     DetectorType mCurrentDetectorType = dtLSD; // 当前探测器类型：1-LSD 2-PSD 3-LBD
     QString mCurrentSavePath;// 本次实验数据存储路径
 #ifdef SINGLE_BOARD_MODE
     quint8 mCurrentAuroraNo = 0;// 当前测量链路
     quint8 mCurrentChannelNo = 0;// 当前测量通道
+    // 连续测量计时器
+    quint32 mCountdownDurationMs = 0;
+    QElapsedTimer mMeasureTimer;
 #endif //SINGLE_BOARD_MODE
     bool mReconnecting = false; // 自动重连标识
 
@@ -193,6 +229,39 @@ private:
     bool m_isMouseHeldDown = false;
 
     void initLogEvent();
+
+    // 固定的24个通道能谱图像属性设置：是否刻度，X/Y坐标轴范围自动与否，坐标轴范围
+    struct SpectrumPlotSettings {
+        //多道道数
+        int multiChannel = 8192;
+        double xMin = 0.0;
+        double xMax = 8192.0;
+        double yMin = 0.0;
+        double yMax = 100.0;
+
+        int fitType = 1;
+        double c0 = 1.0;
+        double c1 = 0.0;
+        double c2 = 0.0;
+    };
+
+    // 能谱图像属性
+    std::atomic<bool> mEnScale = false;// 是否勾选能量刻度
+    SpectrumPlotSettings m_spectrumPlotSettings;
+    std::atomic<bool> mCountRatePlotReady = false; // 计数率曲线待刷新
+    std::atomic<bool> mSpectrumPlotReady = false;  // 能谱曲线待刷新
+    qint64 mTempLastUpdateTime = 0;
+    DetectorData m_detectorData;
+    mutable QMutex mDetectorDataMutex;       // 保护 m_detectorData（解析线程写、主线程读/绘图）
+    // 更新能谱显示
+    void updateSpecPlotData(const quint32 spectrum[]);
+
+    /**
+     * @brief 计数率显示，最快更新时间间隔不小于1000ms
+     * @param FPGATime FPGA内部时钟，当前的计数率对应的FPGA时钟，单位s，能谱数据中单位是ms，这里采用向下取整
+     * @param countRate 计数率，单位cps
+     */
+    void updateCountRatePlotData(double FPGATime, double countRate);
 };
 
 #endif // MAINWINDOW_H

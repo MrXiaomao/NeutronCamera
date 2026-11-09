@@ -42,6 +42,13 @@ public:
     QtnPropertyQString* channelAurora;// 采集链路/区域
     QtnPropertyQString* channelIndex;// 采集通道
 
+    // DAQb参数设置
+    QtnPropertySet* propSetDAQb;
+    QtnPropertyQString* workMode;// 数据类型
+    QtnPropertyQString* waveTriggerMode;// 触发类型
+    QtnPropertyQString* waveformLength;  // 波形长度
+    QtnPropertyQString* highVoltage;  // 高压值
+    QtnPropertyInt* spectrumRefreshTimelength;// 能谱刷新时长
 #endif
     QtnPropertyInt* psdThreshold[18]; // PSD甄别阈值
     QtnPropertyInt* triggerThreshold;// 触发阈值
@@ -60,7 +67,7 @@ public:
     QtnPropertySet* propSetControlCenter;
     QtnPropertyUInt* cmdUdpBroadcastPort;// 广播端口
     QtnPropertyQString* dataSrvIpAddress;  // 数据服务器地址
-    QtnPropertyUInt* dataSrvRemotePort;  // 通讯端口
+    QtnPropertyUInt* dataSrvRemotePort;  // 通讯端口   
 };
 
 // 在AppConfig类中添加辅助函数
@@ -219,12 +226,15 @@ AppConfig::AppConfig(QObject* parent)
         QtnPropertySet* propSet = new QtnPropertySet(d->propSetRoot);
         d->propSetDetector = propSet;
         d->propSetRoot->addChildProperty(propSet);
+#ifdef SINGLE_BOARD_MODE
+        propSet->setName("DAQa参数设置");
+#else
         propSet->setName("探测器参数设置");
+#endif
         propSet->setId(ID_DETECTOR_SET);
 
 #ifdef SINGLE_BOARD_MODE
         // 采集链路/区域
-        QtnPropertyQString* channelId;
         d->channelAurora = qtnCreateProperty<QtnPropertyQString>(propSet);
         d->channelAurora->setId(++baseId);
         d->channelAurora->setName("采集链路");
@@ -286,8 +296,73 @@ AppConfig::AppConfig(QObject* parent)
         d->triggerThreshold->setMinValue(0);
         d->triggerThreshold->setValue(100);
 #endif //SINGLE_BOARD_MODE
-
     }
+
+#ifdef SINGLE_BOARD_MODE
+    baseId = ID_DAQb_SET;
+    {
+        QtnPropertySet* propSet = new QtnPropertySet(d->propSetRoot);
+        d->propSetDAQb = propSet;
+        d->propSetRoot->addChildProperty(propSet);
+        propSet->setName("DAQb参数设置");
+        propSet->setId(ID_DAQb_SET);
+        // 工作模式
+        d->workMode = qtnCreateProperty<QtnPropertyQString>(propSet);
+        d->workMode->setId(++baseId);
+        d->workMode->setName("工作模式");
+        d->workMode->setDescription("工作模式：波形 能谱");
+        {
+            QtnPropertyDelegateInfo listDele;
+            listDele.name = "ComboBox";
+            listDele.attributes["items"] = QStringList()<<"波形"<<"能谱";
+            d->workMode->setDelegateInfo(listDele);
+        }
+        d->workMode->setValue("能谱");
+
+        // 波形触发模式
+        d->waveTriggerMode = qtnCreateProperty<QtnPropertyQString>(propSet);
+        d->waveTriggerMode->setId(++baseId);
+        d->waveTriggerMode->setName("触发模式");
+        d->waveTriggerMode->setDescription("触发模式：Auto Normal");
+        {
+            QtnPropertyDelegateInfo listDele;
+            listDele.name = "ComboBox";
+            listDele.attributes["items"] = QStringList()<<"Auto"<<"Normal";
+            d->waveTriggerMode->setDelegateInfo(listDele);
+        }
+        d->waveTriggerMode->setValue("Normal");
+        // 波形长度
+        d->waveformLength = qtnCreateProperty<QtnPropertyQString>(propSet);
+        d->waveformLength->setId(++baseId);
+        d->waveformLength->setName("波形长度");
+        d->waveformLength->setDescription("波形长度：64 128 256 512");
+        {
+            QtnPropertyDelegateInfo listDele;
+            listDele.name = "ComboBox";
+            listDele.attributes["items"] = QStringList()<<"64"<<"128"<<"256"<<"512";
+            d->waveformLength->setDelegateInfo(listDele);
+        }
+        d->waveformLength->setValue("128");
+        // 高压值
+        d->highVoltage = qtnCreateProperty<QtnPropertyQString>(propSet);
+        d->highVoltage->setId(++baseId);
+        d->highVoltage->setName("高压/V");
+        d->highVoltage->setDescription("高压/V：650 700 750 850");
+        {
+            QtnPropertyDelegateInfo listDele;
+            listDele.name = "ComboBox";
+            listDele.attributes["items"] = QStringList()<<"650"<<"700"<<"750"<<"850";
+            d->highVoltage->setDelegateInfo(listDele);
+        }
+        d->highVoltage->setValue("650");
+        // 能谱刷新时长
+        d->spectrumRefreshTimelength = qtnCreateProperty<QtnPropertyInt>(propSet);
+        d->spectrumRefreshTimelength->setId(++baseId);
+        d->spectrumRefreshTimelength->setName("能谱刷新时长/ms");
+        d->spectrumRefreshTimelength->setDescription("能谱刷新时长：1～4294967295 ms");
+        d->spectrumRefreshTimelength->setValue(4);
+    }
+#endif //SINGLE_BOARD_MODE
 
     // 状态监测模块
     baseId = ID_STATEDEV_SET;
@@ -682,6 +757,24 @@ quint8 AppConfig::channelIndex() const{
     QStringList lst = QStringList()<<"CH1"<<"CH2"<<"CH3"<<"CH4";
     return lst.indexOf(d->channelIndex->value());
 }
+quint8 AppConfig:: workMode() const{
+    QStringList lst = QStringList()<<"波形"<<"能谱";
+    return lst.indexOf(d->workMode->value());
+}
+quint8 AppConfig:: waveTriggerMode() const{
+    QStringList lst = QStringList()<<"Auto"<<"Normal";
+    return lst.indexOf(d->waveTriggerMode->value());
+}
+quint32 AppConfig::waveformLength() const{
+    return d->waveformLength->value().toUInt();
+}
+quint32 AppConfig::highVoltage() const{
+    return d->highVoltage->value().toUInt();
+}
+quint32 AppConfig::spectrumRefreshTimelength() const{
+    return d->spectrumRefreshTimelength->value();
+}
+
 #endif // SINGLE_BOARD_MODE
 
 int AppConfig::psdThreshold(quint8 channelNo) const {

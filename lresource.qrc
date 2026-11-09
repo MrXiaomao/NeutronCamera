@@ -17,5 +17,9 @@
         <file>resource/image/power-fault.png</file>
         <file>resource/image/power-off.png</file>
         <file>resource/image/power-on.png</file>
+        <file>resource/image/play-next.png</file>
+        <file>resource/image/play-previous.png</file>
+        <file>resource/image/rewind-back.png</file>
+        <file>resource/image/rewind-forward.png</file>
     </qresource>
 </RCC>

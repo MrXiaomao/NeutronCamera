@@ -25,9 +25,8 @@ const QByteArray CommandAdapter::kspecHead = QByteArray::fromHex("FF FF AA B1");
 const QByteArray CommandAdapter::kspecTail = QByteArray::fromHex("FF FF CC D1");
 
 
-CommandAdapter::CommandAdapter(quint8 index, QObject *parent)
+CommandAdapter::CommandAdapter(QObject *parent)
     : QObject{parent}
-    , mIndex(index)
 {
     // mParserStatTimer.start();
     mCmdProcessThread = new QLiteThread(this) ;
@@ -119,18 +118,11 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
 
         // 温度监测（心跳检测）
         if (hasHeadAt(pos, kCmdTempHead)) {
-            quint32 timeUTCs = qFromBigEndian<quint32>(cachePool.constData() + pos + 6);
-            quint32 timeUTCms = qFromBigEndian<quint32>(cachePool.constData() + pos + 10);
-            qint32 t = qFromBigEndian<qint32>(cachePool.constData() + pos + 14);
-            float temperature = t * 0.0001f;
-            quint64 msecond = static_cast<quint64>(timeUTCms) * 1000 / std::pow(2,32);//65536; // 毫秒
+            qint32 t = qFromBigEndian<qint32>(cachePool.constData() + pos + 6);// 有符号低24位
+            float temperature = (t & 0x0FFFFF) * 0.0001f;
 
-            // UTC转Unix时间戳，也就是从1970年1月1日00：00：00开始计算的整数秒数
-            quint64 tmUnix = static_cast<quint64>(timeUTCs) - 2208988800ULL; // UTC时间戳（1970）-unix时间戳
-            QDateTime tm = QDateTime::fromMSecsSinceEpoch(tmUnix*1000 + msecond);
-
-            QMetaObject::invokeMethod(this, "reportTemperatureData", Qt::DirectConnection, Q_ARG(float, temperature), Q_ARG(QDateTime, tm));
-            pos += kCmdLen + 8;// 新扩展的数据包长度为20
+            QMetaObject::invokeMethod(this, "reportTemperatureData", Qt::DirectConnection, Q_ARG(float, temperature));
+            pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
         }
@@ -165,13 +157,13 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
                     QByteArray chunk(p, onePkgSize);
                     if (mIsMeasuring || dataType == dtTimestamp) {
                         if (dataType == dtWaveform)
-                            emit reportWaveformData(mIndex, chunk);
+                            emit reportWaveformData(chunk);
                         else if (dataType == dtSpectrum)
-                            emit reportSpectrumData(mIndex, chunk);
+                            emit reportSpectrumData(chunk);
                         else if (dataType == dtParticle)
-                            emit reportParticleData(mIndex, chunk);
+                            emit reportParticleData(chunk);
                         else if (dataType == dtTimestamp)
-                            emit reportTimestampData(mIndex, chunk);
+                            emit reportTimestampData(chunk);
                     }
                     pos += static_cast<int>(onePkgSize);
                 } else {
@@ -179,8 +171,8 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
                     mResyncDropBytes += 4;
                     if (isFirstError) {
                         isFirstError = false;
-                        qWarning().nospace().noquote() << "谱仪[#" << mIndex << "]数据包尾部错误，后续相似错误将不再提示";
-                        qDebug().nospace().noquote() << "谱仪[#" << mIndex << "]数据包尾部错误[" << onePkgSize << "]";
+                        qWarning().nospace().noquote() << "谱仪数据包尾部错误，后续相似错误将不再提示";
+                        qDebug().nospace().noquote() << "谱仪数据包尾部错误[" << onePkgSize << "]";
                     }
                     pos += 4;
                 }
@@ -204,7 +196,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
             default: gainStr = "未知值"; break;
             }
             qInfo().noquote() << "增益：" << gainStr;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -214,7 +206,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
         if (!handled && hasHeadAt(pos, kCmdDeadHead)) {
             quint16 deadTime = qFromBigEndian<quint16>(reinterpret_cast<const uchar*>(cachePool.constData() + pos + 8));
             qInfo().noquote() << "参数查询，死时间/ns：" << deadTime * 10;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -224,7 +216,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
         if (!handled && hasHeadAt(pos, kCmdThresHead)) {
             quint16 triggerThold = qFromBigEndian<quint16>(reinterpret_cast<const uchar*>(cachePool.constData() + pos + 8));
             qInfo().noquote() << "参数查询，触发阈值：" << triggerThold;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -235,7 +227,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
             quint16 upperThold = qFromBigEndian<quint16>(reinterpret_cast<const uchar*>(cachePool.constData() + pos + 6));
             quint16 lowerThold = qFromBigEndian<quint16>(reinterpret_cast<const uchar*>(cachePool.constData() + pos + 8));
             qInfo().noquote() << "参数查询，α/γ甄别上阈值：" << upperThold << "，下阈值：" << lowerThold;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -252,7 +244,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
             else if (waveformLength == wl256) qInfo().noquote() << "参数查询，波形长度：256";
             else if (waveformLength == wl512) qInfo().noquote() << "参数查询，波形长度：512";
             else qInfo().noquote() << "参数查询，波形长度：未知值";
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -262,7 +254,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
         if (!handled && hasHeadAt(pos, kCmdSpectrumRefreshTimeHead)) {
             quint32 spectrumRefreshTime = qFromBigEndian<quint32>(reinterpret_cast<const uchar*>(cachePool.constData() + pos + 6));
             qInfo().noquote() << "参数查询，能谱刷新时间/ms：" << spectrumRefreshTime;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -273,7 +265,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
             quint16 d1 = qFromBigEndian<quint16>(reinterpret_cast<const uchar*>(cachePool.constData() + pos + 6));
             quint16 d2 = qFromBigEndian<quint16>(reinterpret_cast<const uchar*>(cachePool.constData() + pos + 8));
             qInfo().noquote() << "参数查询，梯形成型时间常数，d1=" << (float)d1 / 65536 << "，d2=" << (float)d2 / 65536;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -285,7 +277,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
             quint8 peak = static_cast<quint8>(cachePool.at(pos + 8));
             quint8 fall = static_cast<quint8>(cachePool.at(pos + 9));
             qInfo().noquote() << "参数查询，上升沿=" << rise << "，平顶=" << peak << "，下降沿=" << fall;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -294,7 +286,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
         // 梯形成型使能
         if (!handled && hasHeadAt(pos, kCmdTrapShapeEnableHead)) {
             qInfo().noquote() << "参数查询，梯形成型使能状态：" << (static_cast<quint8>(cachePool.at(pos + 9)) == 0x00 ? "关闭" : "打开");
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -311,7 +303,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
             default: modeStr = "未知模式"; break;
             }
             qInfo().noquote() << "参数查询，工作模式：" << modeStr;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -321,7 +313,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
         if (!handled && hasHeadAt(pos, kCmdHVEnableHead)) {
             HighVolgateOutLevelEnable highVoltageEnable = static_cast<HighVolgateOutLevelEnable>(cachePool.at(pos + 9));
             qInfo().noquote() << "参数查询，高压使能状态：" << (highVoltageEnable ? "关闭" : "打开");
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -332,7 +324,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
             quint16 level = qFromBigEndian<quint16>(reinterpret_cast<const uchar*>(cachePool.constData() + pos + 8));
             double HV = level * 2.5 * 441 / 65536;
             qInfo().noquote() << "参数查询，高压输出电平值（V）：" << HV;
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -340,7 +332,7 @@ void CommandAdapter::analyzeCommands(QByteArray &cachePool)
 
         // FPGA版本
         if (!handled && hasHeadAt(pos, kCmdFPGAVersionHead)) {
-            emit reportParamterData(mIndex, paramChunkAt(pos));
+            emit reportParamterData(paramChunkAt(pos));
             pos += kCmdLen;
             handled = true;
             needNotifyNextCmd = true;
@@ -503,7 +495,7 @@ void CommandAdapter::sendWaveformMode(bool isRead, TriggerMode triggerMode, quin
  能谱基本配置
 ***********************************************************/
 //能谱刷新时间修改(ms，默认值1000)
-void CommandAdapter::sendSprectnumRefreshTimelength(bool isRead, quint32 spectrumRefreshTime){
+void CommandAdapter::sendSpectrumRefreshTimelength(bool isRead, quint32 spectrumRefreshTime){
     QByteArray askCurrentCmd = QByteArray::fromHex(QString("12 34 00 0F FD 10 00 00 00 00 AB CD").toUtf8());
     if (isRead)
         askCurrentCmd[3] = 0x0A;

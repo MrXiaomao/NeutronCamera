@@ -32,18 +32,18 @@ class CommandAdapter : public QObject
 {
     Q_OBJECT
 public:
-    explicit CommandAdapter(quint8 index, QObject *parent = nullptr);
+    explicit CommandAdapter(QObject *parent = nullptr);
     ~CommandAdapter();
 
     virtual void sendCmdToSocket(CommandItem cmdItem, bool delayflag = true) const{};
 
 signals:
-    void reportSpectrumData(quint8 index, const QByteArray&); // 上报能谱数据
-    void reportWaveformData(quint8 index, const QByteArray&); // 上报波形数据
-    void reportParticleData(quint8 index, const QByteArray&); // 上报粒子数据
-    void reportTimestampData(quint8 index, const QByteArray&); // 上报外触发时间戳数据
-    void reportParamterData(quint8 index, const QByteArray&); // 上报参数数据
-    void reportTemperatureData(float temperature, const QDateTime& trTime);
+    void reportSpectrumData(const QByteArray&); // 上报能谱数据
+    void reportWaveformData(const QByteArray&); // 上报波形数据
+    void reportParticleData(const QByteArray&); // 上报粒子数据
+    void reportTimestampData(const QByteArray&); // 上报外触发时间戳数据
+    void reportParamterData(const QByteArray&); // 上报参数数据
+    void reportTemperatureData(float temperature);
 
 // public slots:
 //     void restartTempTimeout();   // 收到温度时调用
@@ -84,7 +84,7 @@ public:
      能谱基本配置
     ***********************************************************/
     //能谱刷新时间修改(ms，默认值1000)
-    void sendSprectnumRefreshTimelength(bool isRead = true, quint32 spectrumRefreshTime = 1000);
+    void sendSpectrumRefreshTimelength(bool isRead = true, quint32 spectrumRefreshTime = 1000);
 
     /*********************************************************
      梯形成型基本配置
@@ -183,7 +183,6 @@ public:
     void clear();
 
 protected:
-    quint8 mIndex = 0;//探测器索引
     bool mIsMeasuring = false;//测量是否正在进行中
     void analyzeCommands(QByteArray &cachePool);
 

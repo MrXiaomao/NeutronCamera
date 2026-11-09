@@ -32,18 +32,12 @@ class DataProcessor : public CommandAdapter
 {
     Q_OBJECT
 public:
-    explicit DataProcessor(quint8 index, QTcpSocket* socket = nullptr, QObject *parent = nullptr);
+    explicit DataProcessor(QTcpSocket* socket = nullptr, QObject *parent = nullptr);
     ~DataProcessor();
 
     virtual void sendCmdToSocket(CommandItem cmdItem, bool delayflag = true) const override;
 
-    void reallocIndex(quint8 index);//重新分配通道索引
-#if ENABLE_LIBHV
-    //void reallocSocket(const hv::SocketChannelPtr& tcpSocket);
-    void reallocSocket(const hv::SocketChannelPtr& tcpSocket, DetParameter* detParameter = nullptr);
-#else
-    void reallocSocket(QTcpSocket *tcpSocket, DetParameter *detParameter = nullptr);
-#endif //ENABLE_LIBHV
+    void reallocSocket(const hv::SocketChannelPtr& tcpSocket);
     bool isFreeSocket();//是否关联Socket
 
     // 追加原始网络数据
@@ -52,17 +46,12 @@ public:
     /*
      * 开始测量
      */
-    void startMeasure(CommandAdapter::WorkMode workMode, CommandAdapter::MeasureMode measureMode, bool sendAlphaGammaThold = false);
+    void startMeasure(CommandAdapter::WorkMode workMode, CommandAdapter::MeasureMode measureMode);
 
     /*
      * 停止测量
      */
     void stopMeasure();
-
-    //获取探测器编号1-32
-    quint8 getIndex(){
-        return this->mIndex;
-    };
 
     void updateSetting(DetParameter* detParameter, bool isRead = false);
 
@@ -85,13 +74,13 @@ public slots:
     void restartTempTimeout();
     void stopTempTimeout();
     // 解析能谱数据包，并拼接成完整能谱
-    void mergeSubSpec_Thread(quint8 no, const QByteArray& data);
+    void mergeSubSpec_Thread(const QByteArray& data);
     // 解析波形数据包（数据解析线程）
-    void extractWaveformData_Thread(quint8 no, const QByteArray& packetData);
+    void extractWaveformData_Thread(const QByteArray& packetData);
     // 解析粒子数据包（数据解析线程）
-    void extractParticleData_Thread(quint8 no, const QByteArray& packetData);
+    void extractParticleData_Thread(const QByteArray& packetData);
     // 解析时间戳数据包（数据解析线程）
-    void extractTimestampData_Thread(quint8 no, const QByteArray& packetData);
+    void extractTimestampData_Thread(const QByteArray& packetData);
 
 signals:   
     void relayConnected();// 继电器
@@ -99,19 +88,19 @@ signals:
     void relayPowerOn();
     void relayPowerOff();
 
-    void detectorConnected(quint8 index);  // 探测器
-    void detectorDisconnected(quint8 index);
+    void detectorConnected();  // 探测器
+    void detectorDisconnected();
 
     // 上报分包数据
-    void reportRawNetData(quint8 index, const QByteArray& data); // 上报原始网络数据
-    void reportOTAUpgradeData(quint8 index, const QByteArray& data); // 上报OTA升级数据
+    void reportRawNetData(const QByteArray& data); // 上报原始网络数据
+    void reportOTAUpgradeData(const QByteArray& data); // 上报OTA升级数据
 
     // 上传解析后的数据
-    void reportFullSpectrum(quint8 index, const FullSpectrum& fullSpectrum); // 发送完整的能谱数据
-    void reportWaveCurveInfo(quint8, const QVector<quint16>& wave); // 发送解析后的波形曲线
-    void reportParticleInfo(quint8 index, const QVector<ParticleData>& particles); // 发送解析后的粒子信息
-    void reportTriggerTimeInfo(quint8 index, const QDateTime trTime); // 发送解析后的触发时间戳信息
-    void reportTemperatureTimeout(quint8 index); // 温度心跳超时信号
+    void reportFullSpectrum(const FullSpectrum& fullSpectrum); // 发送完整的能谱数据
+    void reportWaveCurveInfo(const QVector<quint16>& wave); // 发送解析后的波形曲线
+    void reportParticleInfo(const QVector<ParticleData>& particles); // 发送解析后的粒子信息
+    void reportTriggerTimeInfo(const QDateTime trTime); // 发送解析后的触发时间戳信息
+    void reportTemperatureTimeout(); // 温度心跳超时信号
 
 private:
     void requestParserResetOnDataThread();

@@ -85,14 +85,6 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         ui->action_init->setEnabled(true);
     }
 
-    connect(ui->statusbar,&QStatusBar::messageChanged,this,[&](const QString &message){
-        if(message.isEmpty()) {
-            ui->statusbar->showMessage(tr("准备就绪"));
-        } else {
-            ui->statusbar->showMessage(message);
-        }
-    });
-
     connect(&mPCIeCommSdk, &PCIeCommSdk::captureFinished, this, [=](){
 #ifdef SMART_INVALID_COMMAND
         if (mExternalTriggerMode){
@@ -112,6 +104,8 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
         ui->action_startMeasure->setEnabled(true);
         ui->action_stopMeasure->setEnabled(false);
+        ui->lineEdit_savePath->setEnabled(true);
+        ui->spinBox_timeLength->setEnabled(true);
         bool testOk = mPCIeCommSdk.test();
         if (!testOk){
             ++mContinueMeasuerFailCount;
@@ -141,8 +135,10 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     });
 
     connect(&mPCIeCommSdk, &PCIeCommSdk::externalSignalTriggered, this, [=](){
-        qInfo().noquote() << QStringLiteral("接收外触发信号,准备数据接收");
+        qInfo().noquote() << QStringLiteral("DAQa接收外触发信号,准备数据接收");
         ui->lineEdit_triggerflag->setText(QStringLiteral("正在测量"));
+        if (!mMeasureTimer.isValid())
+            mMeasureTimer.start();
     });
 
     connect(&mPCIeCommSdk, &PCIeCommSdk::timeoutOccurred, this, [=](){
@@ -463,20 +459,23 @@ void MainWindow::initUi()
     // 任务栏信息
     QLabel *label_Idle = new QLabel(ui->statusbar);
     label_Idle->setObjectName("label_Idle");
-    label_Idle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    label_Idle->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     label_Idle->setFixedWidth(300);
     label_Idle->setText(tr("准备就绪"));
     connect(ui->statusbar,&QStatusBar::messageChanged,this,[=](const QString &message){
-        label_Idle->setText(message);
+        if (message.isEmpty())
+            label_Idle->setText(tr("准备就绪"));
+        else
+            label_Idle->setText(message);
     });
 
     ui->statusbar->setContentsMargins(5, 0, 5, 0);
-    ui->statusbar->addWidget(label_Idle);
+    ui->statusbar->addPermanentWidget(label_Idle);
 
     /*设置任务栏信息*/
     QLabel *label_systemtime = new QLabel(ui->statusbar);
     label_systemtime->setObjectName("label_systemtime");
-    label_systemtime->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    label_systemtime->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     QLabel *label_alarm = new QLabel(ui->statusbar);
     label_alarm->setObjectName("label_alarm");
@@ -486,8 +485,16 @@ void MainWindow::initUi()
     label_alarm->setToolTip(tr("单击取消报警提示"));
     label_alarm->setCursor(Qt::CursorShape::PointingHandCursor);
 
-    ui->statusbar->addWidget(new QLabel(ui->statusbar), 1);
-    ui->statusbar->addWidget(nullptr, 1);
+#ifdef SINGLE_BOARD_MODE
+    QLabel *label_temperature = new QLabel(ui->statusbar);
+    label_temperature->setObjectName("label_temperature");
+    label_temperature->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+    label_temperature->setFixedWidth(300);
+    label_temperature->setText(tr("DAQb温度：- ℃"));
+    ui->statusbar->addPermanentWidget(label_temperature);
+#endif // SINGLE_BOARD_MODE
+
+    ui->statusbar->addPermanentWidget(new QLabel(ui->statusbar), 1);
     ui->statusbar->addPermanentWidget(label_systemtime);
     ui->statusbar->addPermanentWidget(label_alarm);
 
@@ -555,6 +562,78 @@ void MainWindow::initUi()
             }
         }
 
+#ifdef SINGLE_BOARD_MODE
+        // 能谱刷新需根据刷新时长来决定，最小1s刷新一次
+        if (mIsMeasuring.load()/* && (t % m_specPlotRefreshTime) == 0*/){
+            // 开始测量以后，有一段冷却时长，这段时间内可以不用刷新能谱
+            if (mCountRatePlotReady.exchange(false)) {
+                ui->spectroMeter_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
+            }
+            if (mSpectrumPlotReady.exchange(false)) {
+                double yMax = 0.0;
+                bool hasData = false;
+                for (int i = 0; i < ui->spectroMeter_neutronSpectrum->graphCount(); ++i) {
+                    QCPGraph *graph = ui->spectroMeter_neutronSpectrum->graph(i);
+                    if (!graph || graph->data()->isEmpty())
+                        continue;
+
+                    hasData = true;
+                    bool foundRange = false;
+                    const QCPRange valueRange = graph->getValueRange(foundRange, QCP::sdBoth);
+                    if (foundRange)
+                        yMax = qMax(yMax, valueRange.upper);
+                }
+
+                if (!hasData)
+                    return;
+
+                if (yMax > 0.0)
+                    ui->spectroMeter_neutronSpectrum->yAxis->setRange(0, yMax * 1.1);
+
+                ui->spectroMeter_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
+            }
+        }
+
+        if (mMeasureTimer.isValid()){
+            if (mMeasureTimer.elapsed() >= mCountdownDurationMs){
+                mCommHelper->stopMeasure();
+                mMeasureTimer.invalidate();
+                if (mExternalTriggerMode && mPCIeCommSdk.numberOfDevices()<=0){
+                    QTimer::singleShot(200, this, [=](){
+                        emit startMeasure();
+                    });
+
+                    emit ui->pushButton_preview->clicked();
+                    if (ui->checkBox_autoIncrease->isChecked()){
+                        ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
+                    }
+
+                    return;
+                }
+
+                SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+                ui->action_startMeasure->setEnabled(true);
+                ui->action_stopMeasure->setEnabled(false);
+                ui->lineEdit_savePath->setEnabled(true);
+                ui->spinBox_timeLength->setEnabled(true);
+                if (ui->checkBox_autoIncrease->isChecked()){
+                    ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
+                }
+            }
+        }
+
+        if (mTempLastUpdateTime!=0 && QDateTime::fromMSecsSinceEpoch(mTempLastUpdateTime).secsTo(QDateTime::currentDateTime()) > 10){
+            // 已经超过10s没接收到温度速度了，报警处理
+            mTempLastUpdateTime = 0;
+            qWarning() << "DAQb温度数据显示超时，设备已下线或出现故障";
+            QLabel* lblTemp = this->findChild<QLabel*>("label_temperature");
+            if (lblTemp){
+                QPalette pal = lblTemp->palette();
+                pal.setColor(QPalette::WindowText, QColor(Qt::gray));
+                lblTemp->setPalette(pal);
+            }
+        }
+#endif
     });
     systemClockTimer->start(900);
 
@@ -566,9 +645,11 @@ void MainWindow::initUi()
             splitterV1->setHandleWidth(1);
             splitterV1->addWidget(ui->spectroMeter_neutronSpectrum);
             splitterV1->addWidget(ui->spectroMeter_gammaSpectrum);
-            splitterV1->setSizes(QList<int>() << 100000 << 100000);
+            splitterV1->addWidget(ui->spectroMeter_navigate);
+            splitterV1->setSizes(QList<int>() << 100000 << 100000 << 100000);
             splitterV1->setCollapsible(0,false);
             splitterV1->setCollapsible(1,false);
+            splitterV1->setCollapsible(2,false);
 
             ui->spectroMeterPageInfoWidget->layout()->addWidget(splitterV1);
         }
@@ -750,9 +831,13 @@ void MainWindow::initUi()
     }
 
     {
+#ifdef SINGLE_BOARD_MODE
+        initCustomPlot(ui->spectroMeter_neutronSpectrum, tr("道址"), tr("DAQb累积能谱"));
+        initCustomPlot(ui->spectroMeter_gammaSpectrum, tr("道址"), tr("DAQa累积能谱"));
+#else
         initCustomPlot(ui->spectroMeter_neutronSpectrum, tr("道址"), tr("中子能谱"));
         initCustomPlot(ui->spectroMeter_gammaSpectrum, tr("道址"), tr("伽马能谱"));
-
+#endif
         QActionGroup *actionType = new QActionGroup(this);
         actionType->addAction(ui->action_typeLSD);
         actionType->addAction(ui->action_typePSD);
@@ -1146,6 +1231,82 @@ void MainWindow::initUi()
         mLastCommunicationTime.invalidate();
         qInfo().noquote() << tr("设备断开连接");
     });
+    //更新温度状态（解析线程）
+    connect(mCommHelper, &CommHelper::reportDetectorTemperature, this,
+            &MainWindow::onReportDetectorTemperature, Qt::QueuedConnection);
+
+    // 接收完整的能谱数据
+    connect(mCommHelper, &CommHelper::reportFullSpectrum, this, &MainWindow::onFullSpectrum_Thread, Qt::DirectConnection);
+
+    // 接收波形曲线数据
+    connect(mCommHelper, &CommHelper::reportWaveCurve, this, [=](const QVector<quint16>& data){
+        // return; // 不显示波形
+        // QCustomPlot *customPlot = getCustomPlot(index);
+        // if (!customPlot)
+        //     return;
+
+        // QVector<double> x, y;
+        // for(int i=0; i<data.size(); ++i)
+        // {
+        //     x << i*10;
+        //     y << data.at(i);
+        // }
+
+
+        // getGraph(index)->setData(x, y);
+        // customPlot->xAxis->rescale(true);
+        // customPlot->yAxis->rescale(true);
+    });
+
+    // 接收触发信号时间戳
+    connect(mCommHelper, &CommHelper::externalSignalTriggered, this, [=](const QDateTime triggerTime){
+        qInfo().noquote() << QStringLiteral("DAQb接收外触发信号,准备数据接收");
+        ui->lineEdit_triggerflag->setText(QStringLiteral("正在测量"));
+        if (!mMeasureTimer.isValid())
+            mMeasureTimer.start();
+    }, Qt::QueuedConnection);
+
+    // 探测器上线
+    connect(mCommHelper, &CommHelper::detectorOnline, this, [=](){
+        if (mPCIeCommSdk.numberOfDevices()<=0){
+            ui->action_startMeasure->setEnabled(true);
+        }
+        ui->statusbar->showMessage(QStringLiteral("本地网络服务已开启"));
+    }, Qt::QueuedConnection);
+
+    // 探测器下线
+    connect(mCommHelper, &CommHelper::detectorOffline, this, [=](){
+        if (mPCIeCommSdk.numberOfDevices()<=0){
+            ui->action_startMeasure->setEnabled(false);
+        }
+    }, Qt::QueuedConnection);
+
+    // 开始指令下发，测量正式开始
+    connect(mCommHelper, &CommHelper::measureStart, this, [=](){
+        // 掉线重测：把墙钟缺口叠进 lastCountRatePlotTimeSec，作为新段时间偏置
+        {
+            QMutexLocker locker(&mDetectorDataMutex);
+            DetectorData &data = m_detectorData;
+            if (data.disconnectWallMs > 0 && data.lastCountRatePlotTimeSec > 0.0) {
+                const double deltaT =
+                    (QDateTime::currentMSecsSinceEpoch() - data.disconnectWallMs) / 1000.0;
+                if (deltaT > 0.0)
+                    data.lastCountRatePlotTimeSec += deltaT;
+                data.countRateTimeOffsetSec = data.lastCountRatePlotTimeSec;
+            }
+            data.disconnectWallMs = 0;
+        }
+
+        // 重置该探测器的能谱累积（保留计数率曲线时间轴与已绘数据）
+        //resetDetectorSpectrum();
+
+        qInfo().nospace() << "DAQb测量已启动，准备接收数据";
+    }, Qt::QueuedConnection);
+
+    // 测量停止指令下发，测量结束
+    connect(mCommHelper, &CommHelper::measureStop, this, [=](){
+        qInfo().nospace() << "DAQb测量已停止";
+    }, Qt::QueuedConnection);
 
     connect(ui->comboBox_horCamera, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int){
         emit ui->pushButton_preview->clicked();
@@ -1542,7 +1703,7 @@ void MainWindow::on_action_startMeasure_triggered()
         mCurrentDetectorType = dtLBD;
 
     onStartMeasure();
-    ui->spinBox_timeStop->setMaximum(ui->spinBox_timeLength->value());
+    ui->spinBox_timeStop->setMaximum(mCountdownDurationMs);
 }
 
 
@@ -1555,6 +1716,10 @@ void MainWindow::on_action_stopMeasure_triggered()
     mEnableContinueMeasuer = false;
     if (mIsMeasuring){
         mIsMeasuring = false;
+#ifdef SINGLE_BOARD_MODE
+        mMeasureTimer.invalidate();
+        mCommHelper->stopMeasure();
+#endif
         mPCIeCommSdk.stopAllCapture();
         qInfo().noquote().nospace() << "手动停止测量";
     }
@@ -1892,7 +2057,9 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
         ui->pushButton_selChannel2->hide();
 
         if (!ui->action_status->isChecked()){
+#ifndef SINGLE_BOARD_MODE
             ui->spectroMeter_neutronSpectrum->hide();
+#endif
             ui->spectroMeter_gammaSpectrum->show();
             ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
         }
@@ -2003,8 +2170,9 @@ void MainWindow::onStartMeasure()
     if (ui->action_test->isChecked())
         measureModes |= PCIeCommSdk::mmTest;
 
-    qint32 timeLength = ui->spinBox_timeLength->value();
-    mPCIeCommSdk.setCaptureTimelength(timeLength);
+    m_detectorData = DetectorData();
+    mCountdownDurationMs = ui->spinBox_timeLength->value();
+    mPCIeCommSdk.setCaptureTimelength(mCountdownDurationMs);
     mPCIeCommSdk.setTriggerThreshold();
     // 先发送PSD甄别阈值
     if (ui->action_typeLSD->isChecked())
@@ -2028,10 +2196,12 @@ void MainWindow::onStartMeasure()
 #ifdef SINGLE_BOARD_MODE
         CommandAdapter::MeasureMode measureMode = mExternalTriggerMode ? \
                                                       CommandAdapter::MeasureMode::mmAuto : CommandAdapter::MeasureMode::mmManual;
-        mCommHelper->startMeasure(mCurrentSavePath, measureMode, CommandAdapter::WorkMode::wmWaveform);
+        mCommHelper->startMeasure(mCurrentSavePath, measureMode, (CommandAdapter::WorkMode)AppConfig::instance().workMode());
+        // 启动测量计时器
+        mMeasureTimer.start();
 #endif
         mPCIeCommSdk.startAllCapture(mCurrentSavePath,
-                                     ui->spinBox_timeLength->value(),
+                                     mCountdownDurationMs,
                                      ui->lineEdit_shotNum->text());
     }
 
@@ -2103,7 +2273,7 @@ void MainWindow::onPrepareMeasure()
 
     this->mIsMeasuring = true;
     mPCIeCommSdk.startAllCapture(mCurrentSavePath,
-                                 ui->spinBox_timeLength->value(),
+                                 mCountdownDurationMs,
                                  ui->lineEdit_shotNum->text());
 
     GlobalSettings settings(DEVICE_CONFIG_FILE);
@@ -2252,8 +2422,18 @@ void MainWindow::on_action_init_triggered()
                 label_LocalServer->setStyleSheet("color:#00ff00;");
                 label_LocalServer->setText(tr("本地网络服务：已开启"));
             }
+            QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/pictogram.png"), QSize(36, 36), QColor::fromRgb(0xff,0x00,0x00,0xff));
+            ui->action_init->setIcon(QIcon(pixmap));
             ui->action_init->setText("停止服务");
-            ui->statusbar->showMessage(QStringLiteral("开启本地网络服务，等待探测器连接"));
+            ui->statusbar->showMessage(QStringLiteral("本地网络服务已开启，等待探测器连接"));
+
+            QLabel* lblTemp = this->findChild<QLabel*>("label_temperature");
+            if (lblTemp){
+                QPalette pal = lblTemp->palette();
+                pal.setColor(QPalette::WindowText, QColor(Qt::green));
+                lblTemp->setPalette(pal);
+                lblTemp->setText(tr("DAQb温度：- ℃"));
+            }
         }
         else{
             qInfo().noquote() << tr("连接设备失败");
@@ -2262,8 +2442,23 @@ void MainWindow::on_action_init_triggered()
     }
     else{
         mCommHelper->disconnectServer();
+        QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/pictogram.png"), QSize(36, 36), QColor::fromRgb(0x7c,0xfc,0x00,0xff));
+        ui->action_init->setIcon(QIcon(pixmap));
         ui->action_init->setText("开启服务");
         ui->statusbar->showMessage(QStringLiteral("本地网络服务已关闭"));
+
+        mTempLastUpdateTime = 0;
+        QLabel* lblTemp = this->findChild<QLabel*>("label_temperature");
+        if (lblTemp){
+            QPalette pal = lblTemp->palette();
+            pal.setColor(QPalette::WindowText, QColor(Qt::gray));
+            lblTemp->setPalette(pal);
+        }
+
+        if (mPCIeCommSdk.numberOfDevices()<=0){
+            ui->action_startMeasure->setEnabled(false);
+            ui->action_stopMeasure->setEnabled(false);
+        }
     }
 #else
     mReconnecting = false;
@@ -2470,3 +2665,214 @@ void MainWindow::initLogEvent()
     ui->plainTextEdit_log->viewport()->installEventFilter(this);
 }
 
+// 处理数据解析后的能谱数据（解析线程）：累积数据；绘图投递到主线程
+void MainWindow::onFullSpectrum_Thread(const FullSpectrum& fullSpectrum)
+{
+    std::array<quint32, 8192> spectrumSnap{};
+    double currenTime = 0.0;
+    double fixedCountRate = 0.0;
+    bool needPlotUpdate = false;
+
+    {
+        QMutexLocker locker(&mDetectorDataMutex);
+        DetectorData &data = m_detectorData;
+
+        // 累积能谱
+        quint32 currentCount = 0;
+        for (int i = 0; i < 8192; ++i) {
+            currentCount += fullSpectrum.spectrum[i];
+            data.spectrum[i] += fullSpectrum.spectrum[i];
+        }
+
+        // 记录累积计数率
+        data.lastAccumulateCount += currentCount;
+        data.lastAccuCountFixed += currentCount * 1.0 * fullSpectrum.measureTime * 1e6
+                                   / (fullSpectrum.measureTime * 1e6 - fullSpectrum.deathTime * 10); // 死时间修正，注意测量时间单位ms，死时间单位*10ns
+
+        //最快每秒更新一次能谱、计数率,这里不考虑丢包带来的计数率修复
+        const quint32 accuTime = (fullSpectrum.sequence - data.lastSpectrumID) * fullSpectrum.measureTime;//单位ms
+        currenTime = data.countRateTimeOffsetSec
+                     + 1.0 * fullSpectrum.sequence * fullSpectrum.measureTime / 1000; //单位s
+        if (accuTime >= 1000) {
+            const double countRate = 1000.0 * data.lastAccumulateCount * 1.0 / accuTime; //cps
+            fixedCountRate = 1000.0 * data.lastAccuCountFixed * 1.0 / accuTime; //修正后的cps
+            data.lastSpectrumID = fullSpectrum.sequence;
+            data.lastAccumulateCount = 0;
+            data.lastAccuCountFixed = 0;
+            data.countRateHistory.append(countRate);
+            data.lastCountRatePlotTimeSec = currenTime;
+
+            std::memcpy(spectrumSnap.data(), data.spectrum, sizeof(spectrumSnap));
+            needPlotUpdate = true;
+        }
+    }
+
+    if (!needPlotUpdate)
+        return;
+
+    QMetaObject::invokeMethod(this, [this, spectrumSnap, currenTime, fixedCountRate]() {
+        updateSpecPlotData(spectrumSnap.data());
+        updateCountRatePlotData(currenTime, fixedCountRate);
+    }, Qt::QueuedConnection);
+}
+
+// 解析线程上报温度，仅写缓存
+void MainWindow::onReportDetectorTemperature(float temperature)
+{
+    mTempLastUpdateTime = QDateTime::currentDateTime().currentMSecsSinceEpoch();
+    QLabel* lblTemp = this->findChild<QLabel*>("label_temperature");
+    if (lblTemp){
+        lblTemp->setText(QString("DAQb温度：%1 ℃").arg(QString::number(temperature, 'f', 1)));
+    }
+
+    const QString baseDirPath = QApplication::applicationDirPath() + "/temperature";
+
+    const QString dayDirPath = baseDirPath + "/";
+    QDir dayDir(dayDirPath);
+    if (!dayDir.exists())
+        dayDir.mkpath(dayDirPath);
+
+    const QString filePath = dayDirPath + "/" + QDateTime::currentDateTime().toString("yyyyMMdd") + ".txt";
+    QFile temperatureFile(filePath);
+    if (!temperatureFile.open(QIODevice::WriteOnly | QIODevice::Append))
+    {
+        qWarning().noquote().nospace() << "Failed to open temperature file: " << filePath;
+        return; // 保留points，下一轮flush再写
+    }
+
+    QTextStream temperatureStream(&temperatureFile);
+    temperatureStream << QDateTime::currentDateTime().toString("HH:mm:ss") << "," << QString::number(temperature, 'f', 1) << "\n";
+    temperatureFile.close();
+}
+
+// 更新能谱显示
+void MainWindow::updateSpecPlotData(const quint32 spectrum[])
+{
+    QVector<double> x, y;
+    // 在持绘图锁之前完成道压缩与坐标换算（主线程内，避免长时间占用 mPlotLocker）
+    const bool useEnScale = mEnScale.load();// 能量刻度
+    const SpectrumPlotSettings &specSettings = m_spectrumPlotSettings;
+    const int mergebin = (specSettings.multiChannel > 0) ? (8192 / specSettings.multiChannel) : 8192;
+
+    if (useEnScale) {
+        for (int i = 0; i < 8192; ++i) {
+            double mergeCount = 0.0;
+            for (int mergeID = 0; mergeID < mergebin; mergeID++) {
+                if (i < 8192) {
+                    mergeCount += spectrum[i];
+                } else {
+                    break;
+                }
+                i++;
+            }
+            const int newCh = (i + 1) / mergebin;
+            double tempX = 0.0;
+            if (specSettings.fitType == 1) {
+                tempX = specSettings.c0 * newCh + specSettings.c1;
+            } else if (specSettings.fitType == 2) {
+                tempX = specSettings.c0 * newCh * newCh + specSettings.c1 * newCh + specSettings.c2;
+            }
+            x << tempX;
+            y << mergeCount;
+        }
+    } else
+    {
+        for (int i = 0; i < 8192; ++i) {
+            double mergeCount = 0.0;
+            for (int mergeID = 0; mergeID < mergebin; mergeID++) {
+                if (i < 8192) {
+                    mergeCount += spectrum[i];
+                } else {
+                    break;
+                }
+                i++;
+            }
+            const int newCh = (i + 1) / mergebin;
+            x << static_cast<double>(newCh);
+            y << mergeCount;
+        }
+    }
+
+    QCPGraph *graph = ui->spectroMeter_neutronSpectrum->graph(0);
+    if (graph == nullptr) {
+        qDebug() << "updateSpecPlotData error";
+        return;
+    }
+    graph->setData(x, y);
+    mSpectrumPlotReady.store(true);
+}
+
+/**
+ * @brief 计数率显示，最快更新时间间隔不小于1000ms
+ * @param detectorId 探测器编号
+ * @param FPGATime FPGA内部时钟，当前的计数率对应的FPGA时钟，单位s，能谱数据中单位是ms，这里采用向下取整
+ * @param countRate 计数率，单位cps
+ */
+void MainWindow::updateCountRatePlotData(double FPGATime, double countRate)
+{
+    // QCustomPlot *customPlot = getCustomPlot(detectorId, false);
+    // if (!customPlot)
+    //     return;
+
+    // getGraph(detectorId, false)->addData(fpgaTime, countRate);
+
+    // if (customPlot->property("enableAutoScale").toBool()) {
+    //     customPlot->rescaleAxes(true);
+    //     mCountRatePlotReady.store(true);
+    //     return;
+    // }
+
+    // if (!customPlot->property("enableFixedScale").toBool()) {
+    //     mCountRatePlotReady.store(true);
+    //     return;
+    // }
+
+    // // 显示最近 WINDOW 秒（X 轴仅读 QCPGraph，不读 m_detectorData）
+    // const int WINDOW = customPlot->property("xAxisFixedRange").toUInt();
+    // const int halfDetNum = DET_NUM / 2;
+    // const int groupStart = ((detectorId - 1) / halfDetNum) * halfDetNum + 1;
+    // const int groupEnd = groupStart + halfDetNum - 1;
+
+    // QCPGraph *firstGraph = getGraph(groupStart, false);
+    // double x_max = (firstGraph && firstGraph->dataCount() > 0)
+    //                    ? firstGraph->data()->at(0)->key
+    //                    : 0.0;
+
+    // for (int detectorIndex = groupStart; detectorIndex <= groupEnd; ++detectorIndex) {
+    //     QCPGraph *tempGraph = getGraph(detectorIndex, false);
+    //     if (!tempGraph || tempGraph->dataCount() <= 0) {
+    //         continue;
+    //     }
+    //     const double lastKey = tempGraph->data()->at(tempGraph->dataCount() - 1)->key;
+    //     x_max = qMax(x_max, lastKey);
+    // }
+    // x_max = qMax(x_max, static_cast<double>(WINDOW));
+    // const double x_min = qMax(0.0, x_max - WINDOW);
+    // customPlot->xAxis->setRange(x_min, x_max);
+
+    // // 仅在此处短暂读 m_detectorData；calcRecentYRange 只扫尾部 WINDOW 个点，不拷贝整段历史
+    // double y_min = 0.0;
+    // double y_max = 1.0;
+    // {
+    //     QMutexLocker detLocker(&mDetectorDataMutex);
+    //     auto it = m_detectorData.find(detectorId);
+    //     if (it != m_detectorData.end()) {
+    //         const auto range = calcRecentYRange(it->countRateHistory, WINDOW);
+    //         y_min = range.first;
+    //         y_max = range.second;
+    //     }
+    //     for (int detectorIndex = groupStart; detectorIndex <= groupEnd; ++detectorIndex) {
+    //         auto it2 = m_detectorData.find(detectorIndex);
+    //         if (it2 == m_detectorData.end()) {
+    //             continue;
+    //         }
+    //         const auto detRange = calcRecentYRange(it2->countRateHistory, WINDOW);
+    //         y_min = qMin(y_min, detRange.first);
+    //         y_max = qMax(y_max, detRange.second);
+    //     }
+    // }
+
+    // const double pad = (y_max - y_min) * 0.1;
+    // customPlot->yAxis->setRange(y_min - pad, y_max + pad);
+    // mCountRatePlotReady.store(true);
+}
