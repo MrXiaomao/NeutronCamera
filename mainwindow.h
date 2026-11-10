@@ -29,7 +29,7 @@ class ToastManager;
 struct DetectorData {
     // double countRate;                 // 当前计数率
     QVector<double> countRateHistory;    // 计数率历史，cps，每秒钟更新一次
-    quint32 spectrum[8192];              // 累积能谱 (固定长度8192)
+    quint32 spectrum[1024];              // 累积能谱 (固定长度1024)
     quint32 lastSpectrumID;              // 上次测量累积时间的能谱序号
     quint32 lastAccumulateCount;         // 上次测量累积时间的计数率,暂时不考虑丢包带来的计数率修复
     double lastAccuCountFixed;     // 上次测量累积时间的计数率，考虑死时间修复后的值
@@ -50,7 +50,7 @@ struct DetectorData {
         , disconnectWallMs(0)
     {
         countRateHistory.clear();
-        for(int i=0; i<8192; i++) spectrum[i] = 0;// 初始化能谱为全0
+        for(int i=0; i<1024; i++) spectrum[i] = 0;// 初始化能谱为全0
     }
 };
 
@@ -96,6 +96,9 @@ public slots:
     void onFullSpectrum_Thread(const FullSpectrum& fullSpectrum);
     // 解析线程上报温度，仅写缓存
     void onReportDetectorTemperature(float temperature);
+
+    void refreshSpectrumPlot();
+    void refreshWaveformPlot();
 
 signals:
     void writeLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
@@ -168,6 +171,12 @@ private slots:
 
     void on_action_deviceManager_triggered();
 
+    void on_spinBox_step_valueChanged(int arg1);
+
+    void on_spinBox_timeStart_textChanged(const QString &arg1);
+
+    void on_spinBox_timeStop_textChanged(const QString &arg1);
+
 private:
     Ui::MainWindow *ui;
     CommHelper* mCommHelper = nullptr;
@@ -233,9 +242,9 @@ private:
     // 固定的24个通道能谱图像属性设置：是否刻度，X/Y坐标轴范围自动与否，坐标轴范围
     struct SpectrumPlotSettings {
         //多道道数
-        int multiChannel = 8192;
+        int multiChannel = 1024;
         double xMin = 0.0;
-        double xMax = 8192.0;
+        double xMax = 1024.0;
         double yMin = 0.0;
         double yMax = 100.0;
 
@@ -253,6 +262,16 @@ private:
     qint64 mTempLastUpdateTime = 0;
     DetectorData m_detectorData;
     mutable QMutex mDetectorDataMutex;       // 保护 m_detectorData（解析线程写、主线程读/绘图）
+
+    mutable QMutex mSpectDataMutex;
+    using SpectrumEntry = FullSpectrum;
+    QVector<SpectrumEntry> m_spectrumByChannel[2];// 0-DAQa 1-DAQb
+    using WaveformEntry = QVector<quint16>;
+    QVector<WaveformEntry> m_waveformByChannel[2];
+
+    // 定时刷新能谱和波形
+    QTimer* m_plotRefreshTimer = nullptr;
+
     // 更新能谱显示
     void updateSpecPlotData(const quint32 spectrum[]);
 

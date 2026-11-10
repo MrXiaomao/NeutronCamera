@@ -526,7 +526,7 @@
           <property name="currentIndex">
            <number>0</number>
           </property>
-          <widget class="QWidget" name="spectroMeterPageInfoWidget">
+          <widget class="QWidget" name="plotSpectrumWidgetPage">
            <layout class="QVBoxLayout" name="verticalLayout_5">
             <property name="spacing">
              <number>0</number>
@@ -544,13 +544,13 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QCustomPlot" name="spectroMeter_neutronSpectrum" native="true"/>
+             <widget class="QCustomPlot" name="plot_neutronSpectrum" native="true"/>
             </item>
             <item>
-             <widget class="QCustomPlot" name="spectroMeter_gammaSpectrum" native="true"/>
+             <widget class="QCustomPlot" name="plot_gammaSpectrum" native="true"/>
             </item>
             <item>
-             <widget class="QWidget" name="spectroMeter_navigate" native="true">
+             <widget class="QWidget" name="plotSpectrum_navigate" native="true">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                 <horstretch>0</horstretch>
@@ -584,7 +584,7 @@
                 </spacer>
                </item>
                <item>
-                <widget class="QToolButton" name="toolButton_first">
+                <widget class="QToolButton" name="toolButton_firstSpectrum">
                  <property name="sizePolicy">
                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                    <horstretch>0</horstretch>
@@ -604,7 +604,7 @@
                 </widget>
                </item>
                <item>
-                <widget class="QToolButton" name="toolButton_back">
+                <widget class="QToolButton" name="toolButton_backSpectrum">
                  <property name="icon">
                   <iconset resource="lresource.qrc">
                    <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
@@ -625,7 +625,7 @@
                 </widget>
                </item>
                <item>
-                <widget class="QSpinBox" name="spinBox_2">
+                <widget class="QSpinBox" name="spinBox_spectrumIndex">
                  <property name="minimum">
                   <number>1</number>
                  </property>
@@ -635,7 +635,7 @@
                 </widget>
                </item>
                <item>
-                <widget class="QToolButton" name="toolButton_forward">
+                <widget class="QToolButton" name="toolButton_forwardSpectrum">
                  <property name="icon">
                   <iconset resource="lresource.qrc">
                    <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
@@ -649,7 +649,7 @@
                 </widget>
                </item>
                <item>
-                <widget class="QToolButton" name="toolButton_last">
+                <widget class="QToolButton" name="toolButton_lastSpectrum">
                  <property name="icon">
                   <iconset resource="lresource.qrc">
                    <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
@@ -664,6 +664,160 @@
                </item>
                <item>
                 <spacer name="horizontalSpacer_3">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>100</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="plotWaveformWidgetPage">
+           <layout class="QVBoxLayout" name="verticalLayout_7">
+            <property name="spacing">
+             <number>0</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QCustomPlot" name="plot_DAQaWaveform" native="true"/>
+            </item>
+            <item>
+             <widget class="QCustomPlot" name="plot_DAQbWaveform" native="true"/>
+            </item>
+            <item>
+             <widget class="QWidget" name="plotWaveform_navigate" native="true">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>0</width>
+                <height>50</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>50</height>
+               </size>
+              </property>
+              <layout class="QHBoxLayout" name="horizontalLayout_6">
+               <item>
+                <spacer name="horizontalSpacer_5">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>100</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item>
+                <widget class="QToolButton" name="toolButton_firstWaveform">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="icon">
+                  <iconset resource="lresource.qrc">
+                   <normaloff>:/resource/image/play-previous.png</normaloff>:/resource/image/play-previous.png</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>16</width>
+                   <height>16</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QToolButton" name="toolButton_backWaveform">
+                 <property name="icon">
+                  <iconset resource="lresource.qrc">
+                   <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>16</width>
+                   <height>16</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_18">
+                 <property name="text">
+                  <string>序号：</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QSpinBox" name="spinBox_waveformIndex">
+                 <property name="minimum">
+                  <number>1</number>
+                 </property>
+                 <property name="maximum">
+                  <number>65536</number>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QToolButton" name="toolButton_forwardWaveform">
+                 <property name="icon">
+                  <iconset resource="lresource.qrc">
+                   <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>16</width>
+                   <height>16</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QToolButton" name="toolButton_lastWaveform">
+                 <property name="icon">
+                  <iconset resource="lresource.qrc">
+                   <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
+                 </property>
+                 <property name="iconSize">
+                  <size>
+                   <width>16</width>
+                   <height>16</height>
+                  </size>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_8">
                  <property name="orientation">
                   <enum>Qt::Horizontal</enum>
                  </property>
@@ -1525,15 +1679,18 @@
                  </widget>
                 </item>
                 <item row="1" column="1">
-                 <widget class="QSpinBox" name="spinBox">
+                 <widget class="QSpinBox" name="spinBox_step">
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
                   <property name="maximum">
-                   <number>3200</number>
+                   <number>2500</number>
                   </property>
                   <property name="singleStep">
-                   <number>4</number>
+                   <number>1</number>
                   </property>
                   <property name="value">
-                   <number>4</number>
+                   <number>1</number>
                   </property>
                  </widget>
                 </item>

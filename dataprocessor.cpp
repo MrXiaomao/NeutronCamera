@@ -295,8 +295,8 @@ void DataProcessor::stopTempTimeout()
  * @param data 完整的能谱数据包，传入进来时已经验证了包的完整性
  */
 void DataProcessor::mergeSubSpec_Thread(const QByteArray& data){
-    // 能谱数据：一个能谱数据包长度为256*32bit，但完整的能谱数据为8192*32bit。
-    // 1. 提取数据包数据（256道 quint32 数据）
+    // 能谱数据：一个能谱数据包长度为512*16bit，但完整的能谱数据为512*16bit。
+    // 1. 提取数据包数据（512道 quint16 数据）
     quint32 spectrumSeq = 0;
     SubSpectrumPacket subSpecPackket;
     if (!extractSpectrumData(data, subSpecPackket)) {
@@ -340,7 +340,7 @@ void DataProcessor::mergeSubSpec_Thread(const QByteArray& data){
         }
 
         // 拷贝子能谱数据到完整能谱
-        memcpy(fullSpectrum.spectrum + (part - 1) * 256, subSpecPackket.spectrum, 256 * 4);
+        memcpy(fullSpectrum.spectrum + (part - 1) * 512, subSpecPackket.spectrum, 512 * sizeof(quint16));
         fullSpectrum.receivedMask |= bit;
 
         if (fullSpectrum.receivedMask == 0x03u) {
@@ -355,7 +355,6 @@ void DataProcessor::mergeSubSpec_Thread(const QByteArray& data){
 
     if (hasFullSpectrum) {
         // 锁外发送，降低锁持有时长
-        fullSpectrumCopy.spectrum[8191]=0; //将最后一道置零
         emit reportFullSpectrum(fullSpectrumCopy);
     }
 }

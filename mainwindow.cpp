@@ -567,13 +567,13 @@ void MainWindow::initUi()
         if (mIsMeasuring.load()/* && (t % m_specPlotRefreshTime) == 0*/){
             // 开始测量以后，有一段冷却时长，这段时间内可以不用刷新能谱
             if (mCountRatePlotReady.exchange(false)) {
-                ui->spectroMeter_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
+                ui->plot_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
             }
             if (mSpectrumPlotReady.exchange(false)) {
                 double yMax = 0.0;
                 bool hasData = false;
-                for (int i = 0; i < ui->spectroMeter_neutronSpectrum->graphCount(); ++i) {
-                    QCPGraph *graph = ui->spectroMeter_neutronSpectrum->graph(i);
+                for (int i = 0; i < ui->plot_neutronSpectrum->graphCount(); ++i) {
+                    QCPGraph *graph = ui->plot_neutronSpectrum->graph(i);
                     if (!graph || graph->data()->isEmpty())
                         continue;
 
@@ -588,14 +588,15 @@ void MainWindow::initUi()
                     return;
 
                 if (yMax > 0.0)
-                    ui->spectroMeter_neutronSpectrum->yAxis->setRange(0, yMax * 1.1);
-
-                ui->spectroMeter_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
+                    ui->plot_neutronSpectrum->yAxis->setRange(0, yMax * 1.1);
+                ui->plot_neutronSpectrum->xAxis->rescale(true);
+                ui->plot_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
             }
         }
 
         if (mMeasureTimer.isValid()){
             if (mMeasureTimer.elapsed() >= mCountdownDurationMs){
+                m_plotRefreshTimer->stop();
                 mCommHelper->stopMeasure();
                 mMeasureTimer.invalidate();
                 if (mExternalTriggerMode && mPCIeCommSdk.numberOfDevices()<=0){
@@ -637,23 +638,41 @@ void MainWindow::initUi()
     });
     systemClockTimer->start(900);
 
+    m_plotRefreshTimer = new QTimer(this);
+    m_plotRefreshTimer->setInterval(200); // 每200ms刷新一次波形
+    connect(m_plotRefreshTimer, &QTimer::timeout, this, [=]{
+        refreshSpectrumPlot();
+        refreshWaveformPlot();
+    });
+    connect(ui->toolButton_lastSpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_spectrumIndex->setValue(ui->spinBox_spectrumIndex->maximum());
+    });
+    connect(ui->toolButton_forwardSpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_spectrumIndex->setValue(ui->spinBox_spectrumIndex->value() + 1);
+    });
+    connect(ui->toolButton_backSpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_spectrumIndex->setValue(ui->spinBox_spectrumIndex->value() - 1);
+    });
+    connect(ui->toolButton_firstSpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_spectrumIndex->setValue(ui->spinBox_spectrumIndex->minimum());
+    });
+    connect(ui->spinBox_spectrumIndex, &QSpinBox::textChanged, this, &MainWindow::refreshSpectrumPlot);
+    connect(ui->toolButton_lastWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->maximum());
+    });
+    connect(ui->toolButton_forwardWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->value() + 1);
+    });
+    connect(ui->toolButton_backWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->value() - 1);
+    });
+    connect(ui->toolButton_firstWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->minimum());
+    });
+    connect(ui->spinBox_waveformIndex, &QSpinBox::textChanged, this, &MainWindow::refreshWaveformPlot);
+
     //布局
     {
-        //中间布局
-        {
-            QSplitter *splitterV1 = new QSplitter(Qt::Vertical,ui->spectroMeterPageInfoWidget);
-            splitterV1->setHandleWidth(1);
-            splitterV1->addWidget(ui->spectroMeter_neutronSpectrum);
-            splitterV1->addWidget(ui->spectroMeter_gammaSpectrum);
-            splitterV1->addWidget(ui->spectroMeter_navigate);
-            splitterV1->setSizes(QList<int>() << 100000 << 100000 << 100000);
-            splitterV1->setCollapsible(0,false);
-            splitterV1->setCollapsible(1,false);
-            splitterV1->setCollapsible(2,false);
-
-            ui->spectroMeterPageInfoWidget->layout()->addWidget(splitterV1);
-        }
-
         //大布局
         QSplitter *splitterH1 = new QSplitter(Qt::Horizontal,this);
         splitterH1->setObjectName("splitterH1");
@@ -832,11 +851,13 @@ void MainWindow::initUi()
 
     {
 #ifdef SINGLE_BOARD_MODE
-        initCustomPlot(ui->spectroMeter_neutronSpectrum, tr("道址"), tr("DAQb累积能谱"));
-        initCustomPlot(ui->spectroMeter_gammaSpectrum, tr("道址"), tr("DAQa累积能谱"));
+        initCustomPlot(ui->plot_neutronSpectrum, tr("道址"), tr("DAQa累积能谱"));
+        initCustomPlot(ui->plot_gammaSpectrum, tr("道址"), tr("DAQb累积能谱"));
+        initCustomPlot(ui->plot_DAQaWaveform, tr("时间/ns"), tr("DAQa波形"));
+        initCustomPlot(ui->plot_DAQbWaveform, tr("时间/ns"), tr("DAQb波形"));
 #else
-        initCustomPlot(ui->spectroMeter_neutronSpectrum, tr("道址"), tr("中子能谱"));
-        initCustomPlot(ui->spectroMeter_gammaSpectrum, tr("道址"), tr("伽马能谱"));
+        initCustomPlot(ui->plot_neutronSpectrum, tr("道址"), tr("中子能谱"));
+        initCustomPlot(ui->plot_gammaSpectrum, tr("道址"), tr("伽马能谱"));
 #endif
         QActionGroup *actionType = new QActionGroup(this);
         actionType->addAction(ui->action_typeLSD);
@@ -1236,27 +1257,20 @@ void MainWindow::initUi()
             &MainWindow::onReportDetectorTemperature, Qt::QueuedConnection);
 
     // 接收完整的能谱数据
-    connect(mCommHelper, &CommHelper::reportFullSpectrum, this, &MainWindow::onFullSpectrum_Thread, Qt::DirectConnection);
+    connect(mCommHelper, &CommHelper::reportFullSpectrum, this, [=](const FullSpectrum& fullSpectrum){
+        QMutexLocker locker(&mSpectDataMutex);
+        m_spectrumByChannel[1].push_back(fullSpectrum);
+    }, Qt::DirectConnection);//&MainWindow::onFullSpectrum_Thread, Qt::DirectConnection);
 
     // 接收波形曲线数据
     connect(mCommHelper, &CommHelper::reportWaveCurve, this, [=](const QVector<quint16>& data){
-        // return; // 不显示波形
-        // QCustomPlot *customPlot = getCustomPlot(index);
-        // if (!customPlot)
-        //     return;
-
-        // QVector<double> x, y;
-        // for(int i=0; i<data.size(); ++i)
-        // {
-        //     x << i*10;
-        //     y << data.at(i);
-        // }
-
-
-        // getGraph(index)->setData(x, y);
-        // customPlot->xAxis->rescale(true);
-        // customPlot->yAxis->rescale(true);
-    });
+        QMutexLocker locker(&mSpectDataMutex);
+        m_waveformByChannel[1].push_back(data);
+        QTimer::singleShot(0, this, [=]{
+            ui->spinBox_waveformIndex->setMaximum(ui->spinBox_waveformIndex->maximum()+1);
+            ui->spinBox_waveformIndex->setMinimum(1);
+        });
+    }, Qt::DirectConnection);
 
     // 接收触发信号时间戳
     connect(mCommHelper, &CommHelper::externalSignalTriggered, this, [=](const QDateTime triggerTime){
@@ -1462,8 +1476,8 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
     customPlot->yAxis->setLabel(axisYLabel);
     customPlot->axisRect()->setupFullAxesBox(true);
 
-    if (customPlot == ui->spectroMeter_neutronSpectrum || customPlot == ui->spectroMeter_gammaSpectrum){
-        customPlot->xAxis->setRange(0, 2048);
+    if (customPlot == ui->plot_neutronSpectrum || customPlot == ui->plot_gammaSpectrum){
+        customPlot->xAxis->setRange(0, 1024);
         customPlot->yAxis->setRange(0, 10000);
         customPlot->legend->setVisible(true);
 
@@ -1488,6 +1502,33 @@ void MainWindow::initCustomPlot(QCustomPlot* customPlot, QString axisXLabel, QSt
 
         QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
         //customPlotHelper->setGraphCheckBoxList(customPlot);
+    }
+    else if (customPlot == ui->plot_DAQaWaveform || customPlot == ui->plot_DAQbWaveform)
+    {
+        customPlot->xAxis->setRange(0, 4*1e6);
+        customPlot->yAxis->setRange(0, 16384);
+        customPlot->legend->setVisible(true);
+
+#ifdef SINGLE_BOARD_MODE
+        QStringList title = {""};
+#else
+        QStringList title = {"水平相机", "垂直相机"};
+        customPlot->legend->setCheckable(true);
+#endif //SINGLE_BOARD_MODE
+
+        QColor colors[] = {Qt::red, Qt::blue};
+        for (int i=0; i<title.size(); ++i){
+            QCPGraph * graph = customPlot->addGraph(customPlot->xAxis, customPlot->yAxis);
+            graph->setAntialiased(false);
+            graph->setPen(QPen(colors[i]));
+            graph->selectionDecorator()->setPen(QPen(colors[i]));
+            graph->setLineStyle(QCPGraph::lsLine);
+            graph->setSelectable(QCP::SelectionType::stNone);
+            graph->setScatterStyle(QCPScatterStyle(i==0 ? QCPScatterStyle::ssCircle : QCPScatterStyle::ssCross, colors[i], 6));
+            graph->setName(title[i]);
+        }
+
+        QCustomPlotHelper* customPlotHelper = new QCustomPlotHelper(customPlot, this);
     }
 
     customPlot->replot();
@@ -1719,6 +1760,7 @@ void MainWindow::on_action_stopMeasure_triggered()
 #ifdef SINGLE_BOARD_MODE
         mMeasureTimer.invalidate();
         mCommHelper->stopMeasure();
+        m_plotRefreshTimer->stop();
 #endif
         mPCIeCommSdk.stopAllCapture();
         qInfo().noquote().nospace() << "手动停止测量";
@@ -1995,9 +2037,9 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
         ui->pushButton_selChannel2->hide();
 
         if (!ui->action_status->isChecked()){
-            ui->spectroMeter_neutronSpectrum->show();
-            ui->spectroMeter_gammaSpectrum->show();
-            ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
+            ui->plot_neutronSpectrum->show();
+            ui->plot_gammaSpectrum->show();
+            ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
         }
         this->setWindowTitle(QApplication::applicationName() + "液闪探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "液闪探测器" + " - " + APP_VERSION);
@@ -2026,9 +2068,9 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
         ui->pushButton_selChannel2->show();
 
         if (!ui->action_status->isChecked()){
-            ui->spectroMeter_neutronSpectrum->show();
-            ui->spectroMeter_gammaSpectrum->hide();
-            ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
+            ui->plot_neutronSpectrum->show();
+            ui->plot_gammaSpectrum->hide();
+            ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
         }
         this->setWindowTitle(QApplication::applicationName() + "塑闪探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "塑闪探测器" + " - " + APP_VERSION);
@@ -2058,10 +2100,10 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
 
         if (!ui->action_status->isChecked()){
 #ifndef SINGLE_BOARD_MODE
-            ui->spectroMeter_neutronSpectrum->hide();
+            ui->plot_neutronSpectrum->hide();
 #endif
-            ui->spectroMeter_gammaSpectrum->show();
-            ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
+            ui->plot_gammaSpectrum->show();
+            ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
         }
         this->setWindowTitle(QApplication::applicationName() + "溴化镧探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "溴化镧探测器" + " - " + APP_VERSION);
@@ -2118,7 +2160,7 @@ void MainWindow::onNeutronSpectrum(quint8 cameraIndex , QPair<QVector<double>,QV
     quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
 
     //实测曲线
-    QCustomPlot* customPlot = ui->spectroMeter_neutronSpectrum;
+    QCustomPlot* customPlot = ui->plot_neutronSpectrum;
     if (cameraOrientation == PCIeCommSdk::CameraOrientation::Horizontal)
         customPlot->graph(0)->setData(pairs.first, pairs.second);
     else
@@ -2135,7 +2177,7 @@ void MainWindow::onGammaSpectrum(quint8 cameraIndex , QPair<QVector<double>,QVec
     quint8 cameraOrientation = cameraIndex <= 11 ? PCIeCommSdk::CameraOrientation::Horizontal : PCIeCommSdk::CameraOrientation::Vertical;
 
     //实测曲线
-    QCustomPlot* customPlot = ui->spectroMeter_gammaSpectrum;
+    QCustomPlot* customPlot = ui->plot_gammaSpectrum;
 #ifdef SINGLE_BOARD_MODE
     customPlot->graph(0)->setData(pairs.first, pairs.second);
 #else
@@ -2155,7 +2197,7 @@ void MainWindow::onStartMeasure()
 {
     QDateTime now = QDateTime::currentDateTime();
     ui->dateTimeEdit_startTime->setDateTime(now);
-    ::SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+    ::SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);    
 
     QString fileSaveDir = QString("%1/%2/%3").arg(ui->lineEdit_savePath->text()).arg(ui->lineEdit_shotNum->text()).arg(now.toString("yyyyMMddHHmmss"));
     QDir dir(fileSaveDir);
@@ -2171,6 +2213,12 @@ void MainWindow::onStartMeasure()
         measureModes |= PCIeCommSdk::mmTest;
 
     m_detectorData = DetectorData();
+    m_spectrumByChannel[0].clear();
+    m_spectrumByChannel[1].clear();
+    m_waveformByChannel[0].clear();
+    m_waveformByChannel[1].clear();
+    ui->spinBox_waveformIndex->setValue(0);
+    ui->spinBox_waveformIndex->setMaximum(0);
     mCountdownDurationMs = ui->spinBox_timeLength->value();
     mPCIeCommSdk.setCaptureTimelength(mCountdownDurationMs);
     mPCIeCommSdk.setTriggerThreshold();
@@ -2178,6 +2226,13 @@ void MainWindow::onStartMeasure()
     if (ui->action_typeLSD->isChecked())
         mPCIeCommSdk.setPSDThreshold();
     mPCIeCommSdk.setTriggerMode(!mExternalTriggerMode);
+
+#ifdef SINGLE_BOARD_MODE
+    if (AppConfig::instance().workMode() == 0)
+        ui->stackedWidget->setCurrentWidget(ui->plotWaveformWidgetPage);
+    else
+        ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
+#endif //SINGLE_BOARD_MODE
 
     if (mExternalTriggerMode)
     {
@@ -2229,6 +2284,8 @@ void MainWindow::onStartMeasure()
     #endif // SINGLE_BOARD_MODE
         QFile::copy(DEVICE_CONFIG_FILE, fileSaveDir + "/device_config.ini");
     }
+
+    m_plotRefreshTimer->start();
 }
 
 void MainWindow::onPrepareMeasure()
@@ -2487,7 +2544,7 @@ void MainWindow::on_action_status_triggered(bool checked)
     else{
         // QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/status.png"), QSize(36, 24), Qt::black);
         // ui->action_status->setIcon(QIcon(pixmap));
-        ui->stackedWidget->setCurrentWidget(ui->spectroMeterPageInfoWidget);
+        ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
     }
 }
 
@@ -2668,7 +2725,11 @@ void MainWindow::initLogEvent()
 // 处理数据解析后的能谱数据（解析线程）：累积数据；绘图投递到主线程
 void MainWindow::onFullSpectrum_Thread(const FullSpectrum& fullSpectrum)
 {
-    std::array<quint32, 8192> spectrumSnap{};
+    QMutexLocker locker(&mSpectDataMutex);
+    m_spectrumByChannel[1].push_back(fullSpectrum);
+    return;
+
+    std::array<quint32, 1024> spectrumSnap{};
     double currenTime = 0.0;
     double fixedCountRate = 0.0;
     bool needPlotUpdate = false;
@@ -2679,7 +2740,7 @@ void MainWindow::onFullSpectrum_Thread(const FullSpectrum& fullSpectrum)
 
         // 累积能谱
         quint32 currentCount = 0;
-        for (int i = 0; i < 8192; ++i) {
+        for (int i = 0; i < 1024; ++i) {
             currentCount += fullSpectrum.spectrum[i];
             data.spectrum[i] += fullSpectrum.spectrum[i];
         }
@@ -2722,6 +2783,9 @@ void MainWindow::onReportDetectorTemperature(float temperature)
     mTempLastUpdateTime = QDateTime::currentDateTime().currentMSecsSinceEpoch();
     QLabel* lblTemp = this->findChild<QLabel*>("label_temperature");
     if (lblTemp){
+        QPalette pal = lblTemp->palette();
+        pal.setColor(QPalette::WindowText, QColor(Qt::green));
+        lblTemp->setPalette(pal);
         lblTemp->setText(QString("DAQb温度：%1 ℃").arg(QString::number(temperature, 'f', 1)));
     }
 
@@ -2752,13 +2816,13 @@ void MainWindow::updateSpecPlotData(const quint32 spectrum[])
     // 在持绘图锁之前完成道压缩与坐标换算（主线程内，避免长时间占用 mPlotLocker）
     const bool useEnScale = mEnScale.load();// 能量刻度
     const SpectrumPlotSettings &specSettings = m_spectrumPlotSettings;
-    const int mergebin = (specSettings.multiChannel > 0) ? (8192 / specSettings.multiChannel) : 8192;
+    const int mergebin = (specSettings.multiChannel > 0) ? (1024 / specSettings.multiChannel) : 1024;
 
     if (useEnScale) {
-        for (int i = 0; i < 8192; ++i) {
+        for (int i = 0; i < 1024; ++i) {
             double mergeCount = 0.0;
             for (int mergeID = 0; mergeID < mergebin; mergeID++) {
-                if (i < 8192) {
+                if (i < 1024) {
                     mergeCount += spectrum[i];
                 } else {
                     break;
@@ -2777,10 +2841,10 @@ void MainWindow::updateSpecPlotData(const quint32 spectrum[])
         }
     } else
     {
-        for (int i = 0; i < 8192; ++i) {
+        for (int i = 0; i < 1024; ++i) {
             double mergeCount = 0.0;
             for (int mergeID = 0; mergeID < mergebin; mergeID++) {
-                if (i < 8192) {
+                if (i < 1024) {
                     mergeCount += spectrum[i];
                 } else {
                     break;
@@ -2793,7 +2857,7 @@ void MainWindow::updateSpecPlotData(const quint32 spectrum[])
         }
     }
 
-    QCPGraph *graph = ui->spectroMeter_neutronSpectrum->graph(0);
+    QCPGraph *graph = ui->plot_neutronSpectrum->graph(0);
     if (graph == nullptr) {
         qDebug() << "updateSpecPlotData error";
         return;
@@ -2876,3 +2940,144 @@ void MainWindow::updateCountRatePlotData(double FPGATime, double countRate)
     // customPlot->yAxis->setRange(y_min - pad, y_max + pad);
     // mCountRatePlotReady.store(true);
 }
+
+void MainWindow::refreshSpectrumPlot()
+{
+    quint32 specIndex = ui->spinBox_spectrumIndex->value();
+    quint32 stepTime = ui->spinBox_step->value();
+    quint32 startTime = ui->spinBox_timeStart->value() + stepTime*(specIndex-1);
+    quint32 stopTime = ui->spinBox_timeStop->value();
+
+    // 全采样
+    {
+        QMutexLocker locker(&mSpectDataMutex);
+        const QVector<SpectrumEntry> &spectra = m_spectrumByChannel[0];
+
+        // 根据步长，计算累积能谱
+        QVector<double> x(496, 0);
+        for (int i=0; i<496; ++i){
+            x[i] += i+1;
+        }
+
+        QVector<double> y(496, 0);
+        for (const auto& entry : spectra){
+            if (entry.sequence >= startTime && entry.sequence < stopTime){
+                for (int i=0; i<1024; ++i){
+                    y[i] += entry.spectrum[i];
+                }
+            }
+        }
+
+        ui->plot_neutronSpectrum->graph(0)->data()->clear();
+        ui->plot_neutronSpectrum->graph(0)->setData(x, y);
+        ui->plot_neutronSpectrum->rescaleAxes(true);
+        ui->plot_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
+    }
+
+    // 小数采
+    {
+        QMutexLocker locker(&mSpectDataMutex);
+        const QVector<SpectrumEntry> &spectra = m_spectrumByChannel[1];
+
+        // 根据步长，计算累积能谱
+        QVector<double> x(1024, 0);
+        for (int i=0; i<1024; ++i){
+            x[i] += i+1;
+        }
+
+        QVector<double> y(1024, 0);
+        for (const auto& entry : spectra){
+            if (entry.sequence >= startTime && entry.sequence < stopTime){
+                for (int i=0; i<1024; ++i){
+                    y[i] += entry.spectrum[i];
+                }
+            }
+        }
+
+        ui->plot_gammaSpectrum->graph(0)->data()->clear();
+        ui->plot_gammaSpectrum->graph(0)->setData(x, y);
+        ui->plot_gammaSpectrum->rescaleAxes(true);
+        ui->plot_gammaSpectrum->replot(QCustomPlot::rpQueuedReplot);
+    }
+
+}
+
+void MainWindow::refreshWaveformPlot()
+{
+    quint32 waveformIndex = ui->spinBox_waveformIndex->value();
+
+    // 全采样
+    {
+        QMutexLocker locker(&mSpectDataMutex);
+        const QVector<WaveformEntry> &waveforms = m_waveformByChannel[0];
+
+        if (waveforms.size() > 0 && waveformIndex > 0 && waveformIndex <= waveforms.size()){
+            const double kWaveformSampleIntervalNs = 2.0; // 1个点是2ns
+            const WaveformEntry &samples = waveforms.at(waveformIndex - 1);
+
+            quint32 count = samples.size();
+            QVector<double> x(count, 0);
+            QVector<double> y(count, 0);
+            for (int i = 0; i < count; ++i) {
+                x[i] = static_cast<double>(i) * kWaveformSampleIntervalNs;
+                y[i] = static_cast<double>(samples.at(i));
+            }
+
+            ui->plot_DAQaWaveform->graph(0)->data()->clear();
+            ui->plot_DAQaWaveform->graph(0)->setData(x, y);
+            ui->plot_DAQaWaveform->rescaleAxes(true);
+            ui->plot_DAQaWaveform->replot(QCustomPlot::rpQueuedReplot);
+        }
+    }
+
+    // 小数采
+    {
+        QMutexLocker locker(&mSpectDataMutex);
+        const QVector<WaveformEntry> &waveforms = m_waveformByChannel[1];
+
+        if (waveforms.size() > 0 && waveformIndex > 0 && waveformIndex <= waveforms.size()){
+            const double kWaveformSampleIntervalNs = 10.0; // 1个点是10ns
+            const WaveformEntry &samples = waveforms.at(waveformIndex - 1);
+
+            quint32 count = samples.size();
+            QVector<double> x(count, 0);
+            QVector<double> y(count, 0);
+            for (int i = 0; i < count; ++i) {
+                x[i] = static_cast<double>(i) * kWaveformSampleIntervalNs;
+                y[i] = static_cast<double>(samples.at(i));
+            }
+
+            ui->plot_DAQbWaveform->graph(0)->data()->clear();
+            ui->plot_DAQbWaveform->graph(0)->setData(x, y);
+            ui->plot_DAQbWaveform->rescaleAxes(true);
+            ui->plot_DAQbWaveform->replot(QCustomPlot::rpQueuedReplot);
+        }
+    }
+}
+
+void MainWindow::on_spinBox_step_valueChanged(int arg1)
+{
+    quint32 stepTime = ui->spinBox_step->value();
+    quint32 startTime = ui->spinBox_timeStart->value();
+    quint32 stopTime = ui->spinBox_timeStop->value();
+    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
+    refreshSpectrumPlot();
+}
+
+void MainWindow::on_spinBox_timeStart_textChanged(const QString &arg1)
+{
+    quint32 stepTime = ui->spinBox_step->value();
+    quint32 startTime = ui->spinBox_timeStart->value();
+    quint32 stopTime = ui->spinBox_timeStop->value();
+    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
+}
+
+
+void MainWindow::on_spinBox_timeStop_textChanged(const QString &arg1)
+{
+    quint32 stepTime = ui->spinBox_step->value();
+    quint32 startTime = ui->spinBox_timeStart->value();
+    quint32 stopTime = ui->spinBox_timeStop->value();
+    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
+}
+

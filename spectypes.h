@@ -20,7 +20,7 @@ struct SubSpectrumPacket {
     quint32 measureTime;   // 测量时间
     quint32 deathTime;     // 死时间
     quint16 spectrumSubNo; // 能谱编号
-    quint32 spectrum[256]; // 能谱数据 256*32bit
+    quint16 spectrum[512]; // 能谱数据 512*16bit
     quint32 timeUTCs;      // utc整数秒
     quint32 timeUTCms;     // utc小数秒
     quint32 reserved;      // 保留位 0000 0000
@@ -45,8 +45,8 @@ struct SubSpectrumPacket {
         timeUTCms = qFromBigEndian<quint32>(timeUTCms);
         tail = qFromBigEndian<quint32>(tail);
 
-        for (int i = 0; i < 256; ++i) {
-            spectrum[i] = qFromBigEndian<quint32>(spectrum[i]);
+        for (int i = 0; i < 512; ++i) {
+            spectrum[i] = qFromBigEndian<quint16>(spectrum[i]);
         }
     }
 };
@@ -64,7 +64,7 @@ struct H5Spectrum{
     quint32 timeUTCms;     // utc小数秒
     quint32 measureTime;   // 能量测量时间间隔,单位ms
     quint32 deathTime;      // 死时间,单位*10ns
-    quint32 spectrum[8192]; // 8192道完整数据
+    quint32 spectrum[1024]; // 1024道完整数据
 };
 
 #pragma pack(push, 1)  // 确保字节对齐
@@ -74,9 +74,8 @@ struct FullSpectrum {
     quint32 timeUTCms;     // utc小数秒
     quint32 measureTime;   // 能量测量时间间隔,单位ms
     quint32 deathTime;      // 死时间,单位*10ns
-    quint32 spectrum[8192]; // 8192道完整数据
-    quint32 receivedMask = 0;   // 32个子包位图
-    QDateTime completeTime; // 完成时间,记录一个完整能谱数据接收完的北京时间
+    quint32 spectrum[1024]; // 1024道完整数据
+    quint32 receivedMask = 0;   // 2个子包位图
     bool isComplete;       // 是否完整
 
     FullSpectrum() : sequence(0), measureTime(0), deathTime(0), receivedMask(0), isComplete(false) {
@@ -85,7 +84,7 @@ struct FullSpectrum {
 
     FullSpectrum(const FullSpectrum& other)
         : sequence(other.sequence), measureTime(other.measureTime), deathTime(other.deathTime),
-          receivedMask(other.receivedMask), completeTime(other.completeTime), isComplete(other.isComplete),
+          receivedMask(other.receivedMask), isComplete(other.isComplete),
           timeUTCs(other.timeUTCs), timeUTCms(other.timeUTCms) {
         memcpy(spectrum, other.spectrum, sizeof(spectrum));
     }
@@ -98,7 +97,6 @@ struct FullSpectrum {
             measureTime = other.measureTime;
             deathTime = other.deathTime;
             receivedMask = other.receivedMask;
-            completeTime = other.completeTime;
             isComplete = other.isComplete;
             memcpy(spectrum, other.spectrum, sizeof(spectrum));
         }
@@ -112,8 +110,8 @@ struct FullSpectrum {
         measureTime = qFromBigEndian<quint32>(measureTime);
         deathTime = qFromBigEndian<quint32>(deathTime);
 
-        for (int i = 0; i < 8192; ++i) {
-            spectrum[i] = qFromBigEndian<quint32>(spectrum[i]);
+        for (int i = 0; i < 1024; ++i) {
+            spectrum[i] = qFromBigEndian<quint16>(spectrum[i]);
         }
     }
 };
@@ -167,7 +165,7 @@ typedef struct _DetParameter{
         triggerThold = 100;
 
         spectrumRefreshTime = 1000;
-        spectrumLength = 8192;
+        spectrumLength = 1024;
 
         spectrumPlotEnMin = 0.0;
         spectrumPlotEnMax = 3000.0;
