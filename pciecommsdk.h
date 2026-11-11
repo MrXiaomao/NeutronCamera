@@ -120,10 +120,14 @@ public:
 
     bool readDataAsync(HANDLE fd, quint64 offset, const QByteArray& data);
 
+    const QVector<QByteArray>& waveformFrames() { return mDDRWaveformDatas; }
+    const QVector<QByteArray>& spectrumFrames() { return mRAMSpectrumDatas; }
+    const quint16 capturedCount() { return mCapturedRef; }
+
     Q_SIGNAL void captureFailOccurred(quint32, quint32);
     Q_SIGNAL void threadExitOccurred(quint32);
-    Q_SIGNAL void captureWaveformDataChanged(quint8,quint32,const QByteArray& data);
-    Q_SIGNAL void captureSpectrumDataChanged(quint8,bool,quint32,const QByteArray& data);
+    Q_SIGNAL void captureWaveformDataChanged(quint8,quint32);
+    Q_SIGNAL void captureSpectrumDataChanged(quint8,quint32);
     Q_SIGNAL void captureFinished(quint32, bool);
     Q_SIGNAL void externalSignalTriggered(quint32);
     Q_SIGNAL void timeoutOccurred(quint32);
@@ -255,6 +259,8 @@ public:
     Q_SIGNAL void timeoutOccurred();
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
+    Q_SIGNAL void captureWaveformDataChanged(quint8/*时刻*/, quint8/*相机索引*/);
+    Q_SIGNAL void captureSpectrumDataChanged(quint8/*时刻*/, quint8/*相机索引*/);
 
     Q_SLOT void onSettingFinished();
 
@@ -295,8 +301,8 @@ public:
     /*初始化*/
     void initCaptureThreads();
 
-    /*解析能谱数据*/
-    bool analyzeHistorySpectrumData(const quint8& cameraIndex,
+    /*从文件中解析能谱数据*/
+    bool analyzeSpectrumFromDir(const quint8& cameraIndex,
                                     const quint32& timeStart/*开始时刻*/,
                                     const quint32& timeStop/*停止时刻*/ ,
                                     const QString& filePath/*文件名*/,
@@ -304,17 +310,27 @@ public:
                                         QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>&,
                                         QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>&
                                         )> callback);
+    bool analyzeSpectrumFromRAM(const quint8& cameraIndex,
+                                const quint32& timeStart/*开始时刻*/,
+                                const quint32& timeStop/*停止时刻*/ ,
+                                std::function<void(
+                                    QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>&,
+                                    QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>&
+                                    )> callback);
 
-    // 根据通道号、开始时间、结束时间以及文件存储目录解析波形数据
-    bool analyzeHistoryWaveformData(
-                                const quint8& cameraIndex,
+    /*从文件目录中解析波形数据*/
+    bool analyzeWaveformFromDir(const quint8& cameraIndex,
                                 const quint32& timeStart/*开始时刻ms*/,
                                 const quint32& timeStop/*结束时刻ms*/,
                                 const QString& fileDir/*文件存储路径*/,
                                 std::function<void(quint64, const std::vector<qint16>&)> callback);
+    bool analyzeWaveformFromRAM(const quint8& cameraIndex,
+                                const quint32& timeStart/*开始时刻ms*/,
+                                const quint32& timeStop/*结束时刻ms*/,
+                                std::function<void(quint64, const std::vector<qint16>&)> callback);
 
-    // 从H5文件解析计数率信息和能谱信息
-    bool analyzeHistoryCpsData(const quint32 channels/*多道道数（统计能谱用）*/,
+    /*从H5文件解析计数率信息和能谱信息*/
+    bool analyzeCpsDataFromH5File(const quint32 channels/*多道道数（统计能谱用）*/,
                                const quint32 timeWidth/*时间宽度ms（统计计数率用）*/,
                                const quint32 timeStart/*开始时刻ms*/,
                                const quint32 timeStop/*结束时刻ms*/,
@@ -391,7 +407,7 @@ public:
     HANDLE getHandle(quint8 physicalNo, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = 0);//O_RDWR
     static HANDLE getHandle(QString path, quint32 flags = GENERIC_READ | GENERIC_WRITE, quint32 dwFlagsAndAttributes = FILE_ATTRIBUTE_NORMAL | FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_FLAG_NO_BUFFERING);//O_RDWR
 
-    void setMeasureModes(MeasureModes mm = mmSingle){mMeasureModes = mm;};
+    void setMeasureModes(MeasureModes mm = mmSingle){mMeasureModes = mm;}
     void setTriggerMode(bool isSoftTriggerMode = true);
 
 #ifdef SINGLE_BOARD_MODE

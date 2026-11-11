@@ -70,7 +70,9 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     ui->pushButton_selChannel2->setEnabled(false);
 #ifdef SINGLE_BOARD_MODE
     ui->action_init->setText("开启服务");
+    ui->spinBox_timeLength->setMinimum(160);
 #else
+    ui->spinBox_timeLength->setMinimum(40);
     ui->action_startMeasure->setEnabled(false);
     ui->action_stopMeasure->setEnabled(false);
 #endif // SINGLE_BOARD_MODE
@@ -148,6 +150,13 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
         ui->action_stopMeasure->setEnabled(false);
         mIsMeasuring = false;
         emit ui->action_stopMeasure->trigger();
+    });
+
+    connect(&mPCIeCommSdk, &PCIeCommSdk::captureWaveformDataChanged, this, [=](quint8,quint8){
+        refreshWaveformPlot();
+    });
+    connect(&mPCIeCommSdk, &PCIeCommSdk::captureSpectrumDataChanged, this, [=](quint8,quint8){
+        refreshSpectrumPlot();
     });
 
     QTimer::singleShot(0, this, [&](){
@@ -670,6 +679,9 @@ void MainWindow::initUi()
         ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->minimum());
     });
     connect(ui->spinBox_waveformIndex, &QSpinBox::textChanged, this, &MainWindow::refreshWaveformPlot);
+    connect(ui->spinBox_timeStart, &QSpinBox::editingFinished, this, &MainWindow::spinBoxEditingFinished);
+    connect(ui->spinBox_timeStop, &QSpinBox::editingFinished, this, &MainWindow::spinBoxEditingFinished);
+    connect(ui->spinBox_timeStep, &QSpinBox::editingFinished, this, &MainWindow::spinBoxEditingFinished);
 
     //布局
     {
@@ -2219,6 +2231,10 @@ void MainWindow::onStartMeasure()
     m_waveformByChannel[1].clear();
     ui->spinBox_waveformIndex->setValue(0);
     ui->spinBox_waveformIndex->setMaximum(0);
+    quint32 stepTime = ui->spinBox_timeStep->value();
+    quint32 startTime = ui->spinBox_timeStart->value();
+    quint32 stopTime = ui->spinBox_timeStop->value();
+    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
     mCountdownDurationMs = ui->spinBox_timeLength->value();
     mPCIeCommSdk.setCaptureTimelength(mCountdownDurationMs);
     mPCIeCommSdk.setTriggerThreshold();
@@ -2349,49 +2365,6 @@ void MainWindow::onPrepareMeasure()
 
 void MainWindow::on_pushButton_preview_clicked()
 {
-    auto joinFilename = [=](const int& cameraIndex)->QString
-    {
-        QString filename;
-#ifdef SINGLE_BOARD_MODE
-        switch (cameraIndex){
-        case 1: filename = "1A"; break;
-        case 2: filename = "1A"; break;
-        case 3: filename = "1A"; break;
-        case 4: filename = "1A"; break;
-
-        case 5: filename = "1B"; break;
-        case 6: filename = "1B"; break;
-        case 7: filename = "1B"; break;
-        case 8: filename = "1B"; break;
-        }
-#else
-        switch (cameraIndex){
-        case 1: filename = "1A"; break;
-        case 2: filename = "1A"; break;
-        case 3: filename = "1A"; break;
-        case 4: filename = "1B"; break;
-        case 5: filename = "1B"; break;
-        case 6: filename = "1B"; break;
-
-        case 7: filename = "2A"; break;
-        case 8: filename = "2A"; break;
-        case 9: filename = "2A"; break;
-        case 10: filename = "2B"; break;
-        case 11: filename = "2B"; break;
-        case 12: filename = "2B"; break;
-
-        case 13: filename = "3A"; break;
-        case 14: filename = "3A"; break;
-        case 15: filename = "3A"; break;
-        case 16: filename = "3B"; break;
-        case 17: filename = "3B"; break;
-        case 18: filename = "3B"; break;
-        }
-#endif // SINGLE_BOARD_MODE
-
-        return filename;
-    };
-
     //提取有效波形参数
     int timeStart = ui->spinBox_timeStart->value(); // 开始时刻
     int timeStop = ui->spinBox_timeStop->value(); // 截止时刻
@@ -2399,22 +2372,16 @@ void MainWindow::on_pushButton_preview_clicked()
 
 #ifdef SINGLE_BOARD_MODE
     // 水平相机
-    //quint8 _cameraIndex = AppConfig::instance().channelAurora() * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + mCurrentChannelNo + 1;
     quint8 cameraIndex = (mPCIeCommSdk.activePhysicalNo()-1) * DETNUMBER_PCIE_PER + (mPCIeCommSdk.isUsedDDR1() ? 0 : 1) * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + mCurrentChannelNo + 1;
-    mPCIeCommSdk.analyzeHistorySpectrumData(cameraIndex,
+    mPCIeCommSdk.analyzeSpectrumFromDir(cameraIndex,
                                             timeStart,
                                             timeStop,
                                             dataDir,
                                             [&](
                                                 QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
-                                                QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
+                                                QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& /*pairSpectrumNeutron*/)
                                             {
                                                 emit showGammaSpectrum(cameraIndex, pairSpectrumGamma);
-                                                //onWaveformPlot(horCameraIndex, mapPair);
-                                                // QMetaObject::invokeMethod(this, [=](){
-                                                //      mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
-                                                // }, Qt::QueuedConnection);
-
                                             });
 #else
     quint8 horCameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
@@ -2422,7 +2389,7 @@ void MainWindow::on_pushButton_preview_clicked()
 
     {        
         // 水平相机
-        mPCIeCommSdk.analyzeHistorySpectrumData(horCameraIndex,
+        mPCIeCommSdk.analyzeSpectrumFromDir(horCameraIndex,
             timeStart,
             timeStop,
             dataDir,
@@ -2435,16 +2402,11 @@ void MainWindow::on_pushButton_preview_clicked()
 
             if (ui->action_typeLSD->isChecked() || ui->action_typeLBD->isChecked())
                 emit showGammaSpectrum(horCameraIndex, pairSpectrumGamma);
-            //onWaveformPlot(horCameraIndex, mapPair);
-            // QMetaObject::invokeMethod(this, [=](){
-            //      mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
-            // }, Qt::QueuedConnection);
-
         });
 
 
         // 垂直相机
-        mPCIeCommSdk.analyzeHistorySpectrumData(verCameraIndex,
+        mPCIeCommSdk.analyzeSpectrumFromDir(verCameraIndex,
             timeStart,
             timeStop,
             dataDir,
@@ -2457,12 +2419,6 @@ void MainWindow::on_pushButton_preview_clicked()
 
             if (ui->action_typeLSD->isChecked() || ui->action_typeLBD->isChecked())
                 emit showGammaSpectrum(verCameraIndex, pairSpectrumGamma);
-            // QMetaObject::invokeMethod(this, [=](){
-            //     mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
-            //     mWaveformVerPlot->replot(QCustomPlot::rpQueuedReplot);
-            //     mWaitingSpinnerWidget->stop();
-            // }, Qt::QueuedConnection);
-
         });
     }
 #endif // SINGLE_BOARD_MODE
@@ -2944,34 +2900,85 @@ void MainWindow::updateCountRatePlotData(double FPGATime, double countRate)
 void MainWindow::refreshSpectrumPlot()
 {
     quint32 specIndex = ui->spinBox_spectrumIndex->value();
-    quint32 stepTime = ui->spinBox_step->value();
+    quint32 stepTime = ui->spinBox_timeStep->value();
     quint32 startTime = ui->spinBox_timeStart->value() + stepTime*(specIndex-1);
-    quint32 stopTime = ui->spinBox_timeStop->value();
+    quint32 stopTime = startTime  + stepTime;
+    const quint32 PER_SPECTRUM_TIMELENGTH_MS = 4;// 单一能谱刷新时长 4ms
 
     // 全采样
     {
-        QMutexLocker locker(&mSpectDataMutex);
-        const QVector<SpectrumEntry> &spectra = m_spectrumByChannel[0];
+        // QMutexLocker locker(&mSpectDataMutex);
+        // const QVector<SpectrumEntry> &spectra = m_spectrumByChannel[0];
 
-        // 根据步长，计算累积能谱
-        QVector<double> x(496, 0);
-        for (int i=0; i<496; ++i){
-            x[i] += i+1;
+        // // 根据步长，计算累积能谱
+        // QVector<double> x(496, 0);
+        // for (int i=0; i<496; ++i){
+        //     x[i] += i+1;
+        // }
+
+        // QVector<double> y(496, 0);
+        // for (const auto& entry : spectra){
+        //     if (entry.sequence >= startTime && entry.sequence < stopTime){
+        //         for (int i=0; i<1024; ++i){
+        //             y[i] += entry.spectrum[i];
+        //         }
+        //     }
+        // }
+
+        // ui->plot_neutronSpectrum->graph(0)->data()->clear();
+        // ui->plot_neutronSpectrum->graph(0)->setData(x, y);
+        // ui->plot_neutronSpectrum->rescaleAxes(true);
+        // ui->plot_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
+
+#ifdef SINGLE_BOARD_MODE
+        // 水平相机
+        quint8 cameraIndex = (mPCIeCommSdk.activePhysicalNo()-1) * DETNUMBER_PCIE_PER + (mPCIeCommSdk.isUsedDDR1() ? 0 : 1) * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + mCurrentChannelNo + 1;
+        mPCIeCommSdk.analyzeSpectrumFromRAM(cameraIndex,
+                                                startTime,
+                                                stopTime,
+                                                [&](
+                                                    QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
+                                                    QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& /*pairSpectrumNeutron*/)
+                                                {
+                                                    emit showGammaSpectrum(cameraIndex, pairSpectrumGamma);
+                                                });
+#else
+        quint8 horCameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+        quint8 verCameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
+
+        {
+            // 水平相机
+            mPCIeCommSdk.analyzeSpectrumFromRAM(horCameraIndex,
+                                                    startTime,
+                                                    stopTime,
+                                                    [&](
+                                                        QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
+                                                        QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
+                                                    {
+                                                        if (ui->action_typeLSD->isChecked() || ui->action_typePSD->isChecked())
+                                                            emit showNeutronSpectrum(horCameraIndex, pairSpectrumNeutron);
+
+                                                        if (ui->action_typeLSD->isChecked() || ui->action_typeLBD->isChecked())
+                                                            emit showGammaSpectrum(horCameraIndex, pairSpectrumGamma);
+                                                    });
+
+
+            // 垂直相机
+            mPCIeCommSdk.analyzeSpectrumFromRAM(verCameraIndex,
+                                                    startTime,
+                                                    stopTime,
+                                                    [&](
+                                                        QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>& pairSpectrumGamma,
+                                                        QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>& pairSpectrumNeutron)
+                                                    {
+                                                        if (ui->action_typeLSD->isChecked() || ui->action_typePSD->isChecked())
+                                                            emit showNeutronSpectrum(verCameraIndex, pairSpectrumNeutron);
+
+                                                        if (ui->action_typeLSD->isChecked() || ui->action_typeLBD->isChecked())
+                                                            emit showGammaSpectrum(verCameraIndex, pairSpectrumGamma);
+                                                    });
         }
-
-        QVector<double> y(496, 0);
-        for (const auto& entry : spectra){
-            if (entry.sequence >= startTime && entry.sequence < stopTime){
-                for (int i=0; i<1024; ++i){
-                    y[i] += entry.spectrum[i];
-                }
-            }
-        }
-
-        ui->plot_neutronSpectrum->graph(0)->data()->clear();
-        ui->plot_neutronSpectrum->graph(0)->setData(x, y);
-        ui->plot_neutronSpectrum->rescaleAxes(true);
-        ui->plot_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
+#endif // SINGLE_BOARD_MODE
     }
 
     // 小数采
@@ -2987,7 +2994,7 @@ void MainWindow::refreshSpectrumPlot()
 
         QVector<double> y(1024, 0);
         for (const auto& entry : spectra){
-            if (entry.sequence >= startTime && entry.sequence < stopTime){
+            if ((entry.sequence-1)*PER_SPECTRUM_TIMELENGTH_MS >= startTime && (entry.sequence-1)*PER_SPECTRUM_TIMELENGTH_MS < stopTime){
                 for (int i=0; i<1024; ++i){
                     y[i] += entry.spectrum[i];
                 }
@@ -3004,30 +3011,87 @@ void MainWindow::refreshSpectrumPlot()
 
 void MainWindow::refreshWaveformPlot()
 {
+    quint32 startTime = ui->spinBox_timeStart->value();
+    quint32 stopTime = ui->spinBox_timeStop->value();
     quint32 waveformIndex = ui->spinBox_waveformIndex->value();
 
     // 全采样
     {
-        QMutexLocker locker(&mSpectDataMutex);
-        const QVector<WaveformEntry> &waveforms = m_waveformByChannel[0];
+        // QMutexLocker locker(&mSpectDataMutex);
+        // const QVector<WaveformEntry> &waveforms = m_waveformByChannel[0];
 
-        if (waveforms.size() > 0 && waveformIndex > 0 && waveformIndex <= waveforms.size()){
-            const double kWaveformSampleIntervalNs = 2.0; // 1个点是2ns
-            const WaveformEntry &samples = waveforms.at(waveformIndex - 1);
+        // if (waveforms.size() > 0 && waveformIndex > 0 && waveformIndex <= waveforms.size()){
+        //     const double kWaveformSampleIntervalNs = 2.0; // 1个点是2ns
+        //     const WaveformEntry &samples = waveforms.at(waveformIndex - 1);
 
-            quint32 count = samples.size();
-            QVector<double> x(count, 0);
-            QVector<double> y(count, 0);
-            for (int i = 0; i < count; ++i) {
-                x[i] = static_cast<double>(i) * kWaveformSampleIntervalNs;
-                y[i] = static_cast<double>(samples.at(i));
-            }
+        //     quint32 count = samples.size();
+        //     QVector<double> x(count, 0);
+        //     QVector<double> y(count, 0);
+        //     for (int i = 0; i < count; ++i) {
+        //         x[i] = static_cast<double>(i) * kWaveformSampleIntervalNs;
+        //         y[i] = static_cast<double>(samples.at(i));
+        //     }
 
-            ui->plot_DAQaWaveform->graph(0)->data()->clear();
-            ui->plot_DAQaWaveform->graph(0)->setData(x, y);
-            ui->plot_DAQaWaveform->rescaleAxes(true);
-            ui->plot_DAQaWaveform->replot(QCustomPlot::rpQueuedReplot);
+        //     ui->plot_DAQaWaveform->graph(0)->data()->clear();
+        //     ui->plot_DAQaWaveform->graph(0)->setData(x, y);
+        //     ui->plot_DAQaWaveform->rescaleAxes(true);
+        //     ui->plot_DAQaWaveform->replot(QCustomPlot::rpQueuedReplot);
+        // }
+#ifdef SINGLE_BOARD_MODE
+        // 水平相机
+        quint8 cameraIndex = (mPCIeCommSdk.activePhysicalNo()-1) * DETNUMBER_PCIE_PER + (mPCIeCommSdk.isUsedDDR1() ? 0 : 1) * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + mCurrentChannelNo + 1;
+        mPCIeCommSdk.analyzeWaveformFromRAM(cameraIndex,
+                                            startTime,
+                                            stopTime,
+                                            [&](quint64 keyBase, const std::vector<qint16>& values)
+                                            {
+                                                onWaveformPlot(cameraIndex, keyBase, values);
+
+                                                // QMetaObject::invokeMethod(this, [=](){
+                                                //     if (mWaveformPlot)
+                                                //         mWaveformPlot->replot(QCustomPlot::rpQueuedReplot);
+                                                //     else
+                                                //         mWaveformHorPlot->replot(QCustomPlot::rpQueuedReplot);
+                                                //     mWaitingSpinnerWidget->stop();
+                                                // }, Qt::QueuedConnection);
+                                            });
+#else
+        quint8 horCameraIndex = ui->comboBox_horCamera->currentIndex() + 1;
+        quint8 verCameraIndex = ui->comboBox_verCamera->currentIndex() + 12;
+
+        {
+            // 水平相机
+            mPCIeCommSdk.analyzeWaveformFromRAM(horCameraIndex,
+                                                startTime,
+                                                stopTime,
+                                                [&](quint64 keyBase, const std::vector<qint16>& values)
+                                                {
+                                                    onWaveformPlot(cameraIndex, keyBase, values);
+
+                                                    if (ui->action_typeLSD->isChecked() || ui->action_typePSD->isChecked())
+                                                        emit showNeutronWaveform(horCameraIndex, pairSpectrumNeutron);
+
+                                                    if (ui->action_typeLSD->isChecked() || ui->action_typeLBD->isChecked())
+                                                        emit showGammaWaveform(horCameraIndex, pairSpectrumGamma);
+                                                });
+
+
+            // 垂直相机
+            mPCIeCommSdk.analyzeWaveformFromRAM(verCameraIndex,
+                                                startTime,
+                                                stopTime,
+                                                [&](quint64 keyBase, const std::vector<qint16>& values)
+                                                {
+                                                    onWaveformPlot(cameraIndex, keyBase, values);
+
+                                                    if (ui->action_typeLSD->isChecked() || ui->action_typePSD->isChecked())
+                                                        emit showNeutronWaveform(verCameraIndex, pairSpectrumNeutron);
+
+                                                    if (ui->action_typeLSD->isChecked() || ui->action_typeLBD->isChecked())
+                                                        emit showGammaWaveform(verCameraIndex, pairSpectrumGamma);
+                                                });
         }
+#endif // SINGLE_BOARD_MODE
     }
 
     // 小数采
@@ -3055,29 +3119,53 @@ void MainWindow::refreshWaveformPlot()
     }
 }
 
-void MainWindow::on_spinBox_step_valueChanged(int arg1)
+#include <QtMath>
+void MainWindow::onWaveformPlot(quint8 channel/*通道号*/, const quint64& keyBase/*时刻 ns*/, const std::vector<qint16>& values/*扣基线后的波形值*/)
 {
-    quint32 stepTime = ui->spinBox_step->value();
-    quint32 startTime = ui->spinBox_timeStart->value();
-    quint32 stopTime = ui->spinBox_timeStop->value();
-    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
-    refreshSpectrumPlot();
+    const int n = static_cast<int>(values.size());
+    if (n <= 0) return;
+
+    // ① 预分配（关键）：一次到位，绝不 append
+    QVector<double> xData(n), yData(n);
+    double yMax = 0;
+    for (int i = 0; i < n; ++i) {
+        xData[i] = static_cast<double>(keyBase + static_cast<quint64>(i) * 2);
+        const double v = static_cast<double>(values[i]);
+        yData[i] = v;
+        if (v > yMax) yMax = v;
+    }
+
+    // 时间+计数率曲线
+#ifndef SINGLE_BOARD_MODE
+    QCustomPlot* customPlot = ui->plot_DAQaWaveform;
+#else
+    QCustomPlot* customPlot = ui->plot_DAQaWaveform;// 水平相机
+    if (channel > 11)
+        customPlot = ui->plot_DAQbWaveform;// 垂直相机
+#endif
+
+    QCPAxisRect *axisRect = customPlot->axisRect();
+    customPlot->graph(axisRect, 0)->addData(xData, yData);
+
+    // 队列刷新
+    QCPAxis* xAxis = axisRect->axis(QCPAxis::AxisType::atBottom);
+    QCPAxis* yAxis = axisRect->axis(QCPAxis::AxisType::atLeft);
+    xAxis->rescale(true);
+    yAxis->rescale(false);
+    yAxis->setRange(QCPRange(0,  yMax * 1.1));
 }
 
-void MainWindow::on_spinBox_timeStart_textChanged(const QString &arg1)
+void MainWindow::spinBoxEditingFinished()
 {
-    quint32 stepTime = ui->spinBox_step->value();
+    QSpinBox* spinBox = qobject_cast<QSpinBox*>(sender());
+    spinBox->setValue(spinBox->value() * 4 / 4);
+
+    quint32 stepTime = ui->spinBox_timeStep->value();
     quint32 startTime = ui->spinBox_timeStart->value();
     quint32 stopTime = ui->spinBox_timeStop->value();
-    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
+    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / (stepTime * 4));// *4->能谱刷新时长是4ms
+
+    if (spinBox == ui->spinBox_timeStep){
+        refreshSpectrumPlot();
+    }
 }
-
-
-void MainWindow::on_spinBox_timeStop_textChanged(const QString &arg1)
-{
-    quint32 stepTime = ui->spinBox_step->value();
-    quint32 startTime = ui->spinBox_timeStart->value();
-    quint32 stopTime = ui->spinBox_timeStop->value();
-    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
-}
-

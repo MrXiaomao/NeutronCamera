@@ -2553,7 +2553,7 @@ void OfflineWindow::onWaveform()
         quint8 ChannelNo = settings.value("Global/ChannelNo").toUInt();
         bool UsedDDR1 = settings.value("Global/UsedDDR1").toBool();
         quint8 cameraIndex = (PhysicalNo-1) * DETNUMBER_PCIE_PER + (UsedDDR1 ? 0 : 1) * CAMNUMBER_DDR_PER/*1面（A/B）支持4通道*/ + ChannelNo + 1;
-        mPCIeCommSdk.analyzeHistoryWaveformData(cameraIndex, startTime, endTime, dataDir,
+        mPCIeCommSdk.analyzeWaveformFromDir(cameraIndex, startTime, endTime, dataDir,
                                                 [&](quint64 keyBase, const std::vector<qint16>& values){
 
             onWaveformPlot(cameraIndex, keyBase, values);
@@ -2572,7 +2572,7 @@ void OfflineWindow::onWaveform()
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理水平相机数据，请等待..."));
 
             // 水平相机
-            mPCIeCommSdk.analyzeHistoryWaveformData(horCameraIndex, startTime, endTime, dataDir,
+            mPCIeCommSdk.analyzeWaveformFromDir(horCameraIndex, startTime, endTime, dataDir,
                                                     [&](quint64 keyBase, const std::vector<qint16>& values){
 
                 onWaveformPlot(horCameraIndex, keyBase, values);
@@ -2595,7 +2595,7 @@ void OfflineWindow::onWaveform()
             mWaitingSpinnerWidget->setText(QStringLiteral("正在处理垂直相机数据，请等待..."));
 
             // 垂直相机
-            mPCIeCommSdk.analyzeHistoryWaveformData(verCameraIndex, startTime, endTime , dataDir,
+            mPCIeCommSdk.analyzeWaveformFromDir(verCameraIndex, startTime, endTime , dataDir,
                                                     [&](quint64 keyBase, const std::vector<qint16>& values){
 
                 onWaveformPlot(verCameraIndex, keyBase, values);
@@ -3328,7 +3328,7 @@ void OfflineWindow::onCpsStatistics(int minPeak, int maxPeak)
 	    QMap<quint8/*通道号*/, QMap<quint16/*时刻*/,quint32/*计数率*/>> cpsMapPairs;
 	    QMap<quint8/*通道号*/, QMap<quint16/*道址*/,quint32/*计数率*/>> spectrumMapPairs;
 	    if (QFileInfo::exists(h5FilePath) &&
-	        !mPCIeCommSdk.analyzeHistoryCpsData(channels,
+	        !mPCIeCommSdk.analyzeCpsDataFromH5File(channels,
 	            timeWidth,
 	            timeStart,
 	            timeStop,

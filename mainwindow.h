@@ -99,6 +99,9 @@ public slots:
 
     void refreshSpectrumPlot();
     void refreshWaveformPlot();
+    void onWaveformPlot(quint8/*通道号*/, const quint64& keyBase/*时刻 ns*/, const std::vector<qint16>& values/*扣基线后的波形值*/);
+
+    void spinBoxEditingFinished();
 
 signals:
     void writeLog(const QString &msg, QtMsgType msgType = QtDebugMsg);
@@ -170,12 +173,6 @@ private slots:
     void on_action_cps_statistics_triggered();
 
     void on_action_deviceManager_triggered();
-
-    void on_spinBox_step_valueChanged(int arg1);
-
-    void on_spinBox_timeStart_textChanged(const QString &arg1);
-
-    void on_spinBox_timeStop_textChanged(const QString &arg1);
 
 private:
     Ui::MainWindow *ui;

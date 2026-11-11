@@ -431,6 +431,42 @@ bool DataAnalysisWorker::readBin1Ch_range_fast(const QString& filePath,
     return true;//DataAnalysisWorker::readBinAllCh_fast(buf, ch0, littleEndian);
 }
 
+bool DataAnalysisWorker::readBin1Ch_range_fast(const QByteArray& fileData,
+                                               qint64         from,
+                                               qint64         to,
+                                               std::vector<qint16>& out,
+                                               bool littleEndian /*= true*/)
+{
+    constexpr qint64 HEAD_BYTES      = 16;
+    constexpr qint64 TAIL_BYTES      = 16;
+    constexpr qint64 BYTES_PER_GROUP = 2;
+
+    const qint64 payload = fileData.size() - HEAD_BYTES - TAIL_BYTES;
+    if (payload <= 0 || payload % BYTES_PER_GROUP != 0) { return false; }
+
+    const qint64 pointsPerChannel = payload / BYTES_PER_GROUP;
+
+    from = qBound<qint64>(0, from, pointsPerChannel);
+    to   = qBound<qint64>(from, to, pointsPerChannel);
+    const qint64 count = to - from;
+    if (count <= 0) { return false; }
+
+    const qint64 byteOffset = HEAD_BYTES + from * BYTES_PER_GROUP;
+
+    // 只映射所需字节区间：跳过头12字节，按6字节/组定位
+    const char* buf = fileData.constData() + byteOffset;
+    if (!buf) { return false; }
+
+    out.resize(static_cast<int>(count));
+    const quint16* src = reinterpret_cast<const quint16*>(buf);
+    qint16* dst = out.data();
+
+    // 小端文件 + 小端环境：直接取
+    memcpy(dst, src, count * sizeof(quint16));
+
+    return true;//DataAnalysisWorker::readBinAllCh_fast(buf, ch0, littleEndian);
+}
+
 bool DataAnalysisWorker::readBin1Ch_all_fast(const QString& filePath,
                                                std::vector<qint16>& out,
                                                bool littleEndian /*= true*/)

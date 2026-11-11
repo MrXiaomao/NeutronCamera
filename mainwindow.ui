@@ -630,7 +630,7 @@
                   <number>1</number>
                  </property>
                  <property name="maximum">
-                  <number>65536</number>
+                  <number>10000</number>
                  </property>
                 </widget>
                </item>
@@ -1471,28 +1471,6 @@
                 <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
                </property>
                <layout class="QGridLayout" name="gridLayout">
-                <item row="0" column="3">
-                 <widget class="QSpinBox" name="spinBox_timeStop">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimum">
-                   <number>1</number>
-                  </property>
-                  <property name="maximum">
-                   <number>10000</number>
-                  </property>
-                  <property name="singleStep">
-                   <number>1</number>
-                  </property>
-                  <property name="value">
-                   <number>10000</number>
-                  </property>
-                 </widget>
-                </item>
                 <item row="0" column="1">
                  <widget class="QSpinBox" name="spinBox_timeStart">
                   <property name="sizePolicy">
@@ -1508,7 +1486,7 @@
                    <number>10000</number>
                   </property>
                   <property name="singleStep">
-                   <number>1</number>
+                   <number>4</number>
                   </property>
                   <property name="value">
                    <number>0</number>
@@ -1613,45 +1591,25 @@
                   </item>
                  </widget>
                 </item>
-                <item row="0" column="2">
-                 <widget class="QLabel" name="label_12">
+                <item row="0" column="3">
+                 <widget class="QSpinBox" name="spinBox_timeStop">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                     <horstretch>0</horstretch>
                     <verstretch>0</verstretch>
                    </sizepolicy>
                   </property>
-                  <property name="text">
-                   <string>结束时刻/ms：</string>
+                  <property name="minimum">
+                   <number>1</number>
                   </property>
-                  <property name="alignment">
-                   <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                  <property name="maximum">
+                   <number>4</number>
                   </property>
-                 </widget>
-                </item>
-                <item row="2" column="0">
-                 <widget class="QLabel" name="label_7">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
+                  <property name="singleStep">
+                   <number>4</number>
                   </property>
-                  <property name="text">
-                   <string>水平相机：</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="3" column="0">
-                 <widget class="QLabel" name="label_9">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="text">
-                   <string>垂直相机：</string>
+                  <property name="value">
+                   <number>4</number>
                   </property>
                  </widget>
                 </item>
@@ -1671,26 +1629,68 @@
                   </property>
                  </widget>
                 </item>
+                <item row="3" column="0">
+                 <widget class="QLabel" name="label_9">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>垂直相机：</string>
+                  </property>
+                 </widget>
+                </item>
                 <item row="1" column="0">
                  <widget class="QLabel" name="label_16">
                   <property name="text">
-                   <string>时间步长/ms：</string>
+                   <string>刷新时长/ms：</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="label_7">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>水平相机：</string>
                   </property>
                  </widget>
                 </item>
                 <item row="1" column="1">
-                 <widget class="QSpinBox" name="spinBox_step">
+                 <widget class="QSpinBox" name="spinBox_timeStep">
                   <property name="minimum">
                    <number>1</number>
                   </property>
                   <property name="maximum">
-                   <number>2500</number>
+                   <number>3200</number>
                   </property>
                   <property name="singleStep">
-                   <number>1</number>
+                   <number>4</number>
                   </property>
                   <property name="value">
-                   <number>1</number>
+                   <number>4</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="2">
+                 <widget class="QLabel" name="label_12">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>结束时刻/ms：</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                   </property>
                  </widget>
                 </item>

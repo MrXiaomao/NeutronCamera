@@ -278,3 +278,5 @@ else:win32:CONFIG(debug, debug|release): LIBS += -L$$PWD/ -lhda_client
 INCLUDEPATH += $$PWD/.
 DEPENDPATH += $$PWD/.
 
+# 启用 SSSE3
+QMAKE_CXXFLAGS += -mssse3

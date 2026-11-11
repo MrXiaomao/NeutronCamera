@@ -62,6 +62,7 @@ public:
                                 const quint8& cameraNo,
                                 std::vector<qint16>& ch0,
                                 bool littleEndian = true);
+
     static bool readBin1Ch_range_fast(
         const QString& filePath,
         quint8         cameraNo,
@@ -75,6 +76,12 @@ public:
                                 qint64         to,
                                 std::vector<qint16>& ch0,
                                 bool littleEndian = true);
+    static bool readBin1Ch_range_fast(const QByteArray& fileData,
+                                      qint64         from,
+                                      qint64         to,
+                                      std::vector<qint16>& ch0,
+                                      bool littleEndian = true);
+
     static bool readBin1Ch_all_fast(const QString& filePath,
                                   std::vector<qint16>& ch0,
                                   bool littleEndian = true);
