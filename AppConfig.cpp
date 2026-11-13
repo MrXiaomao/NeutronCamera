@@ -359,8 +359,9 @@ AppConfig::AppConfig(QObject* parent)
         d->spectrumRefreshTimelength = qtnCreateProperty<QtnPropertyInt>(propSet);
         d->spectrumRefreshTimelength->setId(++baseId);
         d->spectrumRefreshTimelength->setName("能谱刷新时长/ms");
-        d->spectrumRefreshTimelength->setDescription("能谱刷新时长：1～4294967295 ms");
+        d->spectrumRefreshTimelength->setDescription("能谱刷新时长：默认4ms");
         d->spectrumRefreshTimelength->setValue(4);
+        d->spectrumRefreshTimelength->switchState(QtnPropertyStateImmutable, true);
     }
 #endif //SINGLE_BOARD_MODE
 

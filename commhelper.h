@@ -105,7 +105,7 @@ public:
     Q_SIGNAL void measureStart(); //测量开始
     Q_SIGNAL void measureStop(); //测量停止
     Q_SIGNAL void reportDetectorTemperature(float temperature); //探测器温度报告
-    Q_SIGNAL void reportWaveCurve(const QVector<quint16>& data); // 发送解析后的波形曲线
+    Q_SIGNAL void reportWaveCurve(const std::vector<qint16>& data); // 发送解析后的波形曲线
     Q_SIGNAL void reportFullSpectrum(const FullSpectrum& fullSpectrum); // 发送完整的能谱数据
     Q_SIGNAL void externalSignalTriggered(const QDateTime triggerTime);
 

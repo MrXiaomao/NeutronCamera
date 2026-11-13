@@ -75,12 +75,7 @@ QStringList PCIeCommSdk::mPhysicalNames;// 机器插入的采集卡名称列表�
 PCIeCommSdk::PCIeCommSdk(QObject *parent)
     : QObject{parent}
 {
-    QStringList args = QCoreApplication::arguments();
-    if (args.size() == 1){
-        mPhysicalNames << CARD1_NAME << CARD2_NAME << CARD3_NAME;
-        mEnumedDevices = enumDevices();
-        initCaptureThreads();        
-    }
+
 }
 
 
@@ -95,6 +90,17 @@ PCIeCommSdk::~PCIeCommSdk()
             captureThread = nullptr;
             mMapDeviceCaptureThread.remove(deviceIndex);
         }
+    }
+}
+
+void PCIeCommSdk::initLibrary()
+{
+    QStringList args = QCoreApplication::arguments();
+    if (args.size() == 1){
+        mPhysicalNames << CARD1_NAME << CARD2_NAME << CARD3_NAME;
+        mEnumedDevices = enumDevices();
+        printDevicesInfomation();
+        initCaptureThreads();
     }
 }
 
@@ -816,7 +822,9 @@ bool PCIeCommSdk::analyzeSpectrumFromDir(const quint8& cameraIndex,
     if ((cameraIndex % DETNUMBER_PCIE_PER) >= 1 && (cameraIndex % DETNUMBER_PCIE_PER) <= CAMNUMBER_DDR_PER)
         sideFile = "A";
     //根据通道号计算采集卡的索引
-    int boardIndex = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;//计算通道属于第几张采集卡
+    const int boardIndex = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;//计算通道属于第几张采集卡
+    const quint8 cameraNo    = (cameraIndex - 1) % CAMNUMBER_DDR_PER;   // 0/1/2
+
     for (int id = startFileId; id <= endFileId; ++id){
         QString filePath = QString("%1/%2%3spec%4.bin").arg(fileDir).arg(boardIndex).arg(sideFile).arg(id);
 
@@ -964,7 +972,7 @@ bool PCIeCommSdk::analyzeSpectrumFromDir(const quint8& cameraIndex,
 
 bool PCIeCommSdk::analyzeSpectrumFromRAM(const quint8& cameraIndex,
                             const quint32& timeStart/*开始时刻*/,
-                            const quint32& timeStop/*停止时刻*/ ,
+                            const quint32& timeStop/*停止时刻*/,
                             std::function<void(
                                 QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>&,
                                 QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>&
@@ -1113,6 +1121,138 @@ bool PCIeCommSdk::analyzeSpectrumFromRAM(const quint8& cameraIndex,
     return true;
 }
 
+bool PCIeCommSdk::analyzeSpectrumFromRAM(
+    const quint8&  cameraIndex,
+    const quint32& timeStart,
+    const quint32& refreshTimelength,
+    const quint32& spectrumIndex,
+    std::function<void(
+        QPair<QVector<double>, QVector<double>>&,
+        QPair<QVector<double>, QVector<double>>&
+        )> callback)
+{
+    static constexpr quint32 FILE_DURATION_MS     = PACKET_TIMELENGTH;                                   // 160
+    static constexpr quint32 SPECTRUM_BLOCK_BYTES  = 1024;
+    static constexpr quint32 SPECTRUM_PER_FILE     = SPECTRUM_FRAMESIZE_GROUP_PER / SPECTRUM_BLOCK_BYTES; // 40
+    static constexpr quint32 SPECTRUM_DURATION_MS  = FILE_DURATION_MS / SPECTRUM_PER_FILE;                // 4
+    static constexpr int     SPECTRUM_HEAD_BYTES   = 16;
+
+    if (refreshTimelength == 0 || (refreshTimelength % SPECTRUM_DURATION_MS) != 0)
+        return false;
+    if (spectrumIndex == 0)
+        return false;
+
+    // ---- 1. 全局窗口边界（4ms 能谱为单位）----
+    const quint64 winStartMs = quint64(timeStart)
+                               + quint64(spectrumIndex - 1) * quint64(refreshTimelength);
+    const quint64 winEndMs   = winStartMs + quint64(refreshTimelength);
+
+    const quint64 startN = winStartMs / SPECTRUM_DURATION_MS;              // 全局 0 基起始能谱
+    const quint64 endN   = winEndMs / SPECTRUM_DURATION_MS;                // 不含
+    if (endN <= startN)
+        return false;
+
+    // ---- 2. 通道 → 板卡 ----
+    const quint32 ch = cameraIndex % DETNUMBER_PCIE_PER;
+    const QString sideFile = (ch >= 1 && ch <= CAMNUMBER_DDR_PER)
+                                 ? QStringLiteral("A") : QStringLiteral("B");
+    Q_UNUSED(sideFile);
+
+    int boardIndex = 0;
+#ifdef SINGLE_BOARD_MODE
+    boardIndex = isUsedDDR1() ? 1 : 2;
+#else
+    boardIndex = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;
+#endif
+    const quint8 cameraNo    = (cameraIndex - 1) % CAMNUMBER_DDR_PER;   // 0/1/2
+    if (!mMapDeviceCaptureThread.contains(boardIndex))
+        return false;
+
+    auto* thread = mMapDeviceCaptureThread[boardIndex];
+    const quint16 capturedCount = thread->capturedCount();
+
+    // 窗口首尾所在文件都必须有效
+    const quint64 firstFile = startN / SPECTRUM_PER_FILE;
+    const quint64 lastFile  = (endN - 1) / SPECTRUM_PER_FILE;
+    if (lastFile >= capturedCount)
+        return false;                                  // 窗口超出已采集范围
+
+    const QVector<QByteArray>& spectrumFrames = thread->spectrumFrames();
+
+    // ---- 3. 点数 & 累加容器 ----
+#ifdef SINGLE_BOARD_MODE
+    constexpr int POINTS_PER_BLOCK = 992 / 2;          // 496
+#else
+    constexpr int POINTS_PER_BLOCK = 124 / 2;          // 62
+#endif
+    QVector<double> spectrumGamma(POINTS_PER_BLOCK, 0.0);
+    QVector<double> spectrumNeutron(POINTS_PER_BLOCK, 0.0);
+
+    // ---- 4. 缓存已反转的文件，避免跨文件时重复 reverse ----
+    quint64 cachedFileId = quint64(-1);
+    QByteArray cachedReverse;
+
+    auto getFileBlock = [&](quint64 fileId, quint32 packPos, const char*& block) -> bool {
+        if (fileId != cachedFileId) {
+            const QByteArray& src = spectrumFrames[int(fileId)];
+            cachedReverse = PCIeCommSdk::reverseArray(src, 16);
+            if (!cachedReverse.startsWith(QByteArray::fromHex("FFAB00D2")))
+                return false;
+            cachedFileId = fileId;
+        }
+        const qsizetype off = qsizetype(packPos) * SPECTRUM_BLOCK_BYTES;
+        if (off + SPECTRUM_BLOCK_BYTES > cachedReverse.size())
+            return false;
+        block = cachedReverse.constData() + off;
+        return true;
+    };
+
+    // ---- 5. 遍历窗口内所有能谱，逐包累加 ----
+    for (quint64 n = startN; n < endN; ++n) {
+        const quint64 fileId  = n / SPECTRUM_PER_FILE;
+        const quint32 packPos = quint32(n % SPECTRUM_PER_FILE);
+
+        const char* block = nullptr;
+        if (!getFileBlock(fileId, packPos, block))
+            return false;
+
+#ifdef SINGLE_BOARD_MODE
+        const char* g = block + SPECTRUM_HEAD_BYTES;
+        for (int i = 0; i < POINTS_PER_BLOCK; ++i) {
+            const quint8 hi = quint8(g[i*2]);
+            const quint8 lo = quint8(g[i*2+1]);
+            spectrumGamma[i] += double((quint16(hi) << 8) | quint16(lo));
+        }
+#else
+        constexpr int CH_BYTES    = 124;
+        constexpr int OFF_GAMMA   = SPECTRUM_HEAD_BYTES;          // 16
+        constexpr int OFF_NEUTRON = SPECTRUM_HEAD_BYTES + 496;    // 512
+
+        auto accumulateRegion = [&](int regionOff, QVector<double>& acc) {
+            const char* p = block + regionOff + cameraNo * CH_BYTES;
+            for (int i = 0; i < POINTS_PER_BLOCK; ++i) {
+                const quint8 hi = quint8(p[i*2]);
+                const quint8 lo = quint8(p[i*2+1]);
+                acc[i] += double((quint16(hi) << 8) | quint16(lo));
+            }
+        };
+        accumulateRegion(OFF_GAMMA,   spectrumGamma);
+        accumulateRegion(OFF_NEUTRON, spectrumNeutron);
+#endif
+    }
+
+    // ---- 6. 道址 ----
+    QVector<double> channel(POINTS_PER_BLOCK);
+    for (int i = 0; i < POINTS_PER_BLOCK; ++i)
+        channel[i] = i;
+
+    QPair<QVector<double>, QVector<double>> pairGamma   = qMakePair(channel, spectrumGamma);
+    QPair<QVector<double>, QVector<double>> pairNeutron = qMakePair(channel, spectrumNeutron);
+    callback(pairGamma, pairNeutron);
+    return true;
+}
+
+
 /**
  * @brief PCIeCommSdk::analyzeWaveformFromDir 离线分析波形历史数据，兼容旧版和新版FPGA数据协议
  * 波形数据排列方式：ch3, ch3, ch2, ch2, ch0, ch0, ch1, ch1...（逐点交织）
@@ -1215,12 +1355,9 @@ bool PCIeCommSdk::analyzeWaveformFromDir(
 
         // ⑥ 起始时刻（keyBase）：第 from 个点在整条时间轴上的时刻
         //    名义 40ms/文件推进（与文件编号规则一致）
-        const quint64 fileStartNs =
-            static_cast<quint64>(id - startFileId) * PACKET_TIMELENGTH * 1000000ULL;
-        const quint64 baseNs =
-            static_cast<quint64>(timeStart) * 1000000ULL;
-        const quint64 keyBase =
-            baseNs + fileStartNs + static_cast<quint64>(from) * NS_PER_POINT;
+        const quint64 fileStartNs = static_cast<quint64>(id - 1) * PACKET_TIMELENGTH * 1000000ULL;
+        const quint64 baseNs = static_cast<quint64>(from) * NS_PER_POINT;
+        const quint64 keyBase = baseNs + fileStartNs;
 
         // ⑦ 交付：起始时刻 + 连续数组
         callback(keyBase, ch);
@@ -1274,11 +1411,11 @@ bool PCIeCommSdk::analyzeWaveformFromRAM(
     std::vector<qint16> ch;
     const QVector<QByteArray>& waveformFrames = mMapDeviceCaptureThread[boardIndex]->waveformFrames();
     for (int id = startFileId; id <= endFileId; ++id) {
-        const QByteArray& waveformData = waveformFrames[id];
+        const QByteArray& waveformData = waveformFrames[id-1];
         const qint64 pointsPerChannel = waveformData.size() / BYTES_PER_GROUP;   // 19,999,996
 
         QByteArray reverseData = PCIeCommSdk::reverseArray(waveformData, HEAD_BYTES);
-        if (reverseData.startsWith(QByteArray::fromHex("FFAB00D1")))
+        if (reverseData.startsWith(QByteArray::fromHex("FFAB00D3")))
         {
             // ② 本文件内区间（头部完好；尾部靠 qBound 截断）
             qint64 from = 0;
@@ -1319,9 +1456,9 @@ bool PCIeCommSdk::analyzeWaveformFromRAM(
 
             // ⑥ 起始时刻（keyBase）：第 from 个点在整条时间轴上的时刻
             //    名义 40ms/文件推进（与文件编号规则一致）
-            const quint64 fileStartNs = static_cast<quint64>(id - startFileId) * PACKET_TIMELENGTH * 1e6;
-            const quint64 baseNs = static_cast<quint64>(timeStart) * 1e6;
-            const quint64 keyBase = baseNs + fileStartNs + static_cast<quint64>(from) * NS_PER_POINT;
+            const quint64 fileStartNs = static_cast<quint64>(id - 1) * PACKET_TIMELENGTH * 1e6;
+            const quint64 baseNs = static_cast<quint64>(from) * NS_PER_POINT;
+            const quint64 keyBase = baseNs + fileStartNs;
 
             // ⑦ 交付：起始时刻 + 连续数组
             callback(keyBase, ch);
@@ -1829,7 +1966,11 @@ void PCIeCommSdk::initCaptureThreads()
             if (allCaptureFinished)
             {
                 emit captureFinished();
-                qInfo() << "数据采集完毕！";
+#ifdef SINGLE_BOARD_MODE
+                qInfo().noquote() << tr("DAQa数据采集完毕！");
+#else
+                qInfo().noquote() << tr("数据采集完毕！");
+#endif
             }
         }, Qt::DirectConnection);
         connect(captureThread, &CaptureThread::externalSignalTriggered, this, [=](quint32 /*index*/){
@@ -1837,6 +1978,12 @@ void PCIeCommSdk::initCaptureThreads()
         }, Qt::DirectConnection);
         connect(captureThread, &CaptureThread::timeoutOccurred, this, [=](quint32 /*index*/){
             emit timeoutOccurred();
+        }, Qt::DirectConnection);
+        connect(captureThread, &CaptureThread::captureWaveformDataChanged, this, [=](quint8 deviceIndex,quint32 index){
+            emit captureWaveformDataChanged(deviceIndex, index);
+        }, Qt::DirectConnection);
+        connect(captureThread, &CaptureThread::captureSpectrumDataChanged, this, [=](quint8 deviceIndex,quint32 index){
+            emit captureSpectrumDataChanged(deviceIndex, index);
         }, Qt::DirectConnection);
 
     // 设置线程亲和性(小于64核)
@@ -2064,9 +2211,9 @@ CaptureThread::CaptureThread(const quint32 deviceIndex, const quint32 physicalNo
             }
         }
 
-        qDebug() << deviceIndex << "VirtualLock 成功:" << g_lockOk.load()
-                 << "失败:" << g_lockFail.load()
-                 << "其中配额不足(1453):" << g_lockFailErr1453.load();
+        // qDebug() << deviceIndex << "VirtualLock 成功:" << g_lockOk.load()
+        //          << "失败:" << g_lockFail.load()
+        //          << "其中配额不足(1453):" << g_lockFailErr1453.load();
     }
     catch (const std::bad_alloc& e){
         qDebug() << "Memory allocation failed:" << e.what();
@@ -2195,6 +2342,12 @@ bool CaptureThread::checkDataError()
         QByteArray pkgTail = PCIeCommSdk::reverseArray(mDDRWaveformDatas.at(i).right(12));
 #endif //SINGLE_BOARD_MODE
 
+        if (!pkgHead.startsWith(QByteArray::fromHex("FFAB00D3")) || !pkgTail.startsWith(QByteArray::fromHex("FFCD00D3"))){
+            waveformErrorIndex = i+1;
+            waveformError = true;
+            break;
+        }
+
         int headSeq = (quint8)pkgHead[7];
         int tailSeq = (quint8)pkgTail[7];
         int currentSeq = headSeq;
@@ -2216,6 +2369,12 @@ bool CaptureThread::checkDataError()
     lastSeq = 0;
     for (int i=0; i<this->mCapturedRef; ++i){
         QByteArray pkgHead = PCIeCommSdk::reverseArray(mRAMSpectrumDatas.at(i).left(16), 16);
+        if (!pkgHead.startsWith(QByteArray::fromHex("FFAB00D2"))){
+            spectrumErrorIndex = i+1;
+            spectrumError = true;
+            break;
+        }
+
         bool ok = false;
         int currentSeq = pkgHead.mid(4, 2).toHex().toUInt(&ok, 16);
         if ((currentSeq - lastSeq) != 1){
@@ -2348,9 +2507,13 @@ void CaptureThread::printDebugInfo()
             QStringLiteral(" 创建读线程时刻：") << mCreateThreadTime[i] << "-" << mAfterCreateThreadTime[i] <<
             QStringLiteral(" 开始读数据时刻：") << mBeforeReadTime[i] <<
             QStringLiteral(" 读完数据时刻：") << mAfterReadTime[i] <<
-            QStringLiteral(" 开始读延迟：") << (mRamChangedTime[i]-i*40) <<
+            QStringLiteral(" 开始读延迟：") << (mRamChangedTime[i]-i*PACKET_TIMELENGTH) <<
             QStringLiteral(" 读花费时间：") << (mAfterReadTime[i]-mBeforeReadTime[i]) <<
-            QStringLiteral(" 累积延迟：") << (mAfterReadTime[i]-i*40) << (((mAfterReadTime[i]-i*40)>120) ? " ******\n" : "\n");
+#ifdef SINGLE_BOARD_MODE
+            QStringLiteral(" 累积延迟：") << (mAfterReadTime[i]-i*PACKET_TIMELENGTH) << (((mAfterReadTime[i]-i*PACKET_TIMELENGTH)>280) ? " ******\n" : "\n");
+#else
+            QStringLiteral(" 累积延迟：") << (mAfterReadTime[i]-i*PACKET_TIMELENGTH) << (((mAfterReadTime[i]-i*PACKET_TIMELENGTH)>120) ? " ******\n" : "\n");
+#endif
     }
 
     out << "================================================================================================\n\n";
@@ -2405,7 +2568,7 @@ void CaptureThread::saveAllData()
 {
     if (mCapturedRef <= 0) return;
 
-    if (mEnableTestMode/*测试模式*/ || mDataError/*数据出现错误*/){
+    if (mEnableTestMode/*测试模式*//* || mDataError数据出现错误*/){
         return;
     }
 
@@ -2531,10 +2694,10 @@ void CaptureThread::resumePreHeat()
             memset(const_cast<char*>(block.constData()), 0, block.size());
         }
 
-        st << QString::number(t.elapsed());
+        st << QString::number(t.restart());
     }
     qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] "
-                      << ddrName << QStringLiteral(" 预热内存耗时:") << t.elapsed() << st.join(',');
+                                << ddrName << QStringLiteral(" 预热内存耗时:") << st.join(',') << " ms";
 }
 
 void CaptureThread::run()
@@ -2592,6 +2755,9 @@ void CaptureThread::run()
             for (auto& block : mDDRWaveformDatas) {
                 delay(1);
 
+#ifdef SINGLE_BOARD_MODE
+                break;
+#endif
                 // 强制物理页分配：写一遍首尾页
                 memset(const_cast<char*>(block.constData()), 0, block.size());
                 if (!mIsPaused.load())

@@ -21,5 +21,8 @@
         <file>resource/image/play-previous.png</file>
         <file>resource/image/rewind-back.png</file>
         <file>resource/image/rewind-forward.png</file>
+        <file>resource/image/LOGO.ico</file>
+        <file>resource/image/pause.png</file>
+        <file>resource/image/play.png</file>
     </qresource>
 </RCC>

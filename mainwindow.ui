@@ -14,8 +14,8 @@
    <string>中子伽马相机在线测量软件</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../3rdParty/resource/resource.qrc">
-    <normaloff>:/logo.ico</normaloff>:/logo.ico</iconset>
+   <iconset resource="lresource.qrc">
+    <normaloff>:/resource/image/LOGO.ico</normaloff>:/resource/image/LOGO.ico</iconset>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout_2">
@@ -526,8 +526,14 @@
           <property name="currentIndex">
            <number>0</number>
           </property>
-          <widget class="QWidget" name="plotSpectrumWidgetPage">
-           <layout class="QVBoxLayout" name="verticalLayout_5">
+          <widget class="QWidget" name="plotWidgetPage">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_12">
             <property name="spacing">
              <number>0</number>
             </property>
@@ -544,292 +550,726 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QCustomPlot" name="plot_neutronSpectrum" native="true"/>
-            </item>
-            <item>
-             <widget class="QCustomPlot" name="plot_gammaSpectrum" native="true"/>
-            </item>
-            <item>
-             <widget class="QWidget" name="plotSpectrum_navigate" native="true">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>50</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>50</height>
-               </size>
-              </property>
-              <layout class="QHBoxLayout" name="horizontalLayout">
-               <item>
-                <spacer name="horizontalSpacer_2">
-                 <property name="orientation">
-                  <enum>Qt::Horizontal</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>100</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                </spacer>
-               </item>
-               <item>
-                <widget class="QToolButton" name="toolButton_firstSpectrum">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="lresource.qrc">
-                   <normaloff>:/resource/image/play-previous.png</normaloff>:/resource/image/play-previous.png</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>16</width>
-                   <height>16</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="toolButton_backSpectrum">
-                 <property name="icon">
-                  <iconset resource="lresource.qrc">
-                   <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>16</width>
-                   <height>16</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QLabel" name="label_17">
-                 <property name="text">
-                  <string>序号：</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QSpinBox" name="spinBox_spectrumIndex">
-                 <property name="minimum">
-                  <number>1</number>
-                 </property>
-                 <property name="maximum">
-                  <number>10000</number>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="toolButton_forwardSpectrum">
-                 <property name="icon">
-                  <iconset resource="lresource.qrc">
-                   <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>16</width>
-                   <height>16</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="toolButton_lastSpectrum">
-                 <property name="icon">
-                  <iconset resource="lresource.qrc">
-                   <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>16</width>
-                   <height>16</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <spacer name="horizontalSpacer_3">
-                 <property name="orientation">
-                  <enum>Qt::Horizontal</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>100</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                </spacer>
-               </item>
-              </layout>
+             <widget class="QStackedWidget" name="stackedWidget_DAQa">
+              <widget class="QWidget" name="page_DAQaSpectrum">
+               <layout class="QVBoxLayout" name="verticalLayout_7">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QCustomPlot" name="plot_gammaSpectrum" native="true"/>
+                </item>
+                <item>
+                 <widget class="QWidget" name="plotSpectrumDAQa_navigate" native="true">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>0</width>
+                    <height>50</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>50</height>
+                   </size>
+                  </property>
+                  <layout class="QHBoxLayout" name="horizontalLayout_7">
+                   <item>
+                    <spacer name="horizontalSpacer">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_firstSpectrum">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/play-previous.png</normaloff>:/resource/image/play-previous.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_backSpectrum">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                     <property name="autoRepeat">
+                      <bool>true</bool>
+                     </property>
+                     <property name="autoRepeatInterval">
+                      <number>500</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="label_17">
+                     <property name="text">
+                      <string>DAQa能谱序号：</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QSpinBox" name="spinBox_spectrumIndex">
+                     <property name="minimumSize">
+                      <size>
+                       <width>60</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="minimum">
+                      <number>1</number>
+                     </property>
+                     <property name="maximum">
+                      <number>3200</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_forwardSpectrum">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                     <property name="autoRepeat">
+                      <bool>true</bool>
+                     </property>
+                     <property name="autoRepeatInterval">
+                      <number>500</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_lastSpectrum">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QRadioButton" name="radioButton">
+                     <property name="text">
+                      <string>波形</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QRadioButton" name="radioButton_2">
+                     <property name="text">
+                      <string>能谱</string>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_9">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+              <widget class="QWidget" name="page_DAQaWaveform">
+               <layout class="QVBoxLayout" name="verticalLayout_11">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QCustomPlot" name="plot_DAQaWaveform" native="true"/>
+                </item>
+                <item>
+                 <widget class="QWidget" name="plotWaveformDAQa_navigate" native="true">
+                  <property name="minimumSize">
+                   <size>
+                    <width>0</width>
+                    <height>50</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>50</height>
+                   </size>
+                  </property>
+                  <layout class="QHBoxLayout" name="horizontalLayout">
+                   <item>
+                    <spacer name="horizontalSpacer_10">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>83</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_firstWaveform_2">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/play-previous.png</normaloff>:/resource/image/play-previous.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_backWaveform_2">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                     <property name="autoRepeat">
+                      <bool>true</bool>
+                     </property>
+                     <property name="autoRepeatInterval">
+                      <number>200</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="label_20">
+                     <property name="text">
+                      <string>DAQa波形序号：</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QSpinBox" name="spinBox_waveformIndex_2">
+                     <property name="minimumSize">
+                      <size>
+                       <width>60</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="minimum">
+                      <number>1</number>
+                     </property>
+                     <property name="maximum">
+                      <number>12800</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_forwardWaveform_2">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                     <property name="autoRepeat">
+                      <bool>true</bool>
+                     </property>
+                     <property name="autoRepeatInterval">
+                      <number>200</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_lastWaveform_2">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QRadioButton" name="radioButton_3">
+                     <property name="text">
+                      <string>波形</string>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QRadioButton" name="radioButton_4">
+                     <property name="text">
+                      <string>能谱</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_11">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>83</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
              </widget>
             </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="plotWaveformWidgetPage">
-           <layout class="QVBoxLayout" name="verticalLayout_7">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
             <item>
-             <widget class="QCustomPlot" name="plot_DAQaWaveform" native="true"/>
-            </item>
-            <item>
-             <widget class="QCustomPlot" name="plot_DAQbWaveform" native="true"/>
-            </item>
-            <item>
-             <widget class="QWidget" name="plotWaveform_navigate" native="true">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
+             <widget class="QStackedWidget" name="stackedWidget_DAQb">
+              <property name="currentIndex">
+               <number>0</number>
               </property>
-              <property name="minimumSize">
-               <size>
-                <width>0</width>
-                <height>50</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>16777215</width>
-                <height>50</height>
-               </size>
-              </property>
-              <layout class="QHBoxLayout" name="horizontalLayout_6">
-               <item>
-                <spacer name="horizontalSpacer_5">
-                 <property name="orientation">
-                  <enum>Qt::Horizontal</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>100</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                </spacer>
-               </item>
-               <item>
-                <widget class="QToolButton" name="toolButton_firstWaveform">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="icon">
-                  <iconset resource="lresource.qrc">
-                   <normaloff>:/resource/image/play-previous.png</normaloff>:/resource/image/play-previous.png</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>16</width>
-                   <height>16</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="toolButton_backWaveform">
-                 <property name="icon">
-                  <iconset resource="lresource.qrc">
-                   <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>16</width>
-                   <height>16</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QLabel" name="label_18">
-                 <property name="text">
-                  <string>序号：</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QSpinBox" name="spinBox_waveformIndex">
-                 <property name="minimum">
-                  <number>1</number>
-                 </property>
-                 <property name="maximum">
-                  <number>65536</number>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="toolButton_forwardWaveform">
-                 <property name="icon">
-                  <iconset resource="lresource.qrc">
-                   <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>16</width>
-                   <height>16</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QToolButton" name="toolButton_lastWaveform">
-                 <property name="icon">
-                  <iconset resource="lresource.qrc">
-                   <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
-                 </property>
-                 <property name="iconSize">
-                  <size>
-                   <width>16</width>
-                   <height>16</height>
-                  </size>
-                 </property>
-                </widget>
-               </item>
-               <item>
-                <spacer name="horizontalSpacer_8">
-                 <property name="orientation">
-                  <enum>Qt::Horizontal</enum>
-                 </property>
-                 <property name="sizeHint" stdset="0">
-                  <size>
-                   <width>100</width>
-                   <height>20</height>
-                  </size>
-                 </property>
-                </spacer>
-               </item>
-              </layout>
+              <widget class="QWidget" name="page_DAQbWaveform">
+               <layout class="QVBoxLayout" name="verticalLayout_5">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QCustomPlot" name="plot_DAQbWaveform" native="true"/>
+                </item>
+                <item>
+                 <widget class="QWidget" name="plotWaveformDAQb_navigate" native="true">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumSize">
+                   <size>
+                    <width>0</width>
+                    <height>50</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>50</height>
+                   </size>
+                  </property>
+                  <layout class="QHBoxLayout" name="horizontalLayout_6">
+                   <item>
+                    <spacer name="horizontalSpacer_5">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>100</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_firstWaveform">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/play-previous.png</normaloff>:/resource/image/play-previous.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_backWaveform">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                     <property name="autoRepeat">
+                      <bool>true</bool>
+                     </property>
+                     <property name="autoRepeatInterval">
+                      <number>200</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="label_18">
+                     <property name="text">
+                      <string>DAQb波形序号：</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QSpinBox" name="spinBox_waveformIndex">
+                     <property name="minimumSize">
+                      <size>
+                       <width>60</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="minimum">
+                      <number>1</number>
+                     </property>
+                     <property name="maximum">
+                      <number>12800</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_forwardWaveform">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                     <property name="autoRepeat">
+                      <bool>true</bool>
+                     </property>
+                     <property name="autoRepeatInterval">
+                      <number>200</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_lastWaveform">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QCheckBox" name="checkBox_waveformSynRefresh">
+                     <property name="text">
+                      <string>同步刷新</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_8">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>100</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+              <widget class="QWidget" name="page_DAQbSpectrum">
+               <layout class="QVBoxLayout" name="verticalLayout_9">
+                <property name="spacing">
+                 <number>0</number>
+                </property>
+                <property name="leftMargin">
+                 <number>0</number>
+                </property>
+                <property name="topMargin">
+                 <number>0</number>
+                </property>
+                <property name="rightMargin">
+                 <number>0</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>0</number>
+                </property>
+                <item>
+                 <widget class="QCustomPlot" name="plot_neutronSpectrum" native="true"/>
+                </item>
+                <item>
+                 <widget class="QWidget" name="plotSpectrumDAQb_navigate" native="true">
+                  <property name="minimumSize">
+                   <size>
+                    <width>0</width>
+                    <height>50</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>50</height>
+                   </size>
+                  </property>
+                  <layout class="QHBoxLayout" name="horizontalLayout_10">
+                   <item>
+                    <spacer name="horizontalSpacer_2">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>100</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_firstSpectrum_2">
+                     <property name="sizePolicy">
+                      <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                       <horstretch>0</horstretch>
+                       <verstretch>0</verstretch>
+                      </sizepolicy>
+                     </property>
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/play-previous.png</normaloff>:/resource/image/play-previous.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_backSpectrum_2">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                     <property name="autoRepeat">
+                      <bool>true</bool>
+                     </property>
+                     <property name="autoRepeatInterval">
+                      <number>500</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="label_19">
+                     <property name="text">
+                      <string>DAQb能谱序号：</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QSpinBox" name="spinBox_spectrumIndex_2">
+                     <property name="minimumSize">
+                      <size>
+                       <width>60</width>
+                       <height>0</height>
+                      </size>
+                     </property>
+                     <property name="minimum">
+                      <number>1</number>
+                     </property>
+                     <property name="maximum">
+                      <number>3200</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_forwardSpectrum_2">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                     <property name="autoRepeat">
+                      <bool>true</bool>
+                     </property>
+                     <property name="autoRepeatInterval">
+                      <number>500</number>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QToolButton" name="toolButton_lastSpectrum_2">
+                     <property name="icon">
+                      <iconset resource="lresource.qrc">
+                       <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
+                     </property>
+                     <property name="iconSize">
+                      <size>
+                       <width>16</width>
+                       <height>16</height>
+                      </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QCheckBox" name="checkBox_synRefresh">
+                     <property name="text">
+                      <string>同步刷新</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_3">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>100</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
              </widget>
             </item>
            </layout>
@@ -1129,6 +1569,12 @@
        <size>
         <width>300</width>
         <height>0</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>300</width>
+        <height>16777215</height>
        </size>
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout_16">
@@ -1457,7 +1903,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QGroupBox" name="groupBox_2">
+              <widget class="QGroupBox" name="groupBox_spectrumOption">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
                  <horstretch>0</horstretch>
@@ -1471,7 +1917,7 @@
                 <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
                </property>
                <layout class="QGridLayout" name="gridLayout">
-                <item row="0" column="1">
+                <item row="0" column="1" colspan="2">
                  <widget class="QSpinBox" name="spinBox_timeStart">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -1493,7 +1939,43 @@
                   </property>
                  </widget>
                 </item>
-                <item row="2" column="1" colspan="3">
+                <item row="0" column="0">
+                 <widget class="QLabel" name="label_11">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>开始时刻/ms：</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="0">
+                 <widget class="QLabel" name="label_16">
+                  <property name="text">
+                   <string>刷新时长/ms：</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="0">
+                 <widget class="QLabel" name="label_9">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>垂直相机：</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="1" colspan="2">
                  <widget class="QComboBox" name="comboBox_horCamera">
                   <item>
                    <property name="text">
@@ -1552,7 +2034,36 @@
                   </item>
                  </widget>
                 </item>
-                <item row="3" column="1" colspan="3">
+                <item row="2" column="0">
+                 <widget class="QLabel" name="label_7">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="text">
+                   <string>水平相机：</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1" colspan="2">
+                 <widget class="QSpinBox" name="spinBox_timeStep">
+                  <property name="minimum">
+                   <number>4</number>
+                  </property>
+                  <property name="maximum">
+                   <number>12800</number>
+                  </property>
+                  <property name="singleStep">
+                   <number>4</number>
+                  </property>
+                  <property name="value">
+                   <number>4</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="3" column="1" colspan="2">
                  <widget class="QComboBox" name="comboBox_verCamera">
                   <item>
                    <property name="text">
@@ -1591,106 +2102,16 @@
                   </item>
                  </widget>
                 </item>
-                <item row="0" column="3">
-                 <widget class="QSpinBox" name="spinBox_timeStop">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimum">
-                   <number>1</number>
-                  </property>
-                  <property name="maximum">
-                   <number>4</number>
-                  </property>
-                  <property name="singleStep">
-                   <number>4</number>
-                  </property>
-                  <property name="value">
-                   <number>4</number>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="0">
-                 <widget class="QLabel" name="label_11">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
+                <item row="4" column="2">
+                 <widget class="QPushButton" name="pushButton_preview">
+                  <property name="maximumSize">
+                   <size>
+                    <width>80</width>
+                    <height>16777215</height>
+                   </size>
                   </property>
                   <property name="text">
-                   <string>开始时刻/ms：</string>
-                  </property>
-                  <property name="alignment">
-                   <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-                  </property>
-                 </widget>
-                </item>
-                <item row="3" column="0">
-                 <widget class="QLabel" name="label_9">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="text">
-                   <string>垂直相机：</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="1" column="0">
-                 <widget class="QLabel" name="label_16">
-                  <property name="text">
-                   <string>刷新时长/ms：</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="2" column="0">
-                 <widget class="QLabel" name="label_7">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="text">
-                   <string>水平相机：</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="1" column="1">
-                 <widget class="QSpinBox" name="spinBox_timeStep">
-                  <property name="minimum">
-                   <number>1</number>
-                  </property>
-                  <property name="maximum">
-                   <number>3200</number>
-                  </property>
-                  <property name="singleStep">
-                   <number>4</number>
-                  </property>
-                  <property name="value">
-                   <number>4</number>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="2">
-                 <widget class="QLabel" name="label_12">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="text">
-                   <string>结束时刻/ms：</string>
-                  </property>
-                  <property name="alignment">
-                   <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                   <string>预览全能谱</string>
                   </property>
                  </widget>
                 </item>
@@ -1712,26 +2133,6 @@
                 <property name="bottomMargin">
                  <number>0</number>
                 </property>
-                <item>
-                 <spacer name="horizontalSpacer">
-                  <property name="orientation">
-                   <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="sizeHint" stdset="0">
-                   <size>
-                    <width>373</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                 </spacer>
-                </item>
-                <item>
-                 <widget class="QPushButton" name="pushButton_preview">
-                  <property name="text">
-                   <string>预览</string>
-                  </property>
-                 </widget>
-                </item>
                </layout>
               </widget>
              </item>

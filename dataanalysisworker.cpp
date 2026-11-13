@@ -651,7 +651,7 @@ void DataAnalysisWorker::adjustDataWithBaseline(qint16* data, int n,
     if (sampleCount == 0) return;
 
 #ifdef SINGLE_BOARD_MODE
-    bool isPositive = false;
+    bool isPositive = false;//baseline_ch > 0;
 #else
     bool isPositive = true;
 #endif

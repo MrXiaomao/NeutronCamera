@@ -176,14 +176,24 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
+    // 消息处理函数
+    static MainWindow* m_instance; // 静态实例指针
+    QtMessageHandler m_defultMessageHandler = nullptr;
+    static void sysMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString &msg);
+    void handleLogMessage(QtMsgType type, const QMessageLogContext& context, const QString &msg); // 实际处理逻辑
+
     CommHelper* mCommHelper = nullptr;
-    PCIeCommSdk mPCIeCommSdk;
+    PCIeCommSdk* mPCIeCommSdk = nullptr;
     SettingWindow *mSettingWindow = nullptr;// 系统参数配置界面
     DeviceManagerWindow* mDeviceManagerWindow = nullptr; // 设备管理器界面
 
     std::atomic<bool> mIsAlarm = false;// 性能监测是否出现异常
     QElapsedTimer mLastAlarmTime;// 模组最后一次报警时间
     std::atomic<bool> mIsMeasuring = false;// 测量是否正在进行
+
+    // 当前测量参数
+    DataProcessor::TriggerMode mTriggerMode;
+    quint32 mWaveformLength = 64;
     DetectorType mCurrentDetectorType = dtLSD; // 当前探测器类型：1-LSD 2-PSD 3-LBD
     QString mCurrentSavePath;// 本次实验数据存储路径
 #ifdef SINGLE_BOARD_MODE
@@ -258,13 +268,15 @@ private:
     std::atomic<bool> mSpectrumPlotReady = false;  // 能谱曲线待刷新
     qint64 mTempLastUpdateTime = 0;
     DetectorData m_detectorData;
+    DataProcessor::WorkMode mWorkMode = DataProcessor::wmWaveform;// 0-波形 1-能谱
     mutable QMutex mDetectorDataMutex;       // 保护 m_detectorData（解析线程写、主线程读/绘图）
 
     mutable QMutex mSpectDataMutex;
     using SpectrumEntry = FullSpectrum;
-    QVector<SpectrumEntry> m_spectrumByChannel[2];// 0-DAQa 1-DAQb
-    using WaveformEntry = QVector<quint16>;
-    QVector<WaveformEntry> m_waveformByChannel[2];
+    QVector<SpectrumEntry> m_spectrumByChannel;// DAQb
+    using WaveformEntry = std::vector<qint16>;
+    QVector<WaveformEntry> m_waveformByChannel;
+    std::atomic<quint32> mDAQaCapturedCount{0};
 
     // 定时刷新能谱和波形
     QTimer* m_plotRefreshTimer = nullptr;

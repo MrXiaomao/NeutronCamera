@@ -25,25 +25,6 @@
 #include <log4qt/loggerrepository.h>
 #include <log4qt/fileappender.h>
 
-QMainWindow *mMainWindow = nullptr;
-QMutex mutexMsg;
-QtMessageHandler system_default_message_handler = NULL;// 用来保存系统默认的输出接口
-void AppMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString &msg)
-{
-    QMutexLocker locker(&mutexMsg);
-    if (type == QtWarningMsg && context.file == nullptr && context.function == nullptr)
-        return;// 主要用于过滤系统的警告信息
-
-    if (mMainWindow && type != QtDebugMsg){
-        QMetaObject::invokeMethod(mMainWindow, "writeLog", Qt::QueuedConnection, Q_ARG(QString, msg), Q_ARG(QtMsgType, type));
-    }
-
-    //这里必须调用，否则消息被拦截，log4qt无法捕获系统日志
-    if (system_default_message_handler){
-        system_default_message_handler(type, context, msg);
-    }
-}
-
 #include <locale.h>
 #include <QTextCodec>
 #include <QTranslator>
@@ -168,8 +149,6 @@ int main(int argc, char *argv[])
         qApp->installTranslator(&qtbaseTranslator);
 
     qRegisterMetaType<QtMsgType>("QtMsgType");
-    system_default_message_handler = qInstallMessageHandler(AppMessageHandler);
-
     bool isDarkTheme = true;
     settings.beginGroup("Global/Startup");
     if(settings.contains("darkTheme"))
@@ -219,6 +198,7 @@ int main(int argc, char *argv[])
 
     QTextCodec::setCodecForLocale(QTextCodec::codecForMib(106));/* Utf8 */
     QGoodWindowHelper w;
+    QMainWindow *mMainWindow = nullptr;
     if (args.contains("-offline")){
         QApplication::setApplicationName(QObject::tr("中子伽马相机离线数据综合分析软件"));
         mMainWindow = new OfflineWindow(isDarkTheme, &w);
@@ -276,7 +256,6 @@ int main(int argc, char *argv[])
         clientSocket->deleteLater();
     });
 
-    qInfo().noquote() << QObject::tr("系统启动");
     splash.finish(&w);
 
     QRect screenRect = QGuiApplication::primaryScreen()->availableGeometry();

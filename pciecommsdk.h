@@ -150,9 +150,9 @@ private:
     std::atomic<bool> mInterruptSave = false;//是否终止
     bool mIsException = false;//数据是否出现异常
 #ifdef SINGLE_BOARD_MODE
-    quint8 mBlockCapacity = 320;// 40ms/帧，12.8s共320帧
+    quint16 mBlockCapacity = 320;// 40ms/帧，12.8s共320帧
 #else
-    quint8 mBlockCapacity = 250;// 40ms/帧, 4s共100帧，10s共250帧
+    quint16 mBlockCapacity = 250;// 40ms/帧, 4s共100帧，10s共250帧
 #endif
     QVector<QByteArray> mDDRWaveformDatas;
     QVector<QByteArray> mRAMSpectrumDatas;
@@ -259,8 +259,8 @@ public:
     Q_SIGNAL void timeoutOccurred();
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
     Q_SIGNAL void reportGammaSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
-    Q_SIGNAL void captureWaveformDataChanged(quint8/*时刻*/, quint8/*相机索引*/);
-    Q_SIGNAL void captureSpectrumDataChanged(quint8/*时刻*/, quint8/*相机索引*/);
+    Q_SIGNAL void captureWaveformDataChanged(quint8/*设备序号*/, quint32/*包序号*/);
+    Q_SIGNAL void captureSpectrumDataChanged(quint8/*设备序号*/, quint32/*包序号*/);
 
     Q_SLOT void onSettingFinished();
 
@@ -269,6 +269,7 @@ public:
     void stopCapture(quint32 deviceIndex);
     void stopAllCapture();
 
+    void initLibrary();
     void init(); /* 初始化 */
     void reset();/* 重置/复位 */
     void reboot();/* 重启 */
@@ -312,12 +313,20 @@ public:
                                         )> callback);
     bool analyzeSpectrumFromRAM(const quint8& cameraIndex,
                                 const quint32& timeStart/*开始时刻*/,
-                                const quint32& timeStop/*停止时刻*/ ,
+                                const quint32& timeStop/*停止时刻*/,
                                 std::function<void(
                                     QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>&,
                                     QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>&
                                     )> callback);
 
+    bool analyzeSpectrumFromRAM(const quint8& cameraIndex,
+                                const quint32& timeStart/*开始时刻*/,
+                                const quint32& refreshTimelength/*刷新时长*/,
+                                const quint32& spectrumIndex/*能谱序号*/,
+                                std::function<void(
+                                    QPair<QVector<double>/*道址*/,QVector<double>/*伽马累积能谱*/>&,
+                                    QPair<QVector<double>/*道址*/,QVector<double>/*中子累积能谱*/>&
+                                    )> callback);
     /*从文件目录中解析波形数据*/
     bool analyzeWaveformFromDir(const quint8& cameraIndex,
                                 const quint32& timeStart/*开始时刻ms*/,

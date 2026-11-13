@@ -384,13 +384,13 @@ void DataProcessor::extractWaveformData_Thread(const QByteArray& data)
     if (data.size() < bytesNeeded + 8)
         return;
 
-    QVector<quint16> waveform;
+    std::vector<qint16> waveform;
     waveform.reserve(pointCount);
 
     for (int i = 0; i < pointCount; ++i) {
         const uchar* p = reinterpret_cast<const uchar*>(raw + waveformDataOffset + i * 2);//获取指针位置
-        quint16 amplitude = qFromBigEndian<quint16>(p); //从指针位置连续读两个字节转化为大端序的quint16
-        waveform.append(amplitude);
+        qint16 amplitude = qFromBigEndian<qint16>(p); //从指针位置连续读两个字节转化为大端序的quint16
+        waveform.push_back(amplitude);
     }
 
     emit reportWaveCurveInfo(waveform);

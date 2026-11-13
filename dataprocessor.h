@@ -97,7 +97,7 @@ signals:
 
     // 上传解析后的数据
     void reportFullSpectrum(const FullSpectrum& fullSpectrum); // 发送完整的能谱数据
-    void reportWaveCurveInfo(const QVector<quint16>& wave); // 发送解析后的波形曲线
+    void reportWaveCurveInfo(const std::vector<qint16>& wave); // 发送解析后的波形曲线
     void reportParticleInfo(const QVector<ParticleData>& particles); // 发送解析后的粒子信息
     void reportTriggerTimeInfo(const QDateTime trTime); // 发送解析后的触发时间戳信息
     void reportTemperatureTimeout(); // 温度心跳超时信号

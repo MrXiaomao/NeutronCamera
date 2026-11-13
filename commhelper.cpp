@@ -562,7 +562,7 @@ void CommHelper::initDataProcessor()
     }, Qt::DirectConnection);
 
     // 波形数据（解析后的数据）
-    connect(processor, &DataProcessor::reportWaveCurveInfo, this, [=](const QVector<quint16>& wave){
+    connect(processor, &DataProcessor::reportWaveCurveInfo, this, [=](const std::vector<qint16>& wave){
         emit reportWaveCurve(wave); //通知界面更新波形数据
     }, Qt::QueuedConnection);
 

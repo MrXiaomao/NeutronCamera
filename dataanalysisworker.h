@@ -107,7 +107,7 @@ public:
     // 新增：并行版（逐点独立的加速包装）
     static void adjustDataBaselineParallel(
         qint16* data, int n, qint16 baseline_ch,
-        int deviceIndex, int cameraIndex);
+        int deviceIndex = -1, int cameraIndex = -1);
 
     // 提取超过阈值的有效波形数据
     // data: 输入数据（已扣基线）
