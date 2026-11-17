@@ -97,8 +97,8 @@ public slots:
     // 解析线程上报温度，仅写缓存
     void onReportDetectorTemperature(float temperature);
 
-    void refreshSpectrumPlot();
-    void refreshWaveformPlot();
+    void refreshSpectrumPlot(bool isASpectrum/* = true*/);
+    void refreshWaveformPlot(bool isAWaveform/* = true*/);
     void onWaveformPlot(quint8/*通道号*/, const quint64& keyBase/*时刻 ns*/, const std::vector<qint16>& values/*扣基线后的波形值*/);
 
     void spinBoxEditingFinished();

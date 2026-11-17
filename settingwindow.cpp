@@ -24,6 +24,14 @@ SettingWindow::~SettingWindow()
 
 void SettingWindow::on_pushButton_exit_clicked()
 {
+    AppConfig::instance().load();
+    this->close();
+}
+
+
+void SettingWindow::on_pushButton_ok_clicked()
+{
+    AppConfig::instance().save();
     QMetaObject::invokeMethod(this, "reportSettingFinished", Qt::QueuedConnection);
     this->close();
 }

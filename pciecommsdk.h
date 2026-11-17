@@ -129,6 +129,7 @@ public:
     Q_SIGNAL void captureWaveformDataChanged(quint8,quint32);
     Q_SIGNAL void captureSpectrumDataChanged(quint8,quint32);
     Q_SIGNAL void captureFinished(quint32, bool);
+    Q_SIGNAL void workFinished(quint32, bool);
     Q_SIGNAL void externalSignalTriggered(quint32);
     Q_SIGNAL void timeoutOccurred(quint32);
 
@@ -255,6 +256,7 @@ public:
     Q_SIGNAL void reportOpenDeviceFail(quint8);
     Q_SIGNAL void captureFailOccurred(quint32, quint32);
     Q_SIGNAL void captureFinished();
+    Q_SIGNAL void workFinished();
     Q_SIGNAL void externalSignalTriggered();
     Q_SIGNAL void timeoutOccurred();
     Q_SIGNAL void reportNeutronSpectrum(quint8/*时刻*/, quint8/*相机索引*/, QVector<QPair<double,double>>&);
@@ -429,6 +431,7 @@ signals:
 private:
     QMap<quint32, CaptureThread*> mMapDeviceCaptureThread;/*3张卡，6个设备*/
     QMap<quint32, bool> mDeviceThreadRunning;
+    QMap<quint32, bool> mDeviceThreadWorking;
 
     // 由于不同机器搜索出来的板卡名称顺序不一致，这里需要定义2个列表
     static QStringList mEnumedDevices;// 搜索出来的采集卡设备列表，对应的是 boardIndex

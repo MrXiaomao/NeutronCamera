@@ -12,8 +12,6 @@ DEFINES += ENABLE_IOCP=0   #启用IO完成端口
 # Release 也带上日志上下文，便于业务 qWarning（如丢包汇总）不被 AppMessageHandler 误过滤
 DEFINES += QT_MESSAGELOGCONTEXT
 
-RC_ICONS = $$PWD/resource/image/LOGO.ico
-
 SOURCES += \
     AppConfig.cpp \
     QSnmpClient.cpp \
@@ -282,3 +280,5 @@ DEPENDPATH += $$PWD/.
 
 # 启用 SSSE3
 QMAKE_CXXFLAGS += -mssse3
+
+RC_ICONS = $$PWD/resource/image/LOGO.ico

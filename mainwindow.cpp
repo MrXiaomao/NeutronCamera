@@ -87,6 +87,9 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     connect(this, SIGNAL(prepareMeasure()), this, SLOT(onPrepareMeasure()));
 
     mPCIeCommSdk->initLibrary();
+    ui->stackedWidget->setCurrentWidget(ui->plotWidgetPage);
+    ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaSpectrum);
+    ui->stackedWidget_DAQb->setCurrentWidget(ui->page_DAQbSpectrum);
     ui->toolButton_startMeasure->setDefaultAction(ui->action_startMeasure);
     ui->toolButton_stopMeasure->setDefaultAction(ui->action_stopMeasure);
     ui->tableWidget_camera->setEnabled(false);
@@ -116,17 +119,15 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
     }
 
     connect(mPCIeCommSdk, &PCIeCommSdk::captureFinished, this, [=](){
+        refreshWaveformPlot(true);
+    });
+    connect(mPCIeCommSdk, &PCIeCommSdk::workFinished, this, [=](){
 #ifdef SMART_INVALID_COMMAND
         if (mExternalTriggerMode){
             QTimer::singleShot(200, this, [=](){
                 emit startMeasure();
             });
 
-            emit ui->pushButton_preview->clicked();
-            // if (mWorkMode == DataProcessor::WorkMode::wmWaveform)
-            //     refreshWaveformPlot();
-            // else
-            //     refreshSpectrumPlot();
             if (ui->checkBox_autoIncrease->isChecked()){
                 ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
             }
@@ -145,11 +146,6 @@ MainWindow::MainWindow(bool isDarkTheme, QWidget *parent)
             ++mContinueMeasuerFailCount;
         }
 
-        emit ui->pushButton_preview->clicked();
-        // if (mWorkMode == DataProcessor::WorkMode::wmWaveform)
-        //     refreshWaveformPlot();
-        // else
-        //     refreshSpectrumPlot();
         if (ui->checkBox_autoIncrease->isChecked()){
             ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
         }
@@ -644,28 +640,28 @@ void MainWindow::initUi()
                 m_plotRefreshTimer->stop();
                 mCommHelper->stopMeasure();
                 mMeasureTimer.invalidate();
-                if (mExternalTriggerMode && mPCIeCommSdk->numberOfDevices()<=0){
-                    QTimer::singleShot(200, this, [=](){
-                        emit startMeasure();
-                    });
+                if (mPCIeCommSdk->numberOfDevices()<=0)
+                {
+                    if (mExternalTriggerMode && mPCIeCommSdk->numberOfDevices()<=0){
+                        QTimer::singleShot(200, this, [=](){
+                            emit startMeasure();
+                        });
 
-                    if (mPCIeCommSdk->numberOfDevices()<=0)
-                        emit ui->pushButton_preview->clicked();
+                        if (ui->checkBox_autoIncrease->isChecked()){
+                            ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
+                        }
 
+                        return;
+                    }
+
+                    SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
+                    ui->action_startMeasure->setEnabled(true);
+                    ui->action_stopMeasure->setEnabled(false);
+                    ui->lineEdit_savePath->setEnabled(true);
+                    ui->spinBox_timeLength->setEnabled(true);
                     if (ui->checkBox_autoIncrease->isChecked()){
                         ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
                     }
-
-                    return;
-                }
-
-                SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS);
-                ui->action_startMeasure->setEnabled(true);
-                ui->action_stopMeasure->setEnabled(false);
-                ui->lineEdit_savePath->setEnabled(true);
-                ui->spinBox_timeLength->setEnabled(true);
-                if (ui->checkBox_autoIncrease->isChecked()){
-                    ui->lineEdit_shotNum->setText(increaseShotNumSuffix(ui->lineEdit_shotNum->text()));
                 }
             }
         }
@@ -691,62 +687,156 @@ void MainWindow::initUi()
         if (mWorkMode == DataProcessor::wmWaveform)
         {
             quint32 count = 0;
-            if (mPCIeCommSdk->numberOfDevices() <= 0)
+            {
+                count = mDAQaCapturedCount.load(std::memory_order_relaxed);// 每个数据包表示160ms波形，波形刷新单位最小1ms
+                if (count > 0)
+                {
+                    QTimer::singleShot(0, this, [=, count]{
+                        ui->spinBox_AwaveformIndex->setMaximum(count * 160);
+                        ui->spinBox_AwaveformIndex->setMinimum(1);
+                        ui->spinBox_AwaveformIndex->blockSignals(true);
+                        ui->spinBox_AwaveformIndex->setValue(count * 160);
+                        ui->spinBox_AwaveformIndex->blockSignals(false);
+                        // refreshWaveformPlot(true); // 由于数据量比较大，暂时屏蔽实时刷新，等测量完毕再刷新
+
+                        ui->spinBox_AspectrumIndex->setMaximum(count * 40);
+                        ui->spinBox_AspectrumIndex->setMinimum(1);
+                        ui->spinBox_AspectrumIndex->blockSignals(true);
+                        ui->spinBox_AspectrumIndex->setValue(count * 40);
+                        ui->spinBox_AspectrumIndex->blockSignals(false);
+                        refreshSpectrumPlot(true);
+                    });
+                }
+            }
+
+            //if (mPCIeCommSdk->numberOfDevices() <= 0)
             {
                 QMutexLocker locker(&mSpectDataMutex);
                 count = m_waveformByChannel.size();
             }
-            else{
-                count = mDAQaCapturedCount.load(std::memory_order_relaxed) * 160;// 每个书包表示160ms
-            }
-
             if (count > 0)
             {
                 QTimer::singleShot(0, this, [=, count]{
-                    ui->spinBox_waveformIndex->setMaximum(count);
-                    ui->spinBox_waveformIndex->setMinimum(1);
-                    ui->spinBox_waveformIndex->setValue(count);
-                    //refreshWaveformPlot();
+                    ui->spinBox_BwaveformIndex->setMaximum(count);
+                    ui->spinBox_BwaveformIndex->setMinimum(1);
+                    ui->spinBox_BwaveformIndex->blockSignals(true);
+                    ui->spinBox_BwaveformIndex->setValue(count);
+                    ui->spinBox_BwaveformIndex->blockSignals(false);
+                    refreshWaveformPlot(false);
+                });
+            }
+
+        }
+        else
+        {
+            quint32 count = 0;
+            {
+                count = mDAQaCapturedCount.load(std::memory_order_relaxed);// 每个数据包表示160ms，能谱刷新单位最小4ms
+            }
+            if (count > 0)
+            {
+                QTimer::singleShot(0, this, [=, count]{
+                    ui->spinBox_AwaveformIndex->setMaximum(count * 160);
+                    ui->spinBox_AwaveformIndex->setMinimum(1);
+                    ui->spinBox_AwaveformIndex->blockSignals(true);
+                    ui->spinBox_AwaveformIndex->setValue(count * 160);
+                    ui->spinBox_AwaveformIndex->blockSignals(false);
+
+                    ui->spinBox_AspectrumIndex->setMaximum(count * 40);
+                    ui->spinBox_AspectrumIndex->setMinimum(1);
+                    ui->spinBox_AspectrumIndex->blockSignals(true);
+                    ui->spinBox_AspectrumIndex->setValue(count * 40);
+                    ui->spinBox_AspectrumIndex->blockSignals(false);
+                    refreshSpectrumPlot(true);
+                });
+            }
+
+            //if (mPCIeCommSdk->numberOfDevices() <= 0)
+            {
+                QMutexLocker locker(&mSpectDataMutex);
+                count = m_spectrumByChannel.size();
+            }
+            if (count > 0)
+            {
+                QTimer::singleShot(0, this, [=, count]{
+                    ui->spinBox_BspectrumIndex->setMaximum(count);
+                    ui->spinBox_BspectrumIndex->setMinimum(1);
+                    ui->spinBox_BspectrumIndex->blockSignals(true);
+                    ui->spinBox_BspectrumIndex->setValue(count);
+                    ui->spinBox_BspectrumIndex->blockSignals(false);
+                    refreshSpectrumPlot(false);
                 });
             }
         }
-        // else
-        //     refreshSpectrumPlot();
     });
-    connect(ui->toolButton_lastSpectrum, &QToolButton::clicked, this, [=]{
-        ui->spinBox_spectrumIndex->setValue(ui->spinBox_spectrumIndex->maximum());
-        refreshSpectrumPlot();
+    connect(ui->toolButton_lastASpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_AspectrumIndex->setValue(ui->spinBox_AspectrumIndex->maximum());
     });
-    connect(ui->toolButton_forwardSpectrum, &QToolButton::clicked, this, [=]{
-        ui->spinBox_spectrumIndex->setValue(ui->spinBox_spectrumIndex->value() + 1);
-        refreshSpectrumPlot();
+    connect(ui->toolButton_forwardASpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_AspectrumIndex->setValue(ui->spinBox_AspectrumIndex->value() + 1);
     });
-    connect(ui->toolButton_backSpectrum, &QToolButton::clicked, this, [=]{
-        ui->spinBox_spectrumIndex->setValue(ui->spinBox_spectrumIndex->value() - 1);
-        refreshSpectrumPlot();
+    connect(ui->toolButton_backASpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_AspectrumIndex->setValue(ui->spinBox_AspectrumIndex->value() - 1);
     });
-    connect(ui->toolButton_firstSpectrum, &QToolButton::clicked, this, [=]{
-        ui->spinBox_spectrumIndex->setValue(ui->spinBox_spectrumIndex->minimum());
-        refreshSpectrumPlot();
+    connect(ui->toolButton_firstASpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_AspectrumIndex->setValue(ui->spinBox_AspectrumIndex->minimum());
     });
-    connect(ui->spinBox_spectrumIndex, &QSpinBox::editingFinished, this, &MainWindow::refreshSpectrumPlot);
-    connect(ui->toolButton_lastWaveform, &QToolButton::clicked, this, [=]{
-        ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->maximum());
-        refreshWaveformPlot();
+    connect(ui->spinBox_AspectrumIndex, &QSpinBox::textChanged, this, [=]{
+        refreshSpectrumPlot(true);
     });
-    connect(ui->toolButton_forwardWaveform, &QToolButton::clicked, this, [=]{
-        ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->value() + 1);
-        refreshWaveformPlot();
+    //connect(ui->spinBox_AspectrumIndex, &QSpinBox::editingFinished, this, &MainWindow::refreshSpectrumPlot);
+
+    connect(ui->toolButton_lastBSpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_BspectrumIndex->setValue(ui->spinBox_BspectrumIndex->maximum());
     });
-    connect(ui->toolButton_backWaveform, &QToolButton::clicked, this, [=]{
-        ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->value() - 1);
-        refreshWaveformPlot();
+    connect(ui->toolButton_forwardBSpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_BspectrumIndex->setValue(ui->spinBox_BspectrumIndex->value() + 1);
     });
-    connect(ui->toolButton_firstWaveform, &QToolButton::clicked, this, [=]{
-        ui->spinBox_waveformIndex->setValue(ui->spinBox_waveformIndex->minimum());
-        refreshWaveformPlot();
+    connect(ui->toolButton_backBSpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_BspectrumIndex->setValue(ui->spinBox_BspectrumIndex->value() - 1);
     });
-    connect(ui->spinBox_waveformIndex, &QSpinBox::editingFinished, this, &MainWindow::refreshWaveformPlot);
+    connect(ui->toolButton_firstBSpectrum, &QToolButton::clicked, this, [=]{
+        ui->spinBox_BspectrumIndex->setValue(ui->spinBox_BspectrumIndex->minimum());
+    });
+    connect(ui->spinBox_BspectrumIndex, &QSpinBox::textChanged, this, [=]{
+        refreshSpectrumPlot(false);
+    });
+    //connect(ui->spinBox_BspectrumIndex, &QSpinBox::editingFinished, this, &MainWindow::refreshSpectrumPlot);
+
+    connect(ui->toolButton_lastAWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_AwaveformIndex->setValue(ui->spinBox_AwaveformIndex->maximum());
+    });
+    connect(ui->toolButton_forwardAWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_AwaveformIndex->setValue(ui->spinBox_AwaveformIndex->value() + 1);
+    });
+    connect(ui->toolButton_backAWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_AwaveformIndex->setValue(ui->spinBox_AwaveformIndex->value() - 1);
+    });
+    connect(ui->toolButton_firstAWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_AwaveformIndex->setValue(ui->spinBox_AwaveformIndex->minimum());
+    });
+    connect(ui->spinBox_AwaveformIndex, &QSpinBox::textChanged, this, [=]{
+        refreshWaveformPlot(true);
+    });
+    //connect(ui->spinBox_BwaveformIndex, &QSpinBox::editingFinished, this, &MainWindow::refreshWaveformPlot);
+
+    connect(ui->toolButton_lastBWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_BwaveformIndex->setValue(ui->spinBox_BwaveformIndex->maximum());
+    });
+    connect(ui->toolButton_forwardBWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_BwaveformIndex->setValue(ui->spinBox_BwaveformIndex->value() + 1);
+    });
+    connect(ui->toolButton_backBWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_BwaveformIndex->setValue(ui->spinBox_BwaveformIndex->value() - 1);
+    });
+    connect(ui->toolButton_firstBWaveform, &QToolButton::clicked, this, [=]{
+        ui->spinBox_BwaveformIndex->setValue(ui->spinBox_BwaveformIndex->minimum());
+    });
+    connect(ui->spinBox_BwaveformIndex, &QSpinBox::textChanged, this, [=]{
+        refreshWaveformPlot(false);
+    });
+    //connect(ui->spinBox_BwaveformIndex, &QSpinBox::editingFinished, this, &MainWindow::refreshWaveformPlot);
+
     connect(ui->spinBox_timeStart, &QSpinBox::editingFinished, this, &MainWindow::spinBoxEditingFinished);
     connect(ui->spinBox_timeStep, &QSpinBox::editingFinished, this, &MainWindow::spinBoxEditingFinished);
 
@@ -1398,18 +1488,12 @@ void MainWindow::initUi()
     }, Qt::QueuedConnection);
 
     connect(ui->comboBox_horCamera, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int){
-        // emit ui->pushButton_preview->clicked();
-        if (mWorkMode == DataProcessor::wmWaveform)
-            refreshWaveformPlot();
-        else
-            refreshSpectrumPlot();
+        refreshWaveformPlot(true);
+        refreshSpectrumPlot(true);
     });
     connect(ui->comboBox_verCamera, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [=](int){
-        // emit ui->pushButton_preview->clicked();
-        if (mWorkMode == DataProcessor::wmWaveform)
-            refreshWaveformPlot();
-        else
-            refreshSpectrumPlot();
+        refreshWaveformPlot(true);
+        refreshSpectrumPlot(true);
     });
 
     connect(qGoodStateHolder, &QGoodStateHolder::currentThemeChanged, this, [=](){
@@ -1546,6 +1630,59 @@ void MainWindow::initUi()
     ui->spinBox_timeLength->setMaximum(12800);
     ui->spinBox_timeLength->setValue(12800);
 #endif //SINGLE_BOARD_MODE
+
+    connect(ui->checkBox_aWaveformSelWaveform, &QCheckBox::clicked, this, [=](bool checked){
+        // if (checked)
+        // {
+        //     ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaWaveform);
+        // }
+        // else
+        // {
+        //     ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaSpectrum);
+        // }
+        ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaWaveform);
+        ui->checkBox_aWaveformSelWaveform->setChecked(true);
+        ui->checkBox_aWaveformSelSpectrum->setChecked(false);
+    });
+    connect(ui->checkBox_aWaveformSelSpectrum, &QCheckBox::clicked, this, [=](bool checked){
+        // if (checked)
+        // {
+        //     ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaSpectrum);
+        // }
+        // else
+        // {
+        //     ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaWaveform);
+        // }
+        ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaSpectrum);
+        ui->checkBox_aWaveformSelWaveform->setChecked(true);
+        ui->checkBox_aWaveformSelSpectrum->setChecked(false);
+    });
+    connect(ui->checkBox_aSpectrumSelWaveform, &QCheckBox::clicked, this, [=](bool checked){
+        // if (checked)
+        // {
+        //     ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaWaveform);
+        // }
+        // else
+        // {
+        //     ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaSpectrum);
+        // }
+        ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaWaveform);
+        ui->checkBox_aSpectrumSelWaveform->setChecked(false);
+        ui->checkBox_aSpectrumSelSpectrum->setChecked(true);
+    });
+    connect(ui->checkBox_aSpectrumSelSpectrum, &QCheckBox::clicked, this, [=](bool checked){
+        // if (checked)
+        // {
+        //     ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaSpectrum);
+        // }
+        // else
+        // {
+        //     ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaWaveform);
+        // }
+        ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaSpectrum);
+        ui->checkBox_aSpectrumSelWaveform->setChecked(false);
+        ui->checkBox_aSpectrumSelSpectrum->setChecked(true);
+    });
 }
 
 
@@ -2127,9 +2264,9 @@ void MainWindow::on_action_typeLSD_triggered(bool checked)
         ui->pushButton_selChannel2->hide();
 
         if (!ui->action_status->isChecked()){
-            ui->plot_neutronSpectrum->show();
-            ui->plot_gammaSpectrum->show();
-            ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
+            ui->stackedWidget_DAQa->show();
+            ui->stackedWidget_DAQb->show();
+            ui->stackedWidget->setCurrentWidget(ui->plotWidgetPage);
         }
         this->setWindowTitle(QApplication::applicationName() + "液闪探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "液闪探测器" + " - " + APP_VERSION);
@@ -2158,9 +2295,9 @@ void MainWindow::on_action_typePSD_triggered(bool checked)
         ui->pushButton_selChannel2->show();
 
         if (!ui->action_status->isChecked()){
-            ui->plot_neutronSpectrum->show();
-            ui->plot_gammaSpectrum->hide();
-            ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
+            ui->stackedWidget_DAQa->hide();
+            ui->stackedWidget_DAQb->show();
+            ui->stackedWidget->setCurrentWidget(ui->plotWidgetPage);
         }
         this->setWindowTitle(QApplication::applicationName() + "塑闪探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "塑闪探测器" + " - " + APP_VERSION);
@@ -2190,10 +2327,10 @@ void MainWindow::on_action_typeLBD_triggered(bool checked)
 
         if (!ui->action_status->isChecked()){
 #ifndef SINGLE_BOARD_MODE
-            ui->plot_neutronSpectrum->hide();
+            ui->stackedWidget_DAQb->hide();
 #endif
-            ui->plot_gammaSpectrum->show();
-            ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
+            ui->stackedWidget_DAQa->show();
+            ui->stackedWidget->setCurrentWidget(ui->plotWidgetPage);
         }
         this->setWindowTitle(QApplication::applicationName() + "溴化镧探测器" + " - " + APP_VERSION);
         mainWindow->setWindowTitle(QApplication::applicationName() + "溴化镧探测器" + " - " + APP_VERSION);
@@ -2314,11 +2451,12 @@ void MainWindow::onStartMeasure()
     m_spectrumByChannel.clear();
     m_waveformByChannel.clear();
     mDAQaCapturedCount.store(0, std::memory_order_relaxed);
-    quint32 stepTime = ui->spinBox_timeStep->value();
-    quint32 startTime = ui->spinBox_timeStart->value();
-    quint32 stopTime = ui->spinBox_timeLength->value();
-    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
-    ui->spinBox_waveformIndex->setMaximum(stopTime);
+    ui->spinBox_timeStep->setValue(4);
+    // quint32 stepTime = ui->spinBox_timeStep->value();
+    // quint32 startTime = ui->spinBox_timeStart->value();
+    // quint32 stopTime = ui->spinBox_timeLength->value();
+    // ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / stepTime);
+    // ui->spinBox_waveformIndex->setMaximum(stopTime);
     mCountdownDurationMs = ui->spinBox_timeLength->value();
     mPCIeCommSdk->setCaptureTimelength(mCountdownDurationMs);
     mPCIeCommSdk->setTriggerThreshold();
@@ -2328,13 +2466,12 @@ void MainWindow::onStartMeasure()
     mPCIeCommSdk->setTriggerMode(!mExternalTriggerMode);
 
 #ifdef SINGLE_BOARD_MODE
+    ui->stackedWidget_DAQa->setCurrentWidget(ui->page_DAQaSpectrum);
     if (mWorkMode == DataProcessor::wmWaveform){
-        ui->groupBox_spectrumOption->hide();
-        ui->stackedWidget->setCurrentWidget(ui->plotWaveformWidgetPage);
+        ui->stackedWidget_DAQb->setCurrentWidget(ui->page_DAQbWaveform);
     }
     else{
-        ui->groupBox_spectrumOption->show();
-        ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
+        ui->stackedWidget_DAQb->setCurrentWidget(ui->page_DAQbSpectrum);
     }
 #endif //SINGLE_BOARD_MODE
 
@@ -2451,12 +2588,6 @@ void MainWindow::onPrepareMeasure()
 
 void MainWindow::on_pushButton_preview_clicked()
 {
-    if (mWorkMode == DataProcessor::WorkMode::wmWaveform){
-        ui->spinBox_waveformIndex->setValue(1);
-        refreshWaveformPlot();
-        return;
-    }
-
     const quint32 specIndex = 1;
     const quint32 startTime = 0;
     const quint32 stopTime = ui->spinBox_timeLength->value();
@@ -2518,6 +2649,7 @@ void MainWindow::on_pushButton_preview_clicked()
 #endif // SINGLE_BOARD_MODE
 
     // 小数采
+    if (mWorkMode == DataProcessor::wmSpectrum)
     {
         const quint32 PER_SPECTRUM_TIMELENGTH_MS = 4;// 单一能谱刷新时长 4ms
 
@@ -2622,7 +2754,7 @@ void MainWindow::on_action_status_triggered(bool checked)
     else{
         // QPixmap pixmap = maskPixmap(QPixmap(":/resource/image/status.png"), QSize(36, 24), Qt::black);
         // ui->action_status->setIcon(QIcon(pixmap));
-        ui->stackedWidget->setCurrentWidget(ui->plotSpectrumWidgetPage);
+        ui->stackedWidget->setCurrentWidget(ui->plotWidgetPage);
     }
 }
 
@@ -3019,39 +3151,16 @@ void MainWindow::updateCountRatePlotData(double FPGATime, double countRate)
     // mCountRatePlotReady.store(true);
 }
 
-void MainWindow::refreshSpectrumPlot()
+void MainWindow::refreshSpectrumPlot(bool isASpectrum)
 {
-    quint32 specIndex = ui->spinBox_spectrumIndex->value();
-    if (specIndex<=0)
-        return;
-
     quint32 stepTime = ui->spinBox_timeStep->value();
     quint32 startTime = ui->spinBox_timeStart->value();
 
     // 全采样
-    {
-        // QMutexLocker locker(&mSpectDataMutex);
-        // const QVector<SpectrumEntry> &spectra = m_spectrumByChannel[0];
-
-        // // 根据步长，计算累积能谱
-        // QVector<double> x(496, 0);
-        // for (int i=0; i<496; ++i){
-        //     x[i] += i+1;
-        // }
-
-        // QVector<double> y(496, 0);
-        // for (const auto& entry : spectra){
-        //     if (entry.sequence >= startTime && entry.sequence < stopTime){
-        //         for (int i=0; i<1024; ++i){
-        //             y[i] += entry.spectrum[i];
-        //         }
-        //     }
-        // }
-
-        // ui->plot_neutronSpectrum->graph(0)->data()->clear();
-        // ui->plot_neutronSpectrum->graph(0)->setData(x, y);
-        // ui->plot_neutronSpectrum->rescaleAxes(true);
-        // ui->plot_neutronSpectrum->replot(QCustomPlot::rpQueuedReplot);
+    if (isASpectrum){
+        quint32 specIndex = ui->spinBox_AspectrumIndex->value();
+        if (specIndex<=0)
+            return;
 
 #ifdef SINGLE_BOARD_MODE
         // 水平相机
@@ -3105,10 +3214,16 @@ void MainWindow::refreshSpectrumPlot()
                                                 });
         }
 #endif // SINGLE_BOARD_MODE
+
+        return ;
     }
 
     // 小数采
     {
+        qint32 specIndex = ui->spinBox_BspectrumIndex->value() - 1;
+        if (specIndex<0)
+            return;
+
         startTime += specIndex * stepTime;
         quint32 stopTime = startTime  + stepTime;
         const quint32 PER_SPECTRUM_TIMELENGTH_MS = 4;// 单一能谱刷新时长 4ms
@@ -3139,14 +3254,14 @@ void MainWindow::refreshSpectrumPlot()
 
 }
 
-void MainWindow::refreshWaveformPlot()
+void MainWindow::refreshWaveformPlot(bool isAWaveform)
 {
-    quint32 waveformIndex = ui->spinBox_waveformIndex->value();
-    if (waveformIndex<=0)
-        return;
-
     // 全采样
-    {
+    if (isAWaveform){
+        quint32 waveformIndex = ui->spinBox_AwaveformIndex->value();
+        if (waveformIndex<=0)
+            return;
+
         quint32 startTime = waveformIndex - 1;
         quint32 stopTime = startTime + 1;
 
@@ -3194,10 +3309,16 @@ void MainWindow::refreshWaveformPlot()
             }, Qt::QueuedConnection);
         }
 #endif // SINGLE_BOARD_MODE
+
+        return;
     }
 
     // 小数采
     {
+        qint32 waveformIndex = ui->spinBox_BwaveformIndex->value() - 1;
+        if (waveformIndex<0)
+            return;
+
         // 不同的波形长度，时间不一样
         /*
          * Auto
@@ -3207,18 +3328,18 @@ void MainWindow::refreshWaveformPlot()
             256         6400        2ms         512
             512         12800       1ms         1024
         */
-        if (mTriggerMode == DataProcessor::TriggerMode::tmTimer){
-            quint32 WAVEFORM_TIMELENGTH_MS  = 8;
-            switch (mWaveformLength)
-            {
-            case 64: WAVEFORM_TIMELENGTH_MS = 8; break;
-            case 128: WAVEFORM_TIMELENGTH_MS = 4; break;
-            case 256: WAVEFORM_TIMELENGTH_MS = 2; break;
-            case 512: WAVEFORM_TIMELENGTH_MS = 1; break;
-            }
+        // if (mTriggerMode == DataProcessor::TriggerMode::tmTimer){
+        //     quint32 WAVEFORM_TIMELENGTH_MS  = 8;
+        //     switch (mWaveformLength)
+        //     {
+        //     case 64: WAVEFORM_TIMELENGTH_MS = 8; break;
+        //     case 128: WAVEFORM_TIMELENGTH_MS = 4; break;
+        //     case 256: WAVEFORM_TIMELENGTH_MS = 2; break;
+        //     case 512: WAVEFORM_TIMELENGTH_MS = 1; break;
+        //     }
 
-            waveformIndex = (waveformIndex+WAVEFORM_TIMELENGTH_MS-1) / WAVEFORM_TIMELENGTH_MS;
-        }
+        //     waveformIndex = (waveformIndex+WAVEFORM_TIMELENGTH_MS-1) / WAVEFORM_TIMELENGTH_MS;
+        // }
 
         QMutexLocker locker(&mSpectDataMutex);
         const QVector<WaveformEntry> &waveforms = m_waveformByChannel;
@@ -3300,9 +3421,11 @@ void MainWindow::spinBoxEditingFinished()
     quint32 stepTime = ui->spinBox_timeStep->value();
     quint32 startTime = ui->spinBox_timeStart->value();
     quint32 stopTime = ui->spinBox_timeLength->value();
-    ui->spinBox_spectrumIndex->setMaximum((stopTime - startTime) / (stepTime));// *4->能谱刷新时长是4ms
+    ui->spinBox_AspectrumIndex->setMaximum((stopTime - startTime) / (stepTime));// *4->能谱刷新时长是4ms
+    ui->spinBox_BspectrumIndex->setMaximum((stopTime - startTime) / (stepTime));// *4->能谱刷新时长是4ms
 
     if (spinBox == ui->spinBox_timeStep){
-        refreshSpectrumPlot();
+        refreshSpectrumPlot(true);
+        refreshSpectrumPlot(false);
     }
 }

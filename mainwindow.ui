@@ -606,7 +606,7 @@
                     </spacer>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_firstSpectrum">
+                    <widget class="QToolButton" name="toolButton_firstASpectrum">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -626,7 +626,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_backSpectrum">
+                    <widget class="QToolButton" name="toolButton_backASpectrum">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
@@ -653,7 +653,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QSpinBox" name="spinBox_spectrumIndex">
+                    <widget class="QSpinBox" name="spinBox_AspectrumIndex">
                      <property name="minimumSize">
                       <size>
                        <width>60</width>
@@ -669,7 +669,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_forwardSpectrum">
+                    <widget class="QToolButton" name="toolButton_forwardASpectrum">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
@@ -689,7 +689,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_lastSpectrum">
+                    <widget class="QToolButton" name="toolButton_lastASpectrum">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
@@ -703,14 +703,14 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QRadioButton" name="radioButton">
+                    <widget class="QCheckBox" name="checkBox_aSpectrumSelWaveform">
                      <property name="text">
                       <string>波形</string>
                      </property>
                     </widget>
                    </item>
                    <item>
-                    <widget class="QRadioButton" name="radioButton_2">
+                    <widget class="QCheckBox" name="checkBox_aSpectrumSelSpectrum">
                      <property name="text">
                       <string>能谱</string>
                      </property>
@@ -786,7 +786,7 @@
                     </spacer>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_firstWaveform_2">
+                    <widget class="QToolButton" name="toolButton_firstAWaveform">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -806,7 +806,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_backWaveform_2">
+                    <widget class="QToolButton" name="toolButton_backAWaveform">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
@@ -833,7 +833,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QSpinBox" name="spinBox_waveformIndex_2">
+                    <widget class="QSpinBox" name="spinBox_AwaveformIndex">
                      <property name="minimumSize">
                       <size>
                        <width>60</width>
@@ -849,7 +849,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_forwardWaveform_2">
+                    <widget class="QToolButton" name="toolButton_forwardAWaveform">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
@@ -869,7 +869,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_lastWaveform_2">
+                    <widget class="QToolButton" name="toolButton_lastAWaveform">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
@@ -883,7 +883,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QRadioButton" name="radioButton_3">
+                    <widget class="QCheckBox" name="checkBox_aWaveformSelWaveform">
                      <property name="text">
                       <string>波形</string>
                      </property>
@@ -893,7 +893,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QRadioButton" name="radioButton_4">
+                    <widget class="QCheckBox" name="checkBox_aWaveformSelSpectrum">
                      <property name="text">
                       <string>能谱</string>
                      </property>
@@ -922,7 +922,7 @@
             <item>
              <widget class="QStackedWidget" name="stackedWidget_DAQb">
               <property name="currentIndex">
-               <number>0</number>
+               <number>1</number>
               </property>
               <widget class="QWidget" name="page_DAQbWaveform">
                <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -979,7 +979,7 @@
                     </spacer>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_firstWaveform">
+                    <widget class="QToolButton" name="toolButton_firstBWaveform">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -999,7 +999,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_backWaveform">
+                    <widget class="QToolButton" name="toolButton_backBWaveform">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
@@ -1026,7 +1026,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QSpinBox" name="spinBox_waveformIndex">
+                    <widget class="QSpinBox" name="spinBox_BwaveformIndex">
                      <property name="minimumSize">
                       <size>
                        <width>60</width>
@@ -1042,7 +1042,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_forwardWaveform">
+                    <widget class="QToolButton" name="toolButton_forwardBWaveform">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
@@ -1062,7 +1062,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_lastWaveform">
+                    <widget class="QToolButton" name="toolButton_lastBWaveform">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
@@ -1072,13 +1072,6 @@
                        <width>16</width>
                        <height>16</height>
                       </size>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QCheckBox" name="checkBox_waveformSynRefresh">
-                     <property name="text">
-                      <string>同步刷新</string>
                      </property>
                     </widget>
                    </item>
@@ -1149,7 +1142,7 @@
                     </spacer>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_firstSpectrum_2">
+                    <widget class="QToolButton" name="toolButton_firstBSpectrum">
                      <property name="sizePolicy">
                       <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                        <horstretch>0</horstretch>
@@ -1169,7 +1162,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_backSpectrum_2">
+                    <widget class="QToolButton" name="toolButton_backBSpectrum">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/rewind-back.png</normaloff>:/resource/image/rewind-back.png</iconset>
@@ -1196,7 +1189,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QSpinBox" name="spinBox_spectrumIndex_2">
+                    <widget class="QSpinBox" name="spinBox_BspectrumIndex">
                      <property name="minimumSize">
                       <size>
                        <width>60</width>
@@ -1212,7 +1205,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_forwardSpectrum_2">
+                    <widget class="QToolButton" name="toolButton_forwardBSpectrum">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/rewind-forward.png</normaloff>:/resource/image/rewind-forward.png</iconset>
@@ -1232,7 +1225,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QToolButton" name="toolButton_lastSpectrum_2">
+                    <widget class="QToolButton" name="toolButton_lastBSpectrum">
                      <property name="icon">
                       <iconset resource="lresource.qrc">
                        <normaloff>:/resource/image/play-next.png</normaloff>:/resource/image/play-next.png</iconset>
@@ -1242,13 +1235,6 @@
                        <width>16</width>
                        <height>16</height>
                       </size>
-                     </property>
-                    </widget>
-                   </item>
-                   <item>
-                    <widget class="QCheckBox" name="checkBox_synRefresh">
-                     <property name="text">
-                      <string>同步刷新</string>
                      </property>
                     </widget>
                    </item>
@@ -1565,18 +1551,6 @@
     </item>
     <item>
      <widget class="QWidget" name="rightVboxWidget" native="true">
-      <property name="minimumSize">
-       <size>
-        <width>300</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>300</width>
-        <height>16777215</height>
-       </size>
-      </property>
       <layout class="QHBoxLayout" name="horizontalLayout_16">
        <property name="spacing">
         <number>0</number>

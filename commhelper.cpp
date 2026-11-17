@@ -401,6 +401,9 @@ void CommHelper::initSocket()
 {
     // 初始化UDP
 #ifdef SINGLE_BOARD_MODE
+    //屏蔽libhv日志输出
+    hlog_disable();
+
     mTcpServer = new hv::TcpServer();
     mTcpServer->setThreadNum(32);
     mTcpServer->onConnection = [&](const hv::SocketChannelPtr& channel)

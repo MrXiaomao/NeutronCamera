@@ -56,9 +56,9 @@ int main(int argc, char *argv[])
 
     QFont font = QApplication::font();
 #if defined(Q_OS_WIN) && defined(Q_CC_MSVC)
-    int fontId = QFontDatabase::addApplicationFont(QApplication::applicationDirPath() + "/inziu-iosevkaCC-SC-regular.ttf");
+    int fontId = QFontDatabase::addApplicationFont(QApplication::applicationDirPath() + "/SourceHanSansCN-Normal.ttf");
 #else
-    int fontId = QFontDatabase::addApplicationFont(QStringLiteral(":/font/font/inziu-iosevkaCC-SC-regular.ttf"));
+    int fontId = QFontDatabase::addApplicationFont(QStringLiteral(":/font/font/SourceHanSansCN-Normal.ttf"));
 #endif
     QStringList fontFamilies = QFontDatabase::applicationFontFamilies(fontId);
     if (fontFamilies.size() > 0) {
@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
             QCoreApplication::exit(0);
         }, Qt::DirectConnection);
     }
-    mMainWindow->setWindowIcon(QIcon(":/logo.ico"));
+    mMainWindow->setWindowIcon(QIcon(":/resource/image/LOGO.ico"));
     w.setupUiHelper(mMainWindow, isDarkTheme);
 
     // 当有新的客户端连接时，触发激活窗口

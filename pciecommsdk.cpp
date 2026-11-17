@@ -256,6 +256,7 @@ void PCIeCommSdk::startCapture(quint32 deviceIndex, QString fileSavePath, quint3
 
         //启动写文件线程
         mDeviceThreadRunning[deviceIndex] = true;
+        mDeviceThreadWorking[deviceIndex] = true;
         if (mMapDeviceCaptureThread[deviceIndex]->isRunning())
             mMapDeviceCaptureThread[deviceIndex]->resume();
         else
@@ -295,8 +296,10 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMilli
             mActiveDeviceIndex = deviceIndex;
             break;
         }
-        else
+        else{
             mDeviceThreadRunning[deviceIndex] = false;
+            mDeviceThreadWorking[deviceIndex] = false;
+        }
     }
 
     // bool isDDR1 = channelAurora == 0;
@@ -318,7 +321,10 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMilli
         if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
             startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureModes & mmTest, mMeasureModes & mmPreMeasure);
         else
+        {
             mDeviceThreadRunning[deviceIndex] = false;
+            mDeviceThreadWorking[deviceIndex] = false;
+        }
     }
 #endif // SINGLE_BOARD_MODE
 }
@@ -1949,6 +1955,7 @@ void PCIeCommSdk::initCaptureThreads()
         connect(captureThread, &CaptureThread::threadExitOccurred, this, [=](quint32 /*index*/){
             mMapDeviceCaptureThread.remove(deviceIndex);
             mDeviceThreadRunning[deviceIndex] = false;
+            mDeviceThreadWorking[deviceIndex] = false;
         });
         connect(captureThread, &CaptureThread::captureFinished, this, [=](quint32 /*index*/, bool isDDR1){
             mDeviceThreadRunning[deviceIndex] = false;
@@ -1971,6 +1978,24 @@ void PCIeCommSdk::initCaptureThreads()
 #else
                 qInfo().noquote() << tr("数据采集完毕！");
 #endif
+            }
+        }, Qt::DirectConnection);
+        connect(captureThread, &CaptureThread::workFinished, this, [=](quint32 /*index*/, bool isDDR1){
+            mDeviceThreadWorking[deviceIndex] = false;
+
+            bool allWorkFinished = true;
+            for (int deviceIndex = 1; deviceIndex <= numberOfDevices() * 2; ++deviceIndex)
+            {
+                if (mDeviceThreadWorking[deviceIndex])
+                {
+                    allWorkFinished = false;
+                    break;
+                }
+            }
+
+            if (allWorkFinished)
+            {
+                emit workFinished();
             }
         }, Qt::DirectConnection);
         connect(captureThread, &CaptureThread::externalSignalTriggered, this, [=](quint32 /*index*/){
@@ -2413,8 +2438,6 @@ bool CaptureThread::checkDataError()
         qCritical().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 能谱帧序号异常, 索引 = ") << spectrumErrorIndex;
     }
 
-    saveAllData();
-
     // 清空内存耗时，暂时屏蔽
     // for (int i=0; i<this->mCapturedRef; ++i){
     //     memset(mDDRWaveformDatas[i].data(), 0, mDDRWaveformDatas[i].size());
@@ -2566,57 +2589,93 @@ static bool writeNoBuffering(const QString& path, const QByteArray& data)
 
 void CaptureThread::saveAllData()
 {
-    if (mCapturedRef <= 0) return;
+    if (mCapturedRef <= 0) {
+        emit workFinished(mPhysicalNo, mIsDDR1);
+        return;
+    }
 
     if (mEnableTestMode/*测试模式*//* || mDataError数据出现错误*/){
+        emit workFinished(mPhysicalNo, mIsDDR1);
         return;
     }
 
     QDir().mkpath(mSaveFilePath);   // 确保目录存在
     const QString ddrName = (mIsDDR1 ? "DDR1" : "DDR2");
-
-    qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 数据正在存储到硬盘中，请等待...");
-
-    struct SaveTask { QString fileName; const QByteArray* data; };
-    QVector<SaveTask> tasks;
-    tasks.reserve(mCapturedRef * 2);
-
     const QString base = QString("%1/%2%3")
                              .arg(mSaveFilePath).arg(mPhysicalNo)
                              .arg(mIsDDR1 ? QStringLiteral("A") : QStringLiteral("B"));
 
-    for (int i = 0; i < mCapturedRef; ++i) {
-        // data 文件 ← 波形数据（修正：原来错用了 mRAMSpectrumDatas 的长度）
-        tasks.append({ QString("%1data%2.bin").arg(base).arg(i + 1),
-                      &mDDRWaveformDatas.at(i) });
-        // spec 文件 ← 能谱数据
-        tasks.append({ QString("%1spec%2.bin").arg(base).arg(i + 1),
-                      &mRAMSpectrumDatas.at(i) });
+    qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 数据正在存储到硬盘中，请等待...");
+
+    if (1)
+    {
+        for (int i = 0; i < mCapturedRef; ++i) {
+            if (mInterruptSave.load()) return;   // std::atomic<bool>
+
+            {
+                QFile file(QString("%1data%2.bin").arg(base).arg(i + 1));
+                if (!file.open(QIODevice::WriteOnly)) {
+                    qWarning() << QStringLiteral("打开失败:") << file.fileName() << file.errorString();
+                    return;
+                }
+                if (file.write(mDDRWaveformDatas.at(i)) != mDDRWaveformDatas.at(i).size()) {
+                    qWarning() << QStringLiteral("写入失败:") << file.fileName();
+                }
+            }
+
+            {
+                QFile file(QString("%1spec%2.bin").arg(base).arg(i + 1));
+                if (!file.open(QIODevice::WriteOnly)) {
+                    qWarning() << QStringLiteral("打开失败:") << file.fileName() << file.errorString();
+                    return;
+                }
+                if (file.write(mRAMSpectrumDatas.at(i)) != mRAMSpectrumDatas.at(i).size()) {
+                    qWarning() << QStringLiteral("写入失败:") << file.fileName();
+                }
+            }
+        }
+    }
+    else
+    {
+        struct SaveTask { QString fileName; const QByteArray* data; };
+        QVector<SaveTask> tasks;
+        tasks.reserve(mCapturedRef * 2);
+
+        for (int i = 0; i < mCapturedRef; ++i) {
+            // data 文件 ← 波形数据（修正：原来错用了 mRAMSpectrumDatas 的长度）
+            tasks.append({ QString("%1data%2.bin").arg(base).arg(i + 1),
+                          &mDDRWaveformDatas.at(i) });
+            // spec 文件 ← 能谱数据
+            tasks.append({ QString("%1spec%2.bin").arg(base).arg(i + 1),
+                          &mRAMSpectrumDatas.at(i) });
+        }
+
+        QAtomicInt failed(0);
+
+        int oldMax = QThreadPool::globalInstance()->maxThreadCount();
+        QThreadPool::globalInstance()->setMaxThreadCount(
+            qBound(4, QThread::idealThreadCount() * 2, 16));
+
+        QtConcurrent::blockingMap(tasks, [&](const SaveTask& t) {
+            if (mInterruptSave.load()) return;   // std::atomic<bool>
+
+            QFile file(t.fileName);
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Unbuffered)) {
+                qWarning() << QStringLiteral("打开失败:") << t.fileName << file.errorString();
+                failed.fetchAndAddRelaxed(1);
+                return;
+            }
+            if (file.write(*t.data) != t.data->size()) {
+                qWarning() << QStringLiteral("写入失败:") << t.fileName;
+                failed.fetchAndAddRelaxed(1);
+            }
+        });
+
+        QThreadPool::globalInstance()->setMaxThreadCount(oldMax);
     }
 
-    QAtomicInt failed(0);
-
-    int oldMax = QThreadPool::globalInstance()->maxThreadCount();
-    QThreadPool::globalInstance()->setMaxThreadCount(
-        qBound(4, QThread::idealThreadCount() * 2, 16));
-
-    QtConcurrent::blockingMap(tasks, [&](const SaveTask& t) {
-        if (mInterruptSave.load()) return;   // std::atomic<bool>
-
-        QFile file(t.fileName);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Unbuffered)) {
-            qWarning() << QStringLiteral("打开失败:") << t.fileName << file.errorString();
-            failed.fetchAndAddRelaxed(1);
-            return;
-        }
-        if (file.write(*t.data) != t.data->size()) {
-            qWarning() << QStringLiteral("写入失败:") << t.fileName;
-            failed.fetchAndAddRelaxed(1);
-        }
-    });
-
-    QThreadPool::globalInstance()->setMaxThreadCount(oldMax);
     qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 数据已经全部存储到硬盘中");
+    emit workFinished(mPhysicalNo, mIsDDR1);
 }
 
 bool CaptureThread::dataExistError()
@@ -3067,11 +3126,17 @@ void CaptureThread::run()
 #else
             qInfo().nospace().noquote() << QStringLiteral("卡[") << mPhysicalNo << "] " << ddrName << QStringLiteral(" 采集结束，共采集：") << mCapturedRef << "帧/40ms";
 #endif
+            // 检测数据异常
             checkDataError();
+
+            // 通知ui采集结束
             emit captureFinished(mPhysicalNo, mIsDDR1);
-            pause();
 
             // 暂停逻辑
+            saveAllData();
+
+            // 暂停逻辑
+            pause();
             {
                 qDebug().nospace().noquote() << "[" << QString("0x%1").arg((quint64)QThread::currentThreadId(), 8, 16, QLatin1Char('0')) << "]"
                                    << QStringLiteral("卡[") << mPhysicalNo << "] "

@@ -40,9 +40,16 @@
        </spacer>
       </item>
       <item>
+       <widget class="QPushButton" name="pushButton_ok">
+        <property name="text">
+         <string>确定</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="pushButton_exit">
         <property name="text">
-         <string>退出</string>
+         <string>取消</string>
         </property>
        </widget>
       </item>
