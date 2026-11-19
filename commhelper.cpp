@@ -296,7 +296,9 @@ CommHelper::CommHelper(QObject *parent)
 {
     /*初始化网络*/
     initSocket();
+#ifdef SINGLE_BOARD_MODE
     initDataProcessor();
+#endif // SINGLE_BOARD_MODE
 
     // mRequestCmdThread = new QLiteThread(this);
     // mRequestCmdThread->setObjectName("mRequestCmdThread");
@@ -379,7 +381,9 @@ CommHelper::~CommHelper()
         m_workThread->wait();
     }
 
+#ifdef SINGLE_BOARD_MODE
     mDetectorDataProcessor->deleteLater();
+#endif // SINGLE_BOARD_MODE
 }
 
 #include <winsock2.h>   // WSAIoctl函数定义
@@ -544,6 +548,7 @@ void CommHelper::initSocket()
     }
 }
 
+#ifdef SINGLE_BOARD_MODE
 void CommHelper::initDataProcessor()
 {
     // 这里必须是从0开始，0对应的是时间同步模块，1-32对应探测器索引，这样可以通过索引直接访问对应的处理器
@@ -583,6 +588,7 @@ void CommHelper::initDataProcessor()
     connect(processor, &DataProcessor::reportRawNetData, this,
             &CommHelper::onRawNetData_Thread, Qt::DirectConnection);
 }
+#endif // SINGLE_BOARD_MODE
 
 void CommHelper::error(QAbstractSocket::SocketError error)
 {
@@ -968,6 +974,7 @@ void CommHelper::stopReconnect()
     mReconnectTimer->stop();
 }
 
+#ifdef SINGLE_BOARD_MODE
 //网口原始数据（解析线程）
 void CommHelper::onRawNetData_Thread(const QByteArray& data)
 {
@@ -1040,3 +1047,4 @@ void CommHelper::stopMeasure()
         }
     }
 }
+#endif // SINGLE_BOARD_MODE

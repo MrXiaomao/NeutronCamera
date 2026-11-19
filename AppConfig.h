@@ -50,12 +50,12 @@ public:
     quint8 channelIndex() const;
 
     // 波形测量
-    quint8 workMode() const;
     quint8 waveTriggerMode() const;
     quint32 waveformLength() const;
     quint32 highVoltage() const; //650、700、750、850 V
     quint32 spectrumRefreshTimelength() const;
 #endif // SINGLE_BOARD_MODE
+    quint8 workMode() const;
 
     int psdThreshold(quint8 channelNo = 0/*通道号*/) const;
     int triggerThreshold() const;

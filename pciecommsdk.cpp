@@ -194,6 +194,11 @@ quint32 PCIeCommSdk::numberOfDevices()
     return mEnumedDevices.count();
 }
 
+quint32 PCIeCommSdk::captureChannels() const
+{
+    return mCaptureChannels;
+}
+
 /*输出设备信息*/
 void PCIeCommSdk::printDevicesInfomation()
 {
@@ -211,7 +216,7 @@ void PCIeCommSdk::printDevicesInfomation()
             if (boardIndex>0 && boardExists(physicalNo)){
                 bool isEnable = boardIsEnable(boardIndex);
                 AppConfig::instance().enableBoard(physicalNo, isEnable);
-                //AppConfig::instance().setBoardCaptureState(physicalNo, isEnable);
+                AppConfig::instance().setBoardCaptureState(physicalNo, isEnable);
                 lst << QStringLiteral("卡%1%2").arg(physicalNo).arg((isEnable ? "" : "[未启用]"));
 #ifdef SINGLE_BOARD_MODE
                 if (isEnable){
@@ -276,6 +281,7 @@ void PCIeCommSdk::stopCapture(quint32 deviceIndex)
 
 void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMillisecond,  QString shotNum/*炮号*/)
 {
+    mCaptureChannels = 0;
 #ifdef SINGLE_BOARD_MODE
     if (numberOfDevices() <= 0)
         return;
@@ -318,8 +324,10 @@ void PCIeCommSdk::startAllCapture(QString fileSavePath, quint32 captureTimeMilli
         quint8 cardIndex = (deviceIndex - 1) % numberOfDevices() + 1;
         quint8 boardIndex = boardIndexFromName(mEnumedDevices[cardIndex - 1]);
         quint8 physicalNo = physicalNoFromName(mEnumedDevices[boardIndex - 1]);
-        if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1))
+        if (boardIsEnable(boardIndex) && AppConfig::instance().isEnableCapture(physicalNo, isDDR1)){
+            mCaptureChannels++;
             startCapture(deviceIndex, fileSavePath, captureTimeMillisecond, shotNum, mMeasureModes & mmTest, mMeasureModes & mmPreMeasure);
+        }
         else
         {
             mDeviceThreadRunning[deviceIndex] = false;
@@ -999,6 +1007,7 @@ bool PCIeCommSdk::analyzeSpectrumFromRAM(const quint8& cameraIndex,
     const int boardIndex = isUsedDDR1() ? 1 : 2;//计算通道属于第几张采集卡
 #else
     const int boardIndex = (cameraIndex + DETNUMBER_PCIE_PER - 1) / DETNUMBER_PCIE_PER;//计算通道属于第几张采集卡
+    const quint8 cameraNo    = (cameraIndex - 1) % CAMNUMBER_DDR_PER;   // 0/1/2
 #endif
 
     if (!mMapDeviceCaptureThread.contains(boardIndex))
@@ -1060,6 +1069,7 @@ bool PCIeCommSdk::analyzeSpectrumFromRAM(const quint8& cameraIndex,
                 QByteArray chunkgamma = chunk.mid(16, 496);  //62*4*2
                 QByteArray chunkneutron = chunk.mid(512, 496);
 
+                bool ok{false};
                 quint64 absoluteTime = chunk.mid(1008, 8).toHex().toULongLong(&ok, 16);//绝对时间
                 QByteArray reserve2 = chunk.mid(1016, 6);
                 QByteArray tail = chunk.right(2);
@@ -1690,7 +1700,7 @@ bool PCIeCommSdk::takeWaveformData(const quint8& cameraIndex,
                     fileSpace.getSimpleExtentDims(dims, nullptr);
                     if (dims[1] != H5_DATA_COLS) {
                         qWarning() << QString("Dataset columns is %1, required %2").arg(dims[1]).arg(H5_DATA_COLS);
-                        return;
+                        return false;
                     }
                     const hsize_t totalRows = dims[0];
 
@@ -2763,8 +2773,18 @@ void CaptureThread::run()
 {
     qRegisterMetaType<QByteArray>("QByteArray");
     qRegisterMetaType<QVector<QPair<double,double>>>("QVector<QPair<double,double>>");
-    //提升线程优先级
-    timeBeginPeriod(1);// 可提高精度到2ms 需引用-lwinmm
+#ifdef Q_OS_WIN
+    // 开启多媒体定时器，时钟粒度 1ms，需引用-lwinmm
+    MMRESULT mmRet = timeBeginPeriod(1);
+    if (mmRet == TIMERR_NOERROR)
+    {
+        //qDebug() << "Windows timeBeginPeriod(1) success";
+    }
+    else
+    {
+        qWarning() << "Windows timeBeginPeriod(1) failed." << QStringLiteral(" 数据采集线程 id:") << (quint64)this->currentThreadId();
+    }
+#endif
 
     quint64 memOffet = mIsDDR1 ? 0 : 0x40000000;
     quint64 memRamOffet = mIsDDR1 ? 0 : 0x40000;
@@ -2812,7 +2832,7 @@ void CaptureThread::run()
 
         while (mIsPaused.load()){
             for (auto& block : mDDRWaveformDatas) {
-                delay(1);
+                QThread::usleep(1);
 
 #ifdef SINGLE_BOARD_MODE
                 break;
@@ -2873,7 +2893,7 @@ void CaptureThread::run()
         }
         else {
             // 只测试DDR1
-            delay(500);
+            QThread::usleep(500);
         }
 #endif // SINGLE_BOARD_MODE
 
@@ -2909,7 +2929,7 @@ void CaptureThread::run()
                 }
 
                 // 没收到信号长期等待，除非手动停止测量
-                delay(1000);//精度1us
+                QThread::msleep(1);
             }
 
             if (mInterruptSave){
@@ -3046,8 +3066,7 @@ void CaptureThread::run()
                     break;
                 }
 
-                //QThread::msleep(1);//精度2ms
-                delay(1000);//精度1us
+                QThread::msleep(1);
             }
 
             if (isOver)
@@ -3148,7 +3167,10 @@ void CaptureThread::run()
         }
     }
 
+#ifdef Q_OS_WIN
+    // 恢复系统时钟粒度，必须配对
     timeEndPeriod(1);
+#endif
 
     // 报告线程退出
     emit threadExitOccurred(mDeviceIndex);

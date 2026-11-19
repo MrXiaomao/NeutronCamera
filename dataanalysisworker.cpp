@@ -388,6 +388,48 @@ bool DataAnalysisWorker::readBin1Ch_range_fast(
     return true;
 }
 
+bool DataAnalysisWorker::readBin1Ch_range_fast(
+    const QByteArray& fileData,
+    quint8         cameraNo,     // 0 / 1 / 2
+    qint64         from,         // 起始点（含）
+    qint64         to,           // 结束点（不含）
+    std::vector<qint16>& out)
+{
+    constexpr qint64 HEAD_BYTES      = 12;
+    constexpr qint64 TAIL_BYTES      = 12;
+    constexpr qint64 BYTES_PER_GROUP = 6;
+
+    const qint64 payload = fileData.size() - HEAD_BYTES - TAIL_BYTES;
+    if (payload <= 0 || payload % BYTES_PER_GROUP != 0) { return false; }
+
+    const qint64 pointsPerChannel = payload / BYTES_PER_GROUP;
+
+    from = qBound<qint64>(0, from, pointsPerChannel);
+    to   = qBound<qint64>(from, to, pointsPerChannel);
+    const qint64 count = to - from;
+    if (count <= 0) { return false; }
+
+    const qint64 byteOffset = HEAD_BYTES + from * BYTES_PER_GROUP;
+    const qint64 byteLength = count * BYTES_PER_GROUP;
+
+    // 只映射所需字节区间：跳过头12字节，按6字节/组定位
+    const char* buf = fileData.constData() + byteOffset;
+    if (!buf) { return false; }
+
+    out.resize(static_cast<int>(count));
+    const quint16* src = reinterpret_cast<const quint16*>(buf);
+    qint16* dst = out.data();
+    const int chOffset = cameraNo * 2;
+
+    // 小端文件 + 小端环境：直接取
+    for (qint64 i = 0; i < count; ++i) {
+        dst[i] = static_cast<qint16>(src[chOffset + i * 3]);
+    }
+
+    return true;
+}
+
+
 #ifdef SINGLE_BOARD_MODE
 bool DataAnalysisWorker::readBin1Ch_range_fast(const QString& filePath,
                                            qint64         from,

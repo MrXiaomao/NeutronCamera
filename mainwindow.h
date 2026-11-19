@@ -92,8 +92,6 @@ public slots:
     void onGammaSpectrum(quint8, QPair<QVector<double>,QVector<double>>&);//伽马能谱
     void onStartMeasure();//开始测量(软触发)
     void onPrepareMeasure();//开始测量
-    // 处理数据解析后的能谱数据（解析线程）：累积数据；绘图投递到主线程
-    void onFullSpectrum_Thread(const FullSpectrum& fullSpectrum);
     // 解析线程上报温度，仅写缓存
     void onReportDetectorTemperature(float temperature);
 
@@ -192,15 +190,13 @@ private:
     std::atomic<bool> mIsMeasuring = false;// 测量是否正在进行
 
     // 当前测量参数
-    DataProcessor::TriggerMode mTriggerMode;
-    quint32 mWaveformLength = 64;
     DetectorType mCurrentDetectorType = dtLSD; // 当前探测器类型：1-LSD 2-PSD 3-LBD
     QString mCurrentSavePath;// 本次实验数据存储路径
+    quint32 mCountdownDurationMs = 0;
 #ifdef SINGLE_BOARD_MODE
     quint8 mCurrentAuroraNo = 0;// 当前测量链路
     quint8 mCurrentChannelNo = 0;// 当前测量通道
     // 连续测量计时器
-    quint32 mCountdownDurationMs = 0;
     QElapsedTimer mMeasureTimer;
 #endif //SINGLE_BOARD_MODE
     bool mReconnecting = false; // 自动重连标识
@@ -264,32 +260,20 @@ private:
     // 能谱图像属性
     std::atomic<bool> mEnScale = false;// 是否勾选能量刻度
     SpectrumPlotSettings m_spectrumPlotSettings;
-    std::atomic<bool> mCountRatePlotReady = false; // 计数率曲线待刷新
     std::atomic<bool> mSpectrumPlotReady = false;  // 能谱曲线待刷新
     qint64 mTempLastUpdateTime = 0;
-    DetectorData m_detectorData;
-    DataProcessor::WorkMode mWorkMode = DataProcessor::wmWaveform;// 0-波形 1-能谱
-    mutable QMutex mDetectorDataMutex;       // 保护 m_detectorData（解析线程写、主线程读/绘图）
+    CommandAdapter::WorkMode mWorkMode = CommandAdapter::wmWaveform;// 0-波形 1-能谱
 
+#ifdef SINGLE_BOARD_MODE
+    mutable QMutex mDetectorDataMutex;       // 保护 m_detectorData（解析线程写、主线程读/绘图）
     mutable QMutex mSpectDataMutex;
     using SpectrumEntry = FullSpectrum;
     QVector<SpectrumEntry> m_spectrumByChannel;// DAQb
     using WaveformEntry = std::vector<qint16>;
     QVector<WaveformEntry> m_waveformByChannel;
+#endif // SINGLE_BOARD_MODE
+
     std::atomic<quint32> mDAQaCapturedCount{0};
-
-    // 定时刷新能谱和波形
-    QTimer* m_plotRefreshTimer = nullptr;
-
-    // 更新能谱显示
-    void updateSpecPlotData(const quint32 spectrum[]);
-
-    /**
-     * @brief 计数率显示，最快更新时间间隔不小于1000ms
-     * @param FPGATime FPGA内部时钟，当前的计数率对应的FPGA时钟，单位s，能谱数据中单位是ms，这里采用向下取整
-     * @param countRate 计数率，单位cps
-     */
-    void updateCountRatePlotData(double FPGATime, double countRate);
 };
 
 #endif // MAINWINDOW_H

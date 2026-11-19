@@ -35,7 +35,7 @@ public:
     explicit CommandAdapter(QObject *parent = nullptr);
     ~CommandAdapter();
 
-    virtual void sendCmdToSocket(CommandItem cmdItem, bool delayflag = true) const{};
+    virtual void sendCmdToSocket(CommandItem cmdItem, bool delayflag = true) const{}
 
 signals:
     void reportSpectrumData(const QByteArray&); // 上报能谱数据

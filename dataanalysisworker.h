@@ -70,6 +70,13 @@ public:
         qint64         to,
         std::vector<qint16>& out);
 
+    static bool readBin1Ch_range_fast(
+        const QByteArray& fileData,
+        quint8         cameraNo,
+        qint64         from,
+        qint64         to,
+        std::vector<qint16>& out);
+
 #ifdef SINGLE_BOARD_MODE
     static bool readBin1Ch_range_fast(const QString& filePath,
                                 qint64         from,

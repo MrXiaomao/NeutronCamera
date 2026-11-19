@@ -2961,7 +2961,7 @@ void OfflineWindow::onNGammaFilter()
         QString h5FilePath = mFileDir + "/" + ui->comboBox_h5Files_2->currentText() + ".h5";// "/waveform_data.h5";
         if (QFile::exists(h5FilePath))
         {
-            mPCIeCommSdk.takeWaveformData(cameraIndex, h5FilePath, ch_all_valid_wave);
+            PCIeCommSdk::takeWaveformData(cameraIndex, h5FilePath, ch_all_valid_wave);
         }
         else
         {

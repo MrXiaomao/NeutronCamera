@@ -283,6 +283,7 @@ public:
 
     /*获取设备数量*/
     quint32 numberOfDevices();
+    quint32 captureChannels() const;
 
     /*输出设备信息*/
     void printDevicesInfomation();
@@ -443,6 +444,7 @@ private:
 #endif // SINGLE_BOARD_MODE
     MeasureModes mMeasureModes = mmSingle;
     qint32 mMeasureTimelength = 10000;//默认10s
+    quint32 mCaptureChannels = 0;;//正在采集的通道数
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(PCIeCommSdk::MeasureModes)

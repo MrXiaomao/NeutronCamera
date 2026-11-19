@@ -20,7 +20,6 @@ SOURCES += \
     commhelper.cpp \
     dataanalysisworker.cpp \
     datacompresswindow.cpp \
-    dataprocessor.cpp \
     devicemanagerwindow.cpp \
     globalsettings.cpp \
     hdadataupload.cpp \
@@ -44,7 +43,6 @@ HEADERS += \
     commhelper.h \
     dataanalysisworker.h \
     datacompresswindow.h \
-    dataprocessor.h \
     devicemanagerwindow.h \
     hdadataupload.h \
     n_gamma.h \
@@ -144,7 +142,7 @@ DEFINES += APP_VERSION="\\\"V3.4.1023\\\""
 DEFINES +=_WIN32_WINNT=0x0601
 DEFINES += "HDF5_DATAFORMAT_VERSION=(quint32)261009" #如果HDF5数据存储格式发生改变，这里就需要把版本号改一下，否则会导致解析HDF5文件内容失败
 
-DEFINES += SINGLE_BOARD_MODE #单张采集卡模式
+# DEFINES += SINGLE_BOARD_MODE #单张采集卡模式
 
 ################################################################################################
 windows {
@@ -215,6 +213,7 @@ include($$PWD/../3rdParty/alglib-cpp/alglib.pri)
 include($$PWD/../3rdParty/QtnProperty-2.0.3/QtnProperty/QtnProperty.pri)
 
 # 启用 libhv（MinGW 用 libhv.dll.a；MSVC 需 3rdParty/libhv/lib/hv.lib，否则回退 TcpAgentServer）
+contains(DEFINES, SINGLE_BOARD_MODE){
 DEFINES += ENABLE_LIBHV=1
 win32 {
     *-msvc*:!exists($$PWD/../3rdParty/libhv/lib/hv.lib) {
@@ -241,6 +240,8 @@ win32 {
         include($$PWD/../3rdParty/QTelnet/QTelnet.pri)
     }
 }
+}
+
 ################################################################################################
 # 添加预编译头文件
 # 添加config配置
@@ -282,3 +283,12 @@ DEPENDPATH += $$PWD/.
 QMAKE_CXXFLAGS += -mssse3
 
 RC_ICONS = $$PWD/resource/image/LOGO.ico
+
+contains(DEFINES, SINGLE_BOARD_MODE) {
+SOURCES += \
+    dataprocessor.cpp
+
+HEADERS += \
+    dataprocessor.h
+
+}

@@ -621,7 +621,10 @@ QString AppConfig::PDUipAddress() const { return d->PDUIpAddress->value(); }
 // 采集卡通道管理
 void AppConfig::enableBoardCapture(quint8 physicalIndex)
 {
+#ifdef SINGLE_BOARD_MODE
     return;
+#endif // SINGLE_BOARD_MODE
+
     QtnPropertySet* propSetBoard = nullptr;
     if (1 == physicalIndex)
         propSetBoard = d->propSetBoard1;
@@ -775,7 +778,10 @@ quint32 AppConfig::highVoltage() const{
 quint32 AppConfig::spectrumRefreshTimelength() const{
     return d->spectrumRefreshTimelength->value();
 }
-
+#else
+quint8 AppConfig:: workMode() const{
+    return 1;// 能谱
+}
 #endif // SINGLE_BOARD_MODE
 
 int AppConfig::psdThreshold(quint8 channelNo) const {

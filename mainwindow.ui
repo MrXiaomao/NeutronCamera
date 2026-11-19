@@ -646,7 +646,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QLabel" name="label_17">
+                    <widget class="QLabel" name="label_DAQaSpectrum">
                      <property name="text">
                       <string>DAQa能谱序号：</string>
                      </property>
@@ -826,7 +826,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QLabel" name="label_20">
+                    <widget class="QLabel" name="label_DAQaWaveform">
                      <property name="text">
                       <string>DAQa波形序号：</string>
                      </property>
@@ -922,7 +922,7 @@
             <item>
              <widget class="QStackedWidget" name="stackedWidget_DAQb">
               <property name="currentIndex">
-               <number>1</number>
+               <number>0</number>
               </property>
               <widget class="QWidget" name="page_DAQbWaveform">
                <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -1019,7 +1019,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QLabel" name="label_18">
+                    <widget class="QLabel" name="label_DAQbWaveform">
                      <property name="text">
                       <string>DAQb波形序号：</string>
                      </property>
@@ -1072,6 +1072,23 @@
                        <width>16</width>
                        <height>16</height>
                       </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QCheckBox" name="checkBox_bWaveformSelWaveform">
+                     <property name="text">
+                      <string>波形</string>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QCheckBox" name="checkBox_bWaveformSelSpectrum">
+                     <property name="text">
+                      <string>能谱</string>
                      </property>
                     </widget>
                    </item>
@@ -1182,7 +1199,7 @@
                     </widget>
                    </item>
                    <item>
-                    <widget class="QLabel" name="label_19">
+                    <widget class="QLabel" name="label_DAQbSpectrum">
                      <property name="text">
                       <string>DAQb能谱序号：</string>
                      </property>
@@ -1235,6 +1252,23 @@
                        <width>16</width>
                        <height>16</height>
                       </size>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QCheckBox" name="checkBox_bSpectrumSelWaveform">
+                     <property name="text">
+                      <string>波形</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QCheckBox" name="checkBox_bSpectrumSelSpectrum">
+                     <property name="text">
+                      <string>能谱</string>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
                      </property>
                     </widget>
                    </item>
@@ -2217,7 +2251,7 @@
      <x>0</x>
      <y>0</y>
      <width>1431</width>
-     <height>18</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
